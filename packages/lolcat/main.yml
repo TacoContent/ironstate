@@ -1,0 +1,13 @@
+---
+
+tasks:
+  - tags: [lolcat, cli]
+    cargo:
+      package: lcat
+      state: present
+
+  - tags: [lolcat, cli]
+    symlinks:
+      src: ~/.cargo/bin/lcat.exe
+      dest: ~/.local/bin/lolcat.exe
+      state: present

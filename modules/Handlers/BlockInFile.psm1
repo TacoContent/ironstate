@@ -1,0 +1,225 @@
+#!/usr/bin/env pwsh
+<#
+.SYNOPSIS
+  Handler for the 'blockinfile' group: inserts/updates/removes a
+  marker-delimited block of text in a file, modeled on Ansible's
+  ansible.builtin.blockinfile.
+
+.DESCRIPTION
+  A block is wrapped in a pair of marker lines built from 'marker' (default
+  '# {mark} MANAGED BLOCK') with '{mark}' replaced by 'marker_begin'/
+  'marker_end' (default BEGIN/END). Only the text between those exact marker
+  lines is ever touched - everything else in the file is left alone.
+
+  If the markers already exist in the file, the block between them is
+  replaced in place. Otherwise the new block is inserted per 'insertafter'/
+  'insertbefore' (default: end of file). 'create' controls whether a missing
+  'dest' is created (default false, matching Ansible); 'backup' writes a
+  timestamped copy of 'dest' before it's changed.
+
+  "installed" (used by the present/absent/latest state machine in
+  Common.psm1) means the marker block exists AND its content already
+  matches 'block' exactly - the same "exact match" convention Copy.psm1 and
+  Symlinks.psm1 use for their own Test.
+#>
+
+Set-StrictMode -Version Latest
+
+Import-Module (Join-Path $PSScriptRoot '..\Common.psm1')
+
+$script:DefaultMarker = '# {mark} MANAGED BLOCK'
+
+function Get-BlockMarkers {
+  param([string] $Marker, [string] $MarkerBegin, [string] $MarkerEnd)
+  [PSCustomObject]@{
+    Begin = $Marker.Replace('{mark}', $MarkerBegin)
+    End   = $Marker.Replace('{mark}', $MarkerEnd)
+  }
+}
+
+function Get-FileLines {
+  # Splits a file's content into lines, normalizing CRLF -> LF first.
+  # Returns @() for a missing or empty file.
+  param([string] $Path)
+  if (-not (Test-Path $Path)) { return @() }
+  $raw = Get-Content -Path $Path -Raw -ErrorAction SilentlyContinue
+  if ([string]::IsNullOrEmpty($raw)) { return @() }
+  return @(($raw -replace "`r`n", "`n") -split "`n")
+}
+
+function Get-DesiredBlockLines {
+  param([string] $Block)
+  if ([string]::IsNullOrEmpty($Block)) { return @() }
+  $normalized = ($Block -replace "`r`n", "`n").TrimEnd("`n")
+  return @($normalized -split "`n")
+}
+
+function Find-BlockRange {
+  # Locates the begin/end marker lines (exact match, trailing whitespace
+  # ignored). Both markers must be present, end after begin, or the block
+  # is treated as absent.
+  param([string[]] $Lines, [string] $BeginMarker, [string] $EndMarker)
+
+  $beginIndex = -1
+  for ($i = 0; $i -lt $Lines.Count; $i++) {
+    if ($Lines[$i].TrimEnd() -eq $BeginMarker) { $beginIndex = $i; break }
+  }
+  if ($beginIndex -lt 0) { return $null }
+
+  $endIndex = -1
+  for ($i = $beginIndex + 1; $i -lt $Lines.Count; $i++) {
+    if ($Lines[$i].TrimEnd() -eq $EndMarker) { $endIndex = $i; break }
+  }
+  if ($endIndex -lt 0) { return $null }
+
+  [PSCustomObject]@{ BeginIndex = $beginIndex; EndIndex = $endIndex }
+}
+
+function Get-BlockInsertIndex {
+  # 'insertbefore' wins if both are given. 'BOF'/'EOF' are literal
+  # positions; anything else is a regex matched against existing lines -
+  # insertbefore uses the first match, insertafter the last (closest to
+  # Ansible's own behavior). A regex that matches nothing falls back to EOF.
+  param([string[]] $Lines, [string] $InsertAfter, [string] $InsertBefore)
+
+  if ($InsertBefore) {
+    if ($InsertBefore -eq 'BOF') { return 0 }
+    for ($i = 0; $i -lt $Lines.Count; $i++) { if ($Lines[$i] -match $InsertBefore) { return $i } }
+    return $Lines.Count
+  }
+
+  if ($InsertAfter -and $InsertAfter -ne 'EOF') {
+    if ($InsertAfter -eq 'BOF') { return 0 }
+    $matchIndex = -1
+    for ($i = 0; $i -lt $Lines.Count; $i++) { if ($Lines[$i] -match $InsertAfter) { $matchIndex = $i } }
+    if ($matchIndex -ge 0) { return $matchIndex + 1 }
+    return $Lines.Count
+  }
+
+  return $Lines.Count
+}
+
+function Write-BlockInFileLines {
+  # Joins lines back with LF, ensures a trailing newline, and writes them.
+  param([string] $Path, [System.Collections.Generic.List[string]] $Lines)
+  $content = ($Lines -join "`n")
+  if ($content -ne '' -and -not $content.EndsWith("`n")) { $content += "`n" }
+  Set-Content -Path $Path -Value $content -NoNewline
+}
+
+function Backup-BlockInFileDest {
+  param([string] $Path)
+  $backupPath = "$Path.$(Get-Date -Format 'yyyyMMddHHmmss').bak"
+  Copy-Item -Path $Path -Destination $backupPath -Force
+}
+
+function Test-BlockInFilePresent {
+  param($Item)
+
+  $dest = Resolve-UserPath (Get-Prop $Item 'dest')
+  if (-not (Test-Path $dest)) { return $false }
+
+  $markers = Get-BlockMarkers `
+    -Marker (Get-Prop $Item 'marker' $script:DefaultMarker) `
+    -MarkerBegin (Get-Prop $Item 'marker_begin' 'BEGIN') `
+    -MarkerEnd (Get-Prop $Item 'marker_end' 'END')
+
+  $lines = Get-FileLines -Path $dest
+  $range = Find-BlockRange -Lines $lines -BeginMarker $markers.Begin -EndMarker $markers.End
+  if (-not $range) { return $false }
+
+  $existingBlockLines = if ($range.EndIndex -gt $range.BeginIndex + 1) {
+    $lines[($range.BeginIndex + 1)..($range.EndIndex - 1)]
+  } else { @() }
+
+  $desiredBlockLines = Get-DesiredBlockLines -Block (Get-Prop $Item 'block' '')
+  return (@($existingBlockLines) -join "`n") -eq (@($desiredBlockLines) -join "`n")
+}
+
+function Set-BlockInFile {
+  param($Item)
+
+  $dest = Resolve-UserPath (Get-Prop $Item 'dest')
+  $create = [bool] (Get-Prop $Item 'create' $false)
+  $exists = Test-Path $dest
+  if (-not $exists -and -not $create) {
+    Write-Warning "blockinfile dest does not exist and 'create' is false, skipping: $dest"
+    return
+  }
+
+  $markers = Get-BlockMarkers `
+    -Marker (Get-Prop $Item 'marker' $script:DefaultMarker) `
+    -MarkerBegin (Get-Prop $Item 'marker_begin' 'BEGIN') `
+    -MarkerEnd (Get-Prop $Item 'marker_end' 'END')
+
+  $lines = [System.Collections.Generic.List[string]]::new()
+  if ($exists) { $lines.AddRange([string[]] (Get-FileLines -Path $dest)) }
+
+  [string[]] $newBlockLines = @($markers.Begin) + @(Get-DesiredBlockLines -Block (Get-Prop $Item 'block' '')) + @($markers.End)
+
+  $range = Find-BlockRange -Lines $lines.ToArray() -BeginMarker $markers.Begin -EndMarker $markers.End
+
+  if ($range) {
+    $lines.RemoveRange($range.BeginIndex, $range.EndIndex - $range.BeginIndex + 1)
+    $lines.InsertRange($range.BeginIndex, $newBlockLines)
+  } else {
+    $insertIndex = Get-BlockInsertIndex -Lines $lines.ToArray() `
+      -InsertAfter (Get-Prop $Item 'insertafter' 'EOF') `
+      -InsertBefore (Get-Prop $Item 'insertbefore')
+    $lines.InsertRange($insertIndex, $newBlockLines)
+  }
+
+  if ($exists -and [bool] (Get-Prop $Item 'backup' $false)) { Backup-BlockInFileDest -Path $dest }
+
+  $destDir = Split-Path $dest -Parent
+  if ($destDir -and -not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
+
+  Write-BlockInFileLines -Path $dest -Lines $lines
+}
+
+function Remove-BlockInFile {
+  param($Item)
+
+  $dest = Resolve-UserPath (Get-Prop $Item 'dest')
+  if (-not (Test-Path $dest)) { return }
+
+  $markers = Get-BlockMarkers `
+    -Marker (Get-Prop $Item 'marker' $script:DefaultMarker) `
+    -MarkerBegin (Get-Prop $Item 'marker_begin' 'BEGIN') `
+    -MarkerEnd (Get-Prop $Item 'marker_end' 'END')
+
+  $lines = [System.Collections.Generic.List[string]]::new()
+  $lines.AddRange([string[]] (Get-FileLines -Path $dest))
+
+  $range = Find-BlockRange -Lines $lines.ToArray() -BeginMarker $markers.Begin -EndMarker $markers.End
+  if (-not $range) { return }
+
+  if ([bool] (Get-Prop $Item 'backup' $false)) { Backup-BlockInFileDest -Path $dest }
+
+  $lines.RemoveRange($range.BeginIndex, $range.EndIndex - $range.BeginIndex + 1)
+  Write-BlockInFileLines -Path $dest -Lines $lines
+}
+
+function Get-BlockInFileHandler {
+  [PSCustomObject]@{
+    Test      = {
+      param($Item)
+      Test-BlockInFilePresent -Item $Item
+    }
+    Describe  = {
+      param($Item, $Action)
+      $dest = Resolve-UserPath (Get-Prop $Item 'dest')
+      if ($Action -eq 'Uninstall') { "remove managed block from $dest" } else { "manage block in $dest" }
+    }
+    Install   = {
+      param($Item)
+      Set-BlockInFile -Item $Item
+    }
+    Uninstall = {
+      param($Item)
+      Remove-BlockInFile -Item $Item
+    }
+  }
+}
+
+Export-ModuleMember -Function Get-BlockInFileHandler

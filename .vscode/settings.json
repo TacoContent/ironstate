@@ -1,0 +1,10 @@
+{
+  "yaml.schemas": {
+    "./site.schema.json": [
+      "*.yml",
+      "*.yaml",
+      "**/*.yml",
+      "**/*.yaml"
+    ]
+  }
+}

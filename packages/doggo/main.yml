@@ -1,0 +1,16 @@
+---
+
+tasks:
+  - tags: [dns, network, cli]
+    eget:
+      package: mr-karan/doggo
+      state: present
+      args:
+        - --to=~/.local/bin/doggo.exe
+        - --upgrade-only
+
+  - tags: [dog]
+    symlinks:
+      src: ~/.local/bin/doggo.exe
+      dest: ~/.local/bin/dog.exe
+      state: present

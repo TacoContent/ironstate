@@ -1,0 +1,10 @@
+---
+vars:
+  defaults:
+    languages:
+      nodejs: OpenJS.NodeJS
+tasks:
+  - name: Install Node.js
+    winget:
+      package: "${{ languages.nodejs | toggle(defaults.languages.nodejs) }}"
+      state: "present"

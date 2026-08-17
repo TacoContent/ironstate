@@ -1,0 +1,27 @@
+---
+
+vars:
+  defaults:
+    languages:
+      java:
+        jre: false
+        jdk: Microsoft.OpenJDK.25
+
+tasks:
+  - name: Install Java JDK
+    tags:
+      - languages
+      - java
+    winget:
+      package: "${{ languages.java.jdk | toggle(defaults.languages.java.jdk) }}"
+      state: present
+    when: languages.java.jdk != false
+
+  - name: Install Java JRE
+    tags:
+      - languages
+      - java
+    winget:
+      package: "${{ languages.java.jre | toggle(defaults.languages.java.jre) }}"
+      state: present
+    when: languages.java.jre != false

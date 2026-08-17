@@ -1,0 +1,135 @@
+---
+
+tasks:
+  - tags: [json, cli]
+    eget:
+      package: jqlang/jq
+      state: present
+      args:
+        - --to=~/.local/bin/jq.exe
+        - --upgrade-only
+
+  - tags: [yaml, cli]
+    eget:
+      package: mikefarah/yq
+      state: present
+      args:
+        - --to=~/.local/bin/yq.exe
+        - --upgrade-only
+        - --asset=".exe"
+
+  - tags: [cli]
+    eget:
+      package: sharkdp/bat
+      state: present
+      args:
+        - --to=~/.local/bin/bat.exe
+        - --upgrade-only
+
+  - tags: [cli]
+    eget:
+      package: sharkdp/fd
+      state: present
+      args:
+        - --to=~/.local/bin/fd.exe
+        - --upgrade-only
+        - --asset="-gnu.zip"
+
+  - tags: [cli]
+    eget:
+      package: tjblackheart/andcli
+      state: present
+      args:
+        - --to=~/.local/bin/andcli.exe
+        - --upgrade-only
+
+  - tags: [clipboard, cli]
+    eget:
+      package: Slackadays/Clipboard
+      state: present
+      args:
+        - --to=~/.local/bin/cb.exe
+        - --upgrade-only
+
+  - tags: [security, cli, totp]
+    eget:
+      package: replydev/cotp
+      state: present
+      args:
+        - --to=~/.local/bin/cotp.exe
+        - --upgrade-only
+
+  - tags: [env, cli]
+    eget:
+      package: GBerghoff/envdiff
+      state: present
+      args:
+        - --to=~/.local/bin/envdiff.exe
+        - --upgrade-only
+        - --asset=".zip"
+
+  - tags: [env, cli]
+    eget:
+      package: ankddev/envfetch
+      state: present
+      args:
+        - --to=~/.local/bin/envfetch.exe
+        - --upgrade-only
+        - --asset=".exe"
+
+  - tags: [env, cli]
+    eget:
+      package: mikeleppane/envx
+      state: present
+      args:
+        - --to=~/.local/bin/envx.exe
+        - --upgrade-only
+
+  - tags: [json, cli]
+    eget:
+      package: antonmedv/fx
+      state: present
+      args:
+        - --to=~/.local/bin/fx.exe
+        - --upgrade-only
+
+  - tags: [security, cli]
+    winget:
+      package: FiloSottile.age
+      source: winget
+      state: present
+
+  - tags: [dotfiles, cli]
+    winget:
+      package: twpayne.chezmoi
+      source: winget
+      state: present
+
+  - tags: [git, cli]
+    winget:
+      package: GitHub.cli
+      source: winget
+      state: present
+
+  - tags: [task, cli]
+    winget:
+      package: Task.Task
+      source: winget
+      state: present
+
+  - tags: [file-transfer, cli]
+    winget:
+      package: schollz.croc
+      source: winget
+      state: present
+
+  - tags: [files, cli]
+    winget:
+      package: yorukot.superfile
+      source: winget
+      state: present
+
+  - tags: [docs, cli]
+    cargo:
+      package: tealdeer
+      state: present

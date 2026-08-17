@@ -1,0 +1,25 @@
+---
+
+tasks:
+  - tags: [sysinternals, cli]
+    zip:
+      src: https://download.sysinternals.com/files/SysinternalsSuite.zip
+      dest: ~/.local/bin/sysinternals
+      exclude:
+        - '*.chm'
+        - '*.txt'
+        - '*.pdf'
+      include:
+        - '*.exe'
+      creates:
+        - ~/.local/bin/sysinternals/*
+      state: ${{ package.state }}
+      sha256:
+        cache: ~/.local/bin/sysinternals/SysinternalsSuite.zip.sha256
+
+  - tags: [sysinternals, cli]
+    name: register sysinternals bin path
+    path:
+      paths:
+        - ~/.local/bin/sysinternals
+      state: present

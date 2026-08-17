@@ -1,0 +1,41 @@
+---
+tasks:
+  - name: Install smartmontools
+    chocolatey:
+      name: smartmontools
+      state: present
+
+  # get install path of ${env:ProgramFiles}\smartmontools\bin
+  - name: smartctl path fact
+    id: smartctl_path
+    shell:
+      command: Get-Command smartctlx | Select-Object -ExpandProperty Source
+
+  - name: Install smartctl exporter
+    eget:
+      package: smartmontools/smartctl_exporter
+      state: latest
+      args:
+        - --to=~/.local/bin/smartctl_exporter.exe
+        - --upgrade-only
+        - --asset=".zip"
+
+  - name: Create Logon Task
+    scheduled_task:
+      name: smartctl_exporter
+      description: "Run smartctl_exporter on logon"
+      actions:
+        - path: ~/.local/bin/smartctl_exporter.exe
+          arguments: "--smartctl.path={{ smartctl_path.stdout }} --web.listen-address=:9633"
+      triggers:
+        - logon: {}
+        - startup: {}
+      principal:
+        user_id: S-1-5-20 # NETWORK SERVICE
+        run_level: highest
+      settings:
+        allow_demand_start: true
+        multiple_instances: false
+        start_when_available: true
+        run_only_if_network_available: true
+      

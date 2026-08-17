@@ -1,0 +1,73 @@
+---
+
+tasks:
+  - name: Install Rust
+    tags:
+      - languages
+      - rust
+    include:
+      name: languages/rust
+      state: present
+    when:
+      - (languages is mapping and languages.rust) or (languages is boolean and languages)
+
+  - name: Install Python
+    tags: 
+      - languages
+      - python
+    include:
+      name: languages/python
+      state: present
+    when:
+      - (languages is mapping and languages.python) or (languages is boolean and languages)
+
+  - name: Install Node.js
+    tags:
+      - languages
+      - nodejs
+      - node
+    include:
+      name: languages/nodejs
+      state: present
+    when:
+      - (languages is mapping and languages.nodejs) or (languages is boolean and languages)
+
+  - name: Install Golang
+    tags: 
+      - languages
+      - golang
+    include:
+      name: languages/golang
+      state: present
+    when:
+      - (languages is mapping and languages.golang) or (languages is boolean and languages)
+
+  - name: Install Java
+    tags: 
+      - languages
+      - java
+    include:
+      name: languages/java
+      state: present
+    when:
+      - (languages is mapping and languages.java) or (languages is boolean and languages)
+
+  - name: Install .NET
+    tags: 
+      - languages
+      - dotnet
+    include:
+      name: languages/dotnet
+      state: present
+    when:
+      - (languages is mapping and languages.dotnet) or (languages is boolean and languages)
+
+  - name: Install Ruby
+    tags: 
+      - languages
+      - ruby
+    include:
+      name: languages/ruby
+      state: present
+    when:
+      - (languages is mapping and languages.ruby) or (languages is boolean and languages)

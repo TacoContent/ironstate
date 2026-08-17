@@ -1,0 +1,15 @@
+---
+
+vars:
+  defaults:
+    languages:
+      python: 'Python.Python.3.13'
+
+tasks:
+  - name: Install Python
+    tags:
+      - languages
+      - python
+    winget:
+      package: "${{ languages.python | toggle(defaults.languages.python) }}"
+      state: "${{ languages.python | ternary('present', 'absent') }}"

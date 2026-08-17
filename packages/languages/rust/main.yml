@@ -1,0 +1,23 @@
+---
+
+tasks:
+  - name: Check Rust Installation
+    id: rustc
+    shell:
+      command: Get-Command rustc
+  - name: Check Cargo Installation
+    id: cargo
+    shell:
+      command: Get-Command cargo
+
+  - name: Install Rust
+    winget:
+      package: Rustlang.Rustup
+      state: present
+    when: rustc.rc != 0 or cargo.rc != 0
+
+  - name: register cargo bin paths
+    path:
+      paths:
+        - ~/.cargo/bin
+      state: present

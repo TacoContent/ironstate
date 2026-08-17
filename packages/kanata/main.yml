@@ -1,0 +1,29 @@
+---
+
+tasks:
+  - tags: [keyboard, kanata]
+    eget:
+      package: jtroo/kanata
+      state: present
+      args:
+        - --to=~/.local/bin/kanata
+        - --upgrade-only
+        - --asset=".zip"
+
+  - tags: [keyboard, kanata]
+    copy:
+      src: files/kanata.kbd
+      dest: ~/.kanata/kanata.kbd
+      state: present
+
+  - tags: [keyboard, kanata]
+    copy:
+      src: files/kanata-run.bat
+      dest: ~/.local/bin/kanata-run.bat
+      state: present
+
+  - tags: [keyboard, kanata]
+    symlinks:
+      src: ~/.local/bin/kanata/kanata_windows_gui_winIOv2_cmd_allowed_x64
+      dest: ~/.local/bin/kanata.exe
+      state: present

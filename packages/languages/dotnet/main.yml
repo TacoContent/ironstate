@@ -1,0 +1,18 @@
+---
+vars:
+  defaults:
+    languages:
+      dotnet:
+        runtime: false # Microsoft.DotNet.Runtime.10
+        sdk: Microsoft.DotNet.SDK.10
+
+tasks:
+  - name: Install dotNet Runtime
+    winget:
+      package: "${{ languages.dotnet.runtime | toggle(defaults.languages.dotnet.runtime) }}"
+    when: (languages.dotnet.runtime | toggle(defaults.languages.dotnet.runtime)) != false
+
+  - name: Install dotNet SDK
+    winget:
+      package: "${{ languages.dotnet.sdk | toggle(defaults.languages.dotnet.sdk) }}"
+    when: (languages.dotnet.sdk | toggle(defaults.languages.dotnet.sdk)) != false

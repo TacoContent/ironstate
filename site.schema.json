@@ -1,0 +1,570 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/ryanmconrad/ansible-systems/main/install/windows/site.schema.json",
+  "title": "Windows ironstate.ps1 configuration",
+  "description": "Schema for install/windows/site.yml and its per-machine (hosts/<COMPUTERNAME>.yml) and per-user (variables/<USERNAME>.yml) overlay files. A document is either the explicit mapping form ('tasks'/'vars') or, when 'vars' isn't needed, a bare list of tasks/actions directly. Overlays use the explicit mapping form so they can merge by key into the base file (see install/windows/README.md): 'tasks' appends, 'vars' deep-merges key-by-key.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tasks": {
+          "type": "array",
+          "description": "Task/action list, executed in the order written. See README.md for the task/action model.",
+          "items": { "$ref": "#/$defs/taskItem" }
+        },
+        "vars": {
+          "type": "object",
+          "description": "User-defined variables. Merged with gathered host facts into a single flat context that 'when' conditions and '${{ vars.* }}'/'${{ facts.* }}' templating resolve against (vars win over facts on name collision). Host/user overlay files deep-merge into this key-by-key rather than replacing it wholesale. The same 'vars:' key may also appear in a package's own main.yml (see the 'include' module) to declare package-local defaults - bare top-level names available inside that package's own expressions only, with this (site-level) 'vars' winning on a same-name collision."
+        }
+      }
+    },
+    {
+      "type": "array",
+      "description": "Implicit form: the document root is the task/action list directly.",
+      "items": { "$ref": "#/$defs/taskItem" }
+    }
+  ],
+  "$defs": {
+    "templateString": {
+      "type": "string",
+      "pattern": "^\\$\\{\\{[\\s\\S]*\\}\\}$",
+      "description": "A single '${{ ... }}' template expression whose result replaces the field wholesale, native type preserved (see README.md's 'Template expressions' section for the full grammar). Typically a path - '${{ inputs.<key> }}' / '${{ package.state }}' / '${{ package.tags }}' / '${{ facts.<key> }}' / '${{ vars.<key> }}' / '${{ item.<key> }}' / '${{ <id>.<field> }}', optionally indexing into a list with '[N]' (e.g. '${{ example_task.results[0].rc }}') - but may also pipe through filters, e.g. '${{ package.state | default(\"present\") }}'. 'package'/'inputs' are only meaningful inside a package's own main.yml (see the 'include' module); 'item' only inside a looped task (see 'items'/'with'); the rest are available everywhere."
+    },
+    "state": {
+      "description": "'present' installs if missing; 'absent' uninstalls if installed; 'latest' always (re-)installs / re-extracts. Inside a package's main.yml, this may instead be a single template expression such as '${{ package.state }}' or '${{ inputs.<key> }}'.",
+      "default": "present",
+      "oneOf": [
+        { "type": "string", "enum": ["present", "absent", "latest"] },
+        { "$ref": "#/$defs/templateString" }
+      ]
+    },
+    "tags": {
+      "description": "Tags for use with ironstate.ps1 -Tags (flat matching - a leaf's effective tags are its own plus every ancestor task's, accumulated). Inside a package's main.yml, this may instead be a single template expression such as '${{ package.tags }}', which resolves to the package reference's own 'tags' array (replacing this field wholesale, not appending).",
+      "default": [],
+      "oneOf": [
+        { "type": "array", "items": { "type": "string" } },
+        { "$ref": "#/$defs/templateString" }
+      ]
+    },
+    "when": {
+      "description": "Condition(s) gating this task/action and everything nested under it (AND'd with every ancestor task's own 'when'). A single expression string, or a list of expressions (implicit AND) - matches Ansible. Bare dotted/indexed identifiers (e.g. 'foo.rc', 'foo.results[0].rc') resolve against facts/vars/id-registered results/facts (no '${{ }}' wrapper); operators: == != < <= > >=, and, or, not, in/not in, is/is not, and a '|' filter pipeline (e.g. 'value | default(\"x\") == \"x\"'). See README.md for the full grammar.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
+    },
+    "taskItem": {
+      "type": "object",
+      "description": "A task or leaf action. A grouping task has 'actions' (a list of taskItem, recursively - arbitrary nesting depth); a leaf has exactly one of the module keys below instead. Enforced at runtime (Tasks.psm1), not by this schema.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Label used in output. For a leaf, falls back to a per-module default (e.g. the package name) if omitted."
+        },
+        "tags": { "$ref": "#/$defs/tags" },
+        "when": { "$ref": "#/$defs/when" },
+        "id": {
+          "type": "string",
+          "description": "Registers this leaf's result under this name once it runs: '{ changed, failed, rc, stdout, stdout_lines, stderr, stderr_lines }' (Ansible 'register'-shaped; every CLI-backed module and 'shell' populate a real rc/stdout/stderr, others default to 0/''/'' unless they throw). Later tasks reference it with bare dotted/indexed paths in 'when' (e.g. 'foo.rc != 0', 'foo.results[0].rc') and '${{ foo }}' in templates. If this task also has 'items' (a loop), every iteration shares the same 'id': the flat fields reflect the last iteration, and every iteration's result is additionally available as 'foo.results[N]'. Leaf actions only - not valid on a grouping task ('actions'/'include')."
+        },
+        "failed_when": {
+          "description": "Condition(s) overriding whether this leaf counts as failed - same grammar as 'when' (a single expression, or a list, implicit AND), evaluated against this leaf's own 'rc'/'stdout'/'stdout_lines'/'stderr'/'stderr_lines'/'changed' as bare names (e.g. 'failed_when: rc != 0'). Without it, a leaf fails by default exactly when its handler reports a non-zero 'rc' (a thrown error also counts as 'rc: 1'). See 'continue_on_error' for what happens when a leaf fails.",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
+        },
+        "continue_on_error": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, a failed leaf (see 'failed_when') is logged and the run continues to the next task instead of stopping immediately - matches Ansible's 'ignore_errors'. The leaf's registered result (if it has an 'id') still reports 'failed: true'."
+        },
+        "items": {
+          "type": "array",
+          "description": "Materializes this task once per entry (Ansible 'loop'-style) *before* anything else about it is evaluated - name, tags, when, id, its module fields, or a nested 'actions'/'include'. Each copy gets '${{ item }}'/'${{ item.<key> }}' resolved against that one entry. Wins over 'with' if both are set."
+        },
+        "with": {
+          "description": "A single reference value made available as '${{ item }}'/'${{ item.<key> }}' - like 'items' but materializes exactly one copy, without iterating. Ignored if 'items' is also set."
+        },
+        "actions": {
+          "type": "array",
+          "description": "Nested tasks/actions, making this item a grouping task rather than a leaf.",
+          "items": { "$ref": "#/$defs/taskItem" }
+        },
+        "winget": { "$ref": "#/$defs/wingetItem" },
+        "chocolatey": { "$ref": "#/$defs/basicPackageItem" },
+        "pipx": { "$ref": "#/$defs/basicPackageItem" },
+        "npm": { "$ref": "#/$defs/basicPackageItem" },
+        "cargo": { "$ref": "#/$defs/basicPackageItem" },
+        "go": { "$ref": "#/$defs/goItem" },
+        "eget": { "$ref": "#/$defs/egetItem" },
+        "zip": { "$ref": "#/$defs/zipItem" },
+        "symlinks": { "$ref": "#/$defs/symlinkItem" },
+        "copy": { "$ref": "#/$defs/copyItem" },
+        "shell": { "$ref": "#/$defs/shellItem" },
+        "blockinfile": { "$ref": "#/$defs/blockInFileItem" },
+        "log": { "$ref": "#/$defs/logItem" },
+        "path": { "$ref": "#/$defs/pathItem" },
+        "fact": { "$ref": "#/$defs/factItem" },
+        "registry": { "$ref": "#/$defs/registryItem" },
+        "scheduled_task": { "$ref": "#/$defs/scheduledTaskItem" },
+        "include": { "$ref": "#/$defs/includeItem" }
+      }
+    },
+    "wingetItem": {
+      "type": "object",
+      "description": "A winget package. Matched by exact package ID.",
+      "additionalProperties": false,
+      "required": ["package"],
+      "properties": {
+        "package": {
+          "type": "string",
+          "description": "winget package ID, matched with --exact."
+        },
+        "source": {
+          "type": "string",
+          "description": "winget source to install from, e.g. 'winget' or 'msstore'."
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "basicPackageItem": {
+      "type": "object",
+      "description": "A package managed by chocolatey, pipx, npm, or cargo.",
+      "additionalProperties": false,
+      "required": ["package"],
+      "properties": {
+        "package": {
+          "type": "string",
+          "description": "Package name as known to the manager's CLI."
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "goItem": {
+      "type": "object",
+      "description": "A Go binary installed with 'go install'.",
+      "additionalProperties": false,
+      "required": ["package"],
+      "properties": {
+        "package": {
+          "type": "string",
+          "description": "Go module path, e.g. github.com/dhth/act3."
+        },
+        "version": {
+          "type": "string",
+          "description": "Version passed as package@version to 'go install'.",
+          "default": "latest"
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "egetItem": {
+      "type": "object",
+      "description": "A GitHub release binary fetched with eget.",
+      "additionalProperties": false,
+      "required": ["package"],
+      "properties": {
+        "package": {
+          "type": "string",
+          "description": "GitHub repo in owner/name form, e.g. zyedidia/eget."
+        },
+        "state": { "$ref": "#/$defs/state" },
+        "args": {
+          "type": "array",
+          "description": "Extra arguments passed to eget. '--to=' paths support '~' expansion.",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "zipItem": {
+      "type": "object",
+      "description": "A ZIP archive downloaded and extracted directly (no external tool).",
+      "additionalProperties": false,
+      "required": ["src", "dest", "creates"],
+      "properties": {
+        "src": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL of the ZIP archive."
+        },
+        "dest": {
+          "type": "string",
+          "description": "Directory to extract into. '~' expansion is supported."
+        },
+        "include": {
+          "type": "array",
+          "description": "Filename patterns to extract (whitelist).",
+          "items": { "type": "string" }
+        },
+        "exclude": {
+          "type": "array",
+          "description": "Filename patterns to skip (blacklist).",
+          "items": { "type": "string" }
+        },
+        "creates": {
+          "type": "array",
+          "description": "Glob patterns whose presence signals 'already installed'.",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "sha256": {
+          "type": "object",
+          "description": "SHA256 caching for 'state: latest' so unchanged archives are skipped.",
+          "additionalProperties": false,
+          "properties": {
+            "cache": {
+              "type": "string",
+              "description": "Path to cache the downloaded archive's SHA256 hash."
+            }
+          }
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "symlinkItem": {
+      "type": "object",
+      "description": "A symbolic link created from src to dest.",
+      "additionalProperties": false,
+      "required": ["src", "dest"],
+      "properties": {
+        "src": {
+          "type": "string",
+          "description": "Link target. '~' expansion is supported."
+        },
+        "dest": {
+          "type": "string",
+          "description": "Link path. '~' expansion is supported."
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "copyItem": {
+      "type": "object",
+      "description": "Copies a file from 'src' to 'dest'.",
+      "additionalProperties": false,
+      "required": ["src", "dest"],
+      "properties": {
+        "src": {
+          "type": "string",
+          "description": "Source file path. Resolved relative to the install system directory (install/windows, or the owning package's own directory for packages/<name>/main.yml) unless it is absolute, '~'-prefixed, or a URL."
+        },
+        "dest": {
+          "type": "string",
+          "description": "Destination file path. '~' expansion is supported."
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "shellItem": {
+      "type": "object",
+      "description": "Runs an inline PowerShell command or a script file. Exactly one of 'command' or 'script' should be given.",
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Inline PowerShell command(s) to execute. Use a YAML block scalar ('|') for multiline scripts."
+        },
+        "script": {
+          "type": "string",
+          "description": "Path to a script to execute. Resolved relative to the install system directory (install/windows, or the owning package's own directory for packages/<name>/main.yml) unless it is absolute or '~'-prefixed. Mutually exclusive with 'command'."
+        },
+        "host": {
+          "type": "string",
+          "default": "pwsh",
+          "description": "What runs 'command'/'script', like a shebang line. Default 'pwsh' runs it directly in-process (no subprocess). Recognized presets ('powershell', 'cmd', 'bash', 'sh', 'node', 'python') expand to their executable. Any other value is split on whitespace and used as exe + leading args, e.g. 'npx tsx', so any script runner on PATH works."
+        },
+        "extension": {
+          "type": "string",
+          "description": "Overrides the temp file's extension when 'command' (not 'script') is used with a non-'pwsh' 'host'. Defaults to a sensible extension per preset host, or '.txt' otherwise - e.g. set to '.ts' for 'host: npx tsx'."
+        },
+        "args": {
+          "type": "array",
+          "description": "Arguments passed to the command/script.",
+          "items": { "type": "string" }
+        },
+        "creates": {
+          "type": "array",
+          "description": "Glob patterns whose presence signals 'already run'. If omitted, the command always runs for state 'present'/'latest'. For state 'absent', these paths are removed instead of re-running anything.",
+          "items": { "type": "string" }
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "blockInFileItem": {
+      "type": "object",
+      "description": "Manages a marker-delimited block of text inside 'dest', modeled on Ansible's blockinfile module. Only the text between the marker lines is ever touched.",
+      "additionalProperties": false,
+      "required": ["dest"],
+      "properties": {
+        "dest": {
+          "type": "string",
+          "description": "File to manage. '~' expansion is supported."
+        },
+        "block": {
+          "type": "string",
+          "description": "Content to place between the markers. Use a YAML block scalar ('|') for multiline content. Required unless 'state' is 'absent'."
+        },
+        "marker": {
+          "type": "string",
+          "default": "# {mark} MANAGED BLOCK",
+          "description": "Template for both marker lines; '{mark}' is replaced with 'marker_begin'/'marker_end'. Change this (e.g. to use a different comment syntax) if the file's syntax doesn't support '#' comments."
+        },
+        "marker_begin": {
+          "type": "string",
+          "default": "BEGIN",
+          "description": "Substituted for '{mark}' in the opening marker line."
+        },
+        "marker_end": {
+          "type": "string",
+          "default": "END",
+          "description": "Substituted for '{mark}' in the closing marker line."
+        },
+        "insertafter": {
+          "type": "string",
+          "default": "EOF",
+          "description": "Where to insert the block when the markers aren't already present: 'EOF' (default, end of file), 'BOF' (beginning of file), or a regex - the block is inserted after the last matching line (falls back to EOF if nothing matches). Ignored if 'insertbefore' is also set."
+        },
+        "insertbefore": {
+          "type": "string",
+          "description": "Like 'insertafter', but inserts before the first matching line ('BOF' for beginning of file). Takes precedence over 'insertafter' when both are set."
+        },
+        "create": {
+          "type": "boolean",
+          "default": false,
+          "description": "Create 'dest' (and its parent directory) if it doesn't exist. If false and 'dest' is missing, the item is skipped with a warning."
+        },
+        "backup": {
+          "type": "boolean",
+          "default": false,
+          "description": "Write a timestamped copy of 'dest' (dest.<yyyyMMddHHmmss>.bak) before changing it."
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "logLevel": {
+      "type": "string",
+      "enum": ["debug", "verbose", "info", "warning", "error"],
+      "default": "info"
+    },
+    "logPhase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message"],
+      "properties": {
+        "message": { "type": "string" },
+        "level": { "$ref": "#/$defs/logLevel" }
+      }
+    },
+    "logItem": {
+      "type": "object",
+      "description": "Prints a message at a chosen level. Reuses the present/absent state machine: 'state: present' (default) or 'latest' print the 'install' message; 'state: absent' prints the 'uninstall' message. Either give 'message'/'level' directly (shorthand for the 'install' phase) or nest 'install'/'uninstall' phase-specific blocks.",
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Shorthand for install.message - mutually exclusive with 'install'/'uninstall'."
+        },
+        "level": { "$ref": "#/$defs/logLevel" },
+        "install": { "$ref": "#/$defs/logPhase" },
+        "uninstall": { "$ref": "#/$defs/logPhase" },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "includeItem": {
+      "type": "object",
+      "description": "Pulls in packages/<name>/main.yml's task list as if written inline in place of this action (like 'actions:', but sourced from a file). None of 'state'/'tags'/'with' here are applied to the included tasks automatically - the package opts in by referencing '${{ package.state }}', '${{ package.tags }}', or '${{ inputs.<key> }}' on whichever of its own fields should receive them. Tags/when that should apply to every included task belong on this taskItem's own envelope 'tags'/'when' (which cascade down normally), not here.",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Package directory name under install/windows/packages/."
+        },
+        "state": {
+          "type": "string",
+          "enum": ["present", "absent", "latest"],
+          "default": "present",
+          "description": "Made available inside the package as '${{ package.state }}'."
+        },
+        "tags": {
+          "type": "array",
+          "description": "Made available inside the package as '${{ package.tags }}'.",
+          "items": { "type": "string" }
+        },
+        "with": {
+          "type": "object",
+          "description": "Arbitrary key/value inputs made available inside the package as '${{ inputs.<key> }}' (dotted paths, e.g. '${{ inputs.<key>.<nested> }}', work for nested values)."
+        }
+      }
+    },
+    "factItem": {
+      "type": "object",
+      "description": "Sets an arbitrary named value for later tasks to reference (bare '${{ name }}' in templates, bare 'name'/'name.field' in 'when') - a user-defined counterpart to gathered facts and 'id'-registered results, sharing the same flat namespace. Reuses the present/absent state machine like 'log': 'state: present' (default) or 'latest' (re)sets the fact every time this is reached; 'state: absent' unsets it. No real idempotency - a fact always fires when reached.",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Registry key this fact is stored under."
+        },
+        "value": {
+          "description": "Any YAML value - scalar, list, or nested mapping. May reference '${{ <id> }}' / '${{ facts.* }}' / '${{ vars.* }}', resolved before being stored. Required unless 'state' is 'absent'."
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "registryValueItem": {
+      "type": "object",
+      "description": "One named value to write under a registry.path.",
+      "additionalProperties": false,
+      "required": ["name", "type"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Value name under the key."
+        },
+        "type": {
+          "type": "string",
+          "description": "One of String, ExpandString, Binary, DWord, MultiString, QWord (matched case-insensitively - 'DWORD'/'QWORD' work too)."
+        },
+        "value": {
+          "description": "Matches 'type': a scalar for String/ExpandString/DWord/QWord, a list for MultiString (strings) or Binary (byte values 0-255). Required unless the registry item's 'state' is 'absent'."
+        }
+      }
+    },
+    "registryItem": {
+      "type": "object",
+      "description": "Writes one or more named values under a single registry key.",
+      "additionalProperties": false,
+      "required": ["path", "values"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Registry key path. Supports hive shortcuts HKLM/HKCU/HKCR/HKU/HKCC and their HKEY_* full names (e.g. 'HKEY_LOCAL_MACHINE\\Software\\...'), with or without a trailing ':' or forward slashes. HKCR/HKU/HKCC are mounted as PSDrives on first use if not already present."
+        },
+        "values": {
+          "type": "array",
+          "description": "One or more named values to write under 'path'.",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/registryValueItem" }
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "scheduledTaskActionItem": {
+      "type": "object",
+      "description": "One Task Scheduler action (run a program). Only plain executable actions are supported (not COM-handler/email actions).",
+      "additionalProperties": false,
+      "required": ["execute"],
+      "properties": {
+        "execute": { "type": "string", "description": "Path to the executable/script to run." },
+        "arguments": { "type": "string", "description": "Arguments passed to 'execute'." },
+        "working_directory": { "type": "string", "description": "Working directory the action runs from." }
+      }
+    },
+    "scheduledTaskTriggerItem": {
+      "type": "object",
+      "description": "One Task Scheduler trigger. 'type' selects which of the other fields apply - enforced at runtime, not by this schema (see modules/Handlers/ScheduledTask.psm1). Duration-like fields ('delay', 'random_delay', 'repetition_interval', 'repetition_duration') accept either an ISO 8601 duration ('PT30S', 'P1D') or a plain .NET TimeSpan string ('00:00:30', '1.00:00:00').",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["logon", "startup", "once", "daily", "weekly"],
+          "description": "'logon': fires when a user logs on (any user, or a specific 'user_id'). 'startup': fires at system boot. 'once': fires once at 'at'. 'daily': fires at the time-of-day in 'at', every 'days_interval' days. 'weekly': fires at the time-of-day in 'at', on 'days_of_week', every 'weeks_interval' weeks."
+        },
+        "user_id": { "type": "string", "description": "'logon' only - restricts the trigger to a specific user. Omit to fire for any user." },
+        "at": { "type": "string", "description": "'once'/'daily'/'weekly' only. Full date+time (e.g. '2026-08-15T09:00:00') for 'once' - only the time-of-day portion is used for 'daily'/'weekly'." },
+        "days_interval": { "type": "integer", "default": 1, "description": "'daily' only - fire every N days." },
+        "weeks_interval": { "type": "integer", "default": 1, "description": "'weekly' only - fire every N weeks." },
+        "days_of_week": {
+          "type": "array",
+          "description": "'weekly' only, required - day names (Monday, Tuesday, ...).",
+          "items": { "type": "string", "enum": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] }
+        },
+        "delay": { "type": "string", "description": "'logon'/'startup' only - wait this long after the trigger condition before actually running." },
+        "random_delay": { "type": "string", "description": "'once'/'daily'/'weekly'/'logon'/'startup' - randomize the actual start time by up to this much, to avoid many machines firing at the exact same instant." },
+        "repetition_interval": { "type": "string", "description": "'once'/'daily'/'weekly' - re-run every this-often after the initial fire, for the duration in 'repetition_duration'." },
+        "repetition_duration": { "type": "string", "description": "'once'/'daily'/'weekly' - how long 'repetition_interval' repetition continues." }
+      }
+    },
+    "scheduledTaskPrincipalItem": {
+      "type": "object",
+      "description": "Which account the task runs as. Omit the whole 'principal' block to run as the current user with standard rights; when given, only the fields you declare are managed/compared (like 'settings' below).",
+      "additionalProperties": false,
+      "properties": {
+        "user_id": { "type": "string", "description": "Account to run as, e.g. a username, 'SYSTEM', or 'NT AUTHORITY\\SYSTEM'. Mutually exclusive with 'group_id'." },
+        "group_id": { "type": "string", "description": "Group to run as instead of a single user. Mutually exclusive with 'user_id'." },
+        "logon_type": {
+          "type": "string",
+          "enum": ["None", "Password", "S4U", "Interactive", "Group", "ServiceAccount", "InteractiveOrPassword"],
+          "description": "'Password' additionally requires 'user_id' and 'password_env'. A stored task password can't be read back, so idempotency can't detect a drifted password - only 'state: latest' is guaranteed to re-apply one."
+        },
+        "run_level": { "type": "string", "enum": ["Limited", "Highest"], "default": "Limited", "description": "'Highest' runs elevated (\"Run with highest privileges\" in Task Scheduler's UI)." },
+        "password_env": { "type": "string", "description": "Name of an environment variable (populated via this repo's own .env/.secrets loading - see README.md) holding the account's password. Only used when 'logon_type' is 'Password'; never write a plaintext password here." }
+      }
+    },
+    "scheduledTaskSettingsItem": {
+      "type": "object",
+      "description": "Task-level settings. Partial-declare like 'registry's 'values' - only the keys listed here are managed/compared; everything else is left at Task Scheduler's own defaults.",
+      "additionalProperties": false,
+      "properties": {
+        "disallow_start_if_on_batteries": { "type": "boolean" },
+        "start_when_available": { "type": "boolean", "description": "Run as soon as possible after a scheduled start is missed (e.g. the machine was off)." },
+        "hidden": { "type": "boolean" },
+        "wake_to_run": { "type": "boolean", "description": "Wake the machine from sleep to run this task." },
+        "allow_hard_terminate": { "type": "boolean" },
+        "run_only_if_network_available": { "type": "boolean" },
+        "run_only_if_idle": { "type": "boolean" },
+        "multiple_instances": { "type": "string", "enum": ["IgnoreNew", "Parallel", "Queue", "StopExisting"], "description": "What to do if the task is triggered again while already running." },
+        "restart_count": { "type": "integer", "description": "How many times to retry on failure. Task Scheduler silently ignores this unless 'restart_interval' is also set - declare both together." },
+        "execution_time_limit": { "type": "string", "description": "Kill the task if it runs longer than this. 'PT0S' means no limit." },
+        "restart_interval": { "type": "string", "description": "Delay between retries when 'restart_count' is set." },
+        "delete_expired_task_after": { "type": "string", "description": "Automatically delete the task this long after its last trigger expires (only meaningful for a task with an 'once'/'daily'/'weekly' end boundary)." }
+      }
+    },
+    "scheduledTaskItem": {
+      "type": "object",
+      "description": "A Windows Task Scheduler task, managed via the built-in ScheduledTasks module (Get/New/Register/Set/Unregister/Enable/Disable-ScheduledTask).",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "description": "Task name (Task Scheduler's TaskName)." },
+        "path": { "type": "string", "default": "\\", "description": "Task folder (Task Scheduler's TaskPath), e.g. '\\MyApps\\'. Normalized to always start/end with '\\'." },
+        "description": { "type": "string" },
+        "enabled": { "type": "boolean", "default": true, "description": "Applied via Enable-ScheduledTask/Disable-ScheduledTask after every (re)registration." },
+        "actions": {
+          "type": "array",
+          "description": "Required unless 'state: absent'. One or more programs to run, in order.",
+          "items": { "$ref": "#/$defs/scheduledTaskActionItem" }
+        },
+        "triggers": {
+          "type": "array",
+          "description": "Optional - omit for a manual/on-demand-only task.",
+          "items": { "$ref": "#/$defs/scheduledTaskTriggerItem" }
+        },
+        "principal": { "$ref": "#/$defs/scheduledTaskPrincipalItem" },
+        "settings": { "$ref": "#/$defs/scheduledTaskSettingsItem" },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "pathItem": {
+      "type": "object",
+      "description": "Ensures directories are present on (or absent from) the current user's persistent PATH environment variable (User scope, no admin required). Also updates the current process's PATH for entries it adds/removes, so later tasks in the same run can find them immediately.",
+      "additionalProperties": false,
+      "required": ["paths"],
+      "properties": {
+        "paths": {
+          "type": "array",
+          "description": "Directories to ensure on PATH. '~' expansion is supported.",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    }
+  }
+}
