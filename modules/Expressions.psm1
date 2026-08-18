@@ -100,6 +100,11 @@ $script:ExpressionFilters = @{
     if ($null -eq $Value) { return $ArgValues[0] }
     return $Value
   }
+  'null' = {
+    param($Value, [object[]] $ArgValues)
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $null }
+    return $Value
+  }
   'upper' = {
     param($Value, [object[]] $ArgValues)
     if ($null -eq $Value) { return $null }
@@ -114,6 +119,14 @@ $script:ExpressionFilters = @{
     param($Value, [object[]] $ArgValues)
     if ($null -eq $Value) { return $null }
     return ([string] $Value).Trim()
+  }
+  'quote' = {
+    param($Value, [object[]] $ArgValues)
+    if ($null -eq $Value) { return $null }
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $null }
+    $q = '"'
+    if ($ArgValues.Count -eq 1) { $q = $ArgValues[0] }
+    return "$q$Value$q"
   }
   'ternary' = {
     param($Value, [object[]] $ArgValues)

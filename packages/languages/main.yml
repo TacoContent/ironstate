@@ -69,5 +69,7 @@ tasks:
     include:
       name: languages/ruby
       state: present
+      with:
+        override: "${{ languages.ruby.install.override | default('') | quote(\"'\") }}"
     when:
       - (languages is mapping and languages.ruby) or (languages is boolean and languages)

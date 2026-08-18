@@ -20,15 +20,20 @@ function Get-WingetHandler {
       param($Item, $Action)
       $package = Get-Prop $Item 'package'
       $source = Get-Prop $Item 'source'
+      $override = Get-Prop $Item 'override'
       if ($Action -eq 'Uninstall') { "winget uninstall --id $package --exact" }
-      else { "winget install --id $package --exact$(if ($source) { " --source $source" })" }
+      else { 
+        "winget install --id $package --exact$(if ($source) { " --source $source" })$( if ($override) { " --override $override" })" 
+      }
     }
     Install   = {
       param($Item)
       $package = Get-Prop $Item 'package'
+      $override = Get-Prop $Item 'override' # --override args for winget
+      $overrideArgs = if ($override) { @('--override', $override) } else { @() }
       $source = Get-Prop $Item 'source'
       $sourceArgs = if ($source) { @('--source', $source) } else { @() }
-      $result = Invoke-ExternalCommand -Exe 'winget' -Arguments (@('install', '--id', $package, '--exact', '--accept-source-agreements', '--accept-package-agreements') + $sourceArgs)
+      $result = Invoke-ExternalCommand -Exe 'winget' -Arguments (@('install', '--id', $package, '--exact', '--accept-source-agreements', '--accept-package-agreements') + $sourceArgs + $overrideArgs)
       if ($result.rc -ne 0) { Write-Warning "winget install $package exited with code $($result.rc)" }
       return $result
     }

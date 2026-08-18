@@ -104,6 +104,7 @@ function Get-PackageManagerHandlers {
   @{
     winget         = Get-WingetHandler
     chocolatey     = Get-ChocolateyHandler
+    gem            = Get-RubyGemHandler
     pipx           = Get-PipxHandler
     npm            = Get-NpmHandler
     cargo          = Get-CargoHandler

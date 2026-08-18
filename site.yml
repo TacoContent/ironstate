@@ -13,6 +13,8 @@ vars:
       # jdk: EclipseAdoptium.Temurin.21.JDK
     dotnet: true
     ruby: false
+      # install:
+      #   override: '/verysilent /tasks="assocfiles,modpath" /DIR="d:\ruby" /currentuser'
 
 tasks:
 

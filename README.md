@@ -51,6 +51,7 @@ tasks:
       package: Valve.Steam
       source: winget
       state: present
+      # override: '/DIR="path"' # passes override arguments to the installer
 
   - tags: [cloud, cli]
     eget:
