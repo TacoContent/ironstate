@@ -1,29 +1,41 @@
 ---
 
 tasks:
-  - tags: [keyboard, kanata]
+  - name: Install Kanata
+    tags: 
+      - keyboard
+      - kanata
     eget:
       package: jtroo/kanata
-      state: present
+      state: ${{ package.state }}
       args:
         - --to=~/.local/bin/kanata
         - --upgrade-only
         - --asset=".zip"
 
-  - tags: [keyboard, kanata]
+  - name: Copy Kanata Keyboard Layout
+    tags: 
+      - keyboard
+      - kanata
     copy:
       src: files/kanata.kbd
       dest: ~/.kanata/kanata.kbd
-      state: present
+      state: ${{ package.state }}
 
-  - tags: [keyboard, kanata]
+  - name: Copy Kanata Run Script
+    tags: 
+      - keyboard
+      - kanata
     copy:
       src: files/kanata-run.bat
       dest: ~/.local/bin/kanata-run.bat
-      state: present
+      state: ${{ package.state }}
 
-  - tags: [keyboard, kanata]
+  - name: Create Symlink for Kanata Executable
+    tags: 
+      - keyboard
+      - kanata
     symlinks:
       src: ~/.local/bin/kanata/kanata_windows_gui_winIOv2_cmd_allowed_x64
       dest: ~/.local/bin/kanata.exe
-      state: present
+      state: ${{ package.state }}

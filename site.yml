@@ -1,33 +1,17 @@
 ---
 
-vars:
-  monitoring: false
-  cli: true
-  languages:
-    rust: true
-    python: true
-    nodejs: true
-    golang: true
-    java: false
-      # jre: false
-      # jdk: EclipseAdoptium.Temurin.21.JDK
-    dotnet: true
-    ruby: false
-      # install:
-      #   override: '/verysilent /tasks="assocfiles,modpath" /DIR="d:\ruby" /currentuser'
-
 tasks:
 
   - name: Install Languages
     include:
-      name: languages
+      name: roles/languages
       state: present
     tags:
       - languages
 
   - name: System Tweak Tools
     include:
-      name: tweaks
+      name: packages/tweaks
       state: present
     tags:
       - tweaks
@@ -36,15 +20,14 @@ tasks:
 
   - name: Install Windows Terminal
     include:
-      name: terminal
+      name: packages/terminal
       state: present
     tags:
       - terminal
-      - cli
 
   - name: Install smartmontools
     include:
-      name: smartctl
+      name: packages/smartctl
       state: present
     when: monitoring
     tags:
@@ -53,7 +36,7 @@ tasks:
 
   - name: Install CLI Tools
     include:
-      name: cli
+      name: packages/cli
       state: present
     when: cli
     tags:
@@ -310,11 +293,11 @@ tasks:
   - name: install lolcat
     tags: [lolcat, cli]
     include:
-      name: lolcat
+      name: packages/lolcat
       state: present
 
   - name: install sysinternals
     tags: [sysinternals, cli]
     include:
-      name: sysinternals
+      name: packages/sysinternals
       state: latest

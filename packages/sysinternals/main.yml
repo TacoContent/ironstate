@@ -1,7 +1,10 @@
 ---
 
 tasks:
-  - tags: [sysinternals, cli]
+  - name: Install Sysinternals Suite
+    tags: 
+      - sysinternals
+      - cli
     zip:
       src: https://download.sysinternals.com/files/SysinternalsSuite.zip
       dest: ~/.local/bin/sysinternals
@@ -17,9 +20,11 @@ tasks:
       sha256:
         cache: ~/.local/bin/sysinternals/SysinternalsSuite.zip.sha256
 
-  - tags: [sysinternals, cli]
-    name: register sysinternals bin path
+  - name: Register sysinternals bin path
+    tags: 
+      - sysinternals
+      - cli
     path:
       paths:
         - ~/.local/bin/sysinternals
-      state: present
+      state: ${{ package.state }}

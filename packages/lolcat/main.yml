@@ -1,13 +1,17 @@
 ---
 
 tasks:
-  - tags: [lolcat, cli]
+  - tags: 
+      - lolcat
+      - cli
     cargo:
       package: lcat
-      state: present
+      state: ${{ package.state }}
 
-  - tags: [lolcat, cli]
+  - tags: 
+      - lolcat
+      - cli
     symlinks:
       src: ~/.cargo/bin/lcat.exe
       dest: ~/.local/bin/lolcat.exe
-      state: present
+      state: ${{ package.state }}

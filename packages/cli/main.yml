@@ -1,135 +1,169 @@
 ---
 
 tasks:
-  - tags: [json, cli]
+  - tags: 
+      - json
+      - cli
     eget:
       package: jqlang/jq
-      state: present
+      state: ${{ package.state }}
       args:
         - --to=~/.local/bin/jq.exe
         - --upgrade-only
 
-  - tags: [yaml, cli]
+  - tags: 
+      - yaml
+      - cli
     eget:
       package: mikefarah/yq
-      state: present
+      state: ${{ package.state }}
       args:
         - --to=~/.local/bin/yq.exe
         - --upgrade-only
         - --asset=".exe"
 
-  - tags: [cli]
+  - tags: 
+      - cli
     eget:
       package: sharkdp/bat
-      state: present
+      state: ${{ package.state }}
       args:
         - --to=~/.local/bin/bat.exe
         - --upgrade-only
 
-  - tags: [cli]
+  - tags: 
+      - cli
     eget:
       package: sharkdp/fd
-      state: present
+      state: ${{ package.state }}
       args:
         - --to=~/.local/bin/fd.exe
         - --upgrade-only
         - --asset="-gnu.zip"
 
-  - tags: [cli]
+  - tags: 
+      - cli
     eget:
       package: tjblackheart/andcli
-      state: present
+      state: ${{ package.state }}
       args:
         - --to=~/.local/bin/andcli.exe
         - --upgrade-only
 
-  - tags: [clipboard, cli]
+  - tags: 
+      - clipboard
+      - cli
     eget:
       package: Slackadays/Clipboard
-      state: present
+      state: ${{ package.state }}
       args:
         - --to=~/.local/bin/cb.exe
         - --upgrade-only
 
-  - tags: [security, cli, totp]
+  - tags: 
+      - security
+      - cli
+      - totp
     eget:
       package: replydev/cotp
-      state: present
+      state: ${{ package.state }}
       args:
         - --to=~/.local/bin/cotp.exe
         - --upgrade-only
 
-  - tags: [env, cli]
+  - tags: 
+      - env
+      - cli
     eget:
       package: GBerghoff/envdiff
-      state: present
+      state: ${{ package.state }}
       args:
         - --to=~/.local/bin/envdiff.exe
         - --upgrade-only
         - --asset=".zip"
 
-  - tags: [env, cli]
+  - tags: 
+      - env
+      - cli
     eget:
       package: ankddev/envfetch
-      state: present
+      state: ${{ package.state }}
       args:
         - --to=~/.local/bin/envfetch.exe
         - --upgrade-only
         - --asset=".exe"
 
-  - tags: [env, cli]
+  - tags: 
+      - env
+      - cli
     eget:
       package: mikeleppane/envx
-      state: present
+      state: ${{ package.state }}
       args:
         - --to=~/.local/bin/envx.exe
         - --upgrade-only
 
-  - tags: [json, cli]
+  - tags: 
+      - json
+      - cli
     eget:
       package: antonmedv/fx
-      state: present
+      state: ${{ package.state }}
       args:
         - --to=~/.local/bin/fx.exe
         - --upgrade-only
 
-  - tags: [security, cli]
+  - tags: 
+      - security
+      - cli
     winget:
       package: FiloSottile.age
       source: winget
-      state: present
+      state: ${{ package.state }}
 
-  - tags: [dotfiles, cli]
+  - tags: 
+      - dotfiles
+      - cli
     winget:
       package: twpayne.chezmoi
       source: winget
-      state: present
+      state: ${{ package.state }}
 
-  - tags: [git, cli]
+  - tags: 
+      - git
+      - cli
     winget:
       package: GitHub.cli
       source: winget
-      state: present
+      state: ${{ package.state }}
 
-  - tags: [task, cli]
+  - tags: 
+      - task
+      - cli
     winget:
       package: Task.Task
       source: winget
-      state: present
+      state: ${{ package.state }}
 
-  - tags: [file-transfer, cli]
+  - tags: 
+      - file-transfer
+      - cli
     winget:
       package: schollz.croc
       source: winget
-      state: present
+      state: ${{ package.state }}
 
-  - tags: [files, cli]
+  - tags: 
+      - files
+      - cli
     winget:
       package: yorukot.superfile
       source: winget
-      state: present
+      state: ${{ package.state }}
 
-  - tags: [docs, cli]
+  - tags: 
+      - docs
+      - cli
     cargo:
       package: tealdeer
-      state: present
+      state: ${{ package.state }}

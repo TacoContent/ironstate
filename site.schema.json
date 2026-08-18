@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/ryanmconrad/ansible-systems/main/install/windows/site.schema.json",
-  "title": "Windows ironstate.ps1 configuration",
+  "title": "IronState Configuration",
   "description": "Schema for install/windows/site.yml and its per-machine (hosts/<COMPUTERNAME>.yml) and per-user (variables/<USERNAME>.yml) overlay files. A document is either the explicit mapping form ('tasks'/'vars') or, when 'vars' isn't needed, a bare list of tasks/actions directly. Overlays use the explicit mapping form so they can merge by key into the base file (see install/windows/README.md): 'tasks' appends, 'vars' deep-merges key-by-key.",
   "oneOf": [
     {

@@ -1,10 +1,18 @@
 {
   "yaml.schemas": {
-    "./site.schema.json": [
-      "*.yml",
-      "*.yaml",
-      "**/*.yml",
-      "**/*.yaml"
+    "file:///d:/Development/projects/ironstate/site.schema.json": [
+      "file:///d%3A/Development/projects/ironstate/*.yml",
+      "file:///d%3A/Development/projects/ironstate/*.yaml",
+      "file:///d%3A/Development/projects/ironstate/**/*.yml",
+      "file:///d%3A/Development/projects/ironstate/**/*.yaml"
     ]
-  }
+  },
+  "yaml.disableSchemaDetection": [
+    "**/.github/workflows/*.yml",
+    "**/.github/workflows/*.yaml",
+    "**/.gitea/workflows/*.yml",
+    "**/.gitea/workflows/*.yaml",
+    "**/.forgejo/workflows/*.yml",
+    "**/.forgejo/workflows/*.yaml"
+  ]
 }

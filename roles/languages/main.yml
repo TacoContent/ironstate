@@ -6,7 +6,7 @@ tasks:
       - languages
       - rust
     include:
-      name: languages/rust
+      name: roles/languages/rust
       state: present
     when:
       - (languages is mapping and languages.rust) or (languages is boolean and languages)
@@ -16,7 +16,7 @@ tasks:
       - languages
       - python
     include:
-      name: languages/python
+      name: roles/languages/python
       state: present
     when:
       - (languages is mapping and languages.python) or (languages is boolean and languages)
@@ -27,7 +27,7 @@ tasks:
       - nodejs
       - node
     include:
-      name: languages/nodejs
+      name: roles/languages/nodejs
       state: present
     when:
       - (languages is mapping and languages.nodejs) or (languages is boolean and languages)
@@ -37,7 +37,7 @@ tasks:
       - languages
       - golang
     include:
-      name: languages/golang
+      name: roles/languages/golang
       state: present
     when:
       - (languages is mapping and languages.golang) or (languages is boolean and languages)
@@ -47,7 +47,7 @@ tasks:
       - languages
       - java
     include:
-      name: languages/java
+      name: roles/languages/java
       state: present
     when:
       - (languages is mapping and languages.java) or (languages is boolean and languages)
@@ -57,7 +57,7 @@ tasks:
       - languages
       - dotnet
     include:
-      name: languages/dotnet
+      name: roles/languages/dotnet
       state: present
     when:
       - (languages is mapping and languages.dotnet) or (languages is boolean and languages)
@@ -67,7 +67,7 @@ tasks:
       - languages
       - ruby
     include:
-      name: languages/ruby
+      name: roles/languages/ruby
       state: present
       with:
         override: "${{ languages.ruby.install.override | default('') | quote(\"'\") }}"

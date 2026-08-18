@@ -335,7 +335,8 @@ $handlers = Get-PackageManagerHandlers
 $moduleNames = @($handlers.Keys)
 
 $taskList = Get-TaskList -Data $data
-$leaves = Expand-TaskTree -Tasks $taskList -ModuleNames $moduleNames -PackagesRoot (Join-Path $PSScriptRoot 'packages') -Facts $facts -Vars $vars
+# (Join-Path $PSScriptRoot 'packages')
+$leaves = Expand-TaskTree -Tasks $taskList -ModuleNames $moduleNames -PackagesRoot $PSScriptRoot -Facts $facts -Vars $vars
 $filteredLeaves = @($leaves | Where-Object { Test-TagsMatch -Tags $_.Tags -Filter $Tags })
 
 $run = Invoke-Tasks -Leaves $filteredLeaves -Handlers $handlers -Facts $facts -Vars $vars -Apply:$Apply

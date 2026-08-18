@@ -1,16 +1,23 @@
 ---
 
 tasks:
-  - tags: [dns, network, cli]
+  - name: Install doggo CLI
+    tags: 
+      - dns
+      - network
+      - cli
     eget:
       package: mr-karan/doggo
-      state: present
+      state: ${{ package.state }}
       args:
         - --to=~/.local/bin/doggo.exe
         - --upgrade-only
 
-  - tags: [dog]
+  - name: Create symlink for doggo
+    tags:
+      - dog
+      - cli
     symlinks:
       src: ~/.local/bin/doggo.exe
       dest: ~/.local/bin/dog.exe
-      state: present
+      state: ${{ package.state }}

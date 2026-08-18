@@ -2,8 +2,8 @@
 tasks:
   - name: Install smartmontools
     chocolatey:
-      name: smartmontools
-      state: present
+      package: smartmontools
+      state: ${{ package.state }}
 
   # get install path of ${env:ProgramFiles}\smartmontools\bin
   - name: smartctl path fact
@@ -25,17 +25,16 @@ tasks:
       name: smartctl_exporter
       description: "Run smartctl_exporter on logon"
       actions:
-        - path: ~/.local/bin/smartctl_exporter.exe
+        - execute: ~/.local/bin/smartctl_exporter.exe
           arguments: "--smartctl.path={{ smartctl_path.stdout }} --web.listen-address=:9633"
       triggers:
-        - logon: {}
-        - startup: {}
+        - type: "logon"
+        - type: "startup"
       principal:
         user_id: S-1-5-20 # NETWORK SERVICE
-        run_level: highest
+        run_level: Highest
       settings:
-        allow_demand_start: true
-        multiple_instances: false
+        multiple_instances: IgnoreNew
         start_when_available: true
         run_only_if_network_available: true
       

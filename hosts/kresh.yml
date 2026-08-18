@@ -1,0 +1,18 @@
+---
+
+vars:
+  monitoring: false
+  cli: true
+  languages:
+    rust: true
+    python: true
+    nodejs: true
+    golang: true
+    java: false
+      # jre: false
+      # jdk: EclipseAdoptium.Temurin.21.JDK
+    dotnet: true
+    ruby: false
+      # install:
+      #   override: '/verysilent /tasks="assocfiles,modpath" /DIR="d:\ruby" /currentuser'
+
