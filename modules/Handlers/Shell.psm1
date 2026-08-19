@@ -318,4 +318,4 @@ function Get-ShellHandler {
   }
 }
 
-Export-ModuleMember -Function Get-ShellHandler
+Export-ModuleMember -Function Get-ShellHandler, Resolve-ShellStateConfig, Invoke-ShellItem, Get-ShellItemLabel

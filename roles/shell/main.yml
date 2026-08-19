@@ -7,11 +7,92 @@ tasks:
   #     source: winget
   #     state: present
 
-  - name: PowerShell Profile Path
+  - name: PowerShell System Profile Path Fact
     fact:
-      name: pwsh_profile_path
+      name: pwsh_system_profile_path
+      shell:
+        command: Write-Output $PROFILE
+      value: "${{ stdout | dirname }}"
+
+  - name: PowerShell System Profile Fact
+    fact:
+      name: pwsh_system_profile
+      shell:
+        command: Write-Output $PROFILE
+    failed_when: rc != 0 or (stdout | length == 0)
+
+  - name: PowerShell User Defined Profile Path Fact
+    fact:
+      name: pwsh_user_profile_path
       value: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) | dirname }}"
 
+  - name: PowerShell User Defined Profile Fact
+    fact:
+      name: pwsh_user_profile
+      value: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}"
+
+  - name: Register User Profile
+    blockinfile:
+      create: false
+      state: present
+      dest: "${{ facts.pwsh_system_profile }}"
+      block: |
+        $PROFILE_PATH = "${{ facts.pwsh_user_profile }}"
+        if (Test-Path $PROFILE_PATH) {
+            . $PROFILE_PATH
+        }
+
+  - name: Import PowerShell Modules
+    blockinfile:
+      create: true
+      state: present
+      dest: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}"
+      block: |
+        $env:VIRTUAL_ENV_DISABLE_PROMPT = 1;
+        
+        $modules = @("posh-git", "Terminal-Icons");
+        $modules | ForEach-Object {
+          if ( !(Get-Module -ListAvailable -Name "$_") ) {
+            Install-Module $_ -Scope CurrentUser -Force;
+          }
+        };
+
+        $modules | ForEach-Object {
+          Import-Module -Name $_;
+        }
+  - name: Configure PowerShell Host Colors
+    blockinfile:
+      create: true
+      state: present
+      dest: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}"
+      block: |
+
+        $host.privatedata.ErrorForegroundColor = 'Magenta';
+        $host.privatedata.ErrorBackgroundColor = 'Black';
+        $host.privatedata.WarningForegroundColor = 'Yellow';
+        $host.privatedata.WarningBackgroundColor = 'Black';
+        $host.privatedata.DebugForegroundColor = 'DarkGray';
+        $host.privatedata.DebugBackgroundColor = 'Black';
+        $host.privatedata.VerboseForegroundColor = 'White';
+        $host.privatedata.VerboseBackgroundColor = 'Black';
+        $host.privatedata.ProgressForegroundColor = 'DarkBlue';
+        $host.privatedata.ProgressBackgroundColor = 'DarkCyan';
+
+  - name: Import Chocolatey Profile
+    blockinfile:
+      create: true
+      state: present
+      dest: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}"
+      block: |
+        # Import the Chocolatey Profile that contains the necessary code to enable
+        # tab-completions to function for `choco`.
+        # Be aware that if you are missing these lines from your profile, tab completion
+        # for `choco` will not function.
+        # See https://ch0.co/tab-completion for details.
+        $ChocolateyProfile = "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+        if (Test-Path($ChocolateyProfile)) {
+          Import-Module "$ChocolateyProfile"
+        }
 
   - name: Load Custom PowerShell Source Files
     blockinfile:
@@ -19,9 +100,9 @@ tasks:
       state: present
       dest: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}"
       block: |
-        # Load custom shell extensions from ${{ pwsh_profile_path }}/custom/<category>/*.ps1
+        # Load custom shell extensions from ${{ facts.pwsh_user_profile_path }}/custom/<category>/*.ps1
         foreach ($category in @("aliases", "exports", "functions", "sources")) {
-            $customDir = Join-Path "${{ pwsh_profile_path }}" "custom/$category"
+            $customDir = Join-Path "${{ facts.pwsh_user_profile_path }}" "custom/$category"
             if (Test-Path $customDir) {
                 Get-ChildItem -Path $customDir -Filter *.ps1 -File | ForEach-Object {
                     . $_.FullName
@@ -49,14 +130,14 @@ tasks:
 
   # - name: Ensure Custom PowerShell Directory Exists
   #   file:
-  #     path: "${{ pwsh_profile_path }}/custom2"
+  #     path: "${{ facts.pwsh_user_profile_path }}/custom2"
   #     type: directory
   #     state: present
 
   - name: Copy Custom PowerShell Files
     copy:
       src: "files/home/.config/powershell/custom/"
-      dest: "${{ pwsh_profile_path }}/custom/"
+      dest: "${{ facts.pwsh_user_profile_path }}/custom/"
       state: present
 
   - name: Oh-My-Posh Profile

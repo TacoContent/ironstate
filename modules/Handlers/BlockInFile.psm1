@@ -59,19 +59,26 @@ function Resolve-BlockIdentifier {
 
 function Get-FileLines {
   # Splits a file's content into lines, normalizing CRLF -> LF first.
-  # Returns @() for a missing or empty file.
+  # Returns @() for a missing or empty file (including a 'dest' that turns
+  # out to be a directory - Test-Path is true for those too, but reading one
+  # as a file yields no content). The leading ',' guards against PowerShell
+  # unrolling a 0- or 1-element array across the function return boundary -
+  # without it, a 0-element array comes back to the caller as $null (and a
+  # 1-element one as its bare element, not a list) - see the same note on
+  # Common.psm1's Copy-DeepData.
   param([string] $Path)
-  if (-not (Test-Path $Path)) { return @() }
+  if (-not (Test-Path $Path)) { return ,@() }
   $raw = Get-Content -Path $Path -Raw -ErrorAction SilentlyContinue
-  if ([string]::IsNullOrEmpty($raw)) { return @() }
-  return @(($raw -replace "`r`n", "`n") -split "`n")
+  if ([string]::IsNullOrEmpty($raw)) { return ,@() }
+  return ,@(($raw -replace "`r`n", "`n") -split "`n")
 }
 
 function Get-DesiredBlockLines {
+  # Same 0-/1-element return-boundary guard as Get-FileLines above.
   param([string] $Block)
-  if ([string]::IsNullOrEmpty($Block)) { return @() }
+  if ([string]::IsNullOrEmpty($Block)) { return ,@() }
   $normalized = ($Block -replace "`r`n", "`n").TrimEnd("`n")
-  return @($normalized -split "`n")
+  return ,@($normalized -split "`n")
 }
 
 function Find-BlockRange {

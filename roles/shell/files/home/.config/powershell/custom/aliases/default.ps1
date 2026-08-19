@@ -2,13 +2,16 @@
 
 # Modern CLI replacements (gated on availability)
 if (Get-Command bat  -ErrorAction SilentlyContinue) { 
-	Remove-Alias -Name cat
-#	Set-Alias -Name cat -Value bat -Option AllScope 
-	function cat { bat --paging=never @args }
+    function Invoke-Bat {
+        bat --paging=never @args
+    }
+    Remove-Item Alias:cat -ErrorAction SilentlyContinue
+    Set-Alias -Name cat -Value Invoke-Bat -Scope Global
 }
+
+
 if (Get-Command btop -ErrorAction SilentlyContinue) { Set-Alias -Name top -Value btop -Option AllScope }
-function dev { Set-Location D:\Development }
-function ws  { Set-Location D:\Dropbox\Development }
+
 
 # Navigation — dot aliases need wrapper functions since Set-Alias cannot carry arguments.
 # Note: '.' (pwd) and '.2'–'.9' (zsh dir-stack) have no PS equivalent and are omitted.
@@ -31,19 +34,18 @@ function Invoke-ListLong        { Get-ChildItem @args | Format-Table Mode, LastW
 function Invoke-ListAll         { Get-ChildItem -Force @args | Format-Table Mode, LastWriteTime, Length, Name -AutoSize }
 function Invoke-ListDirectories { Get-ChildItem -Directory @args }
 
-
 if (Get-Command eza -ErrorAction SilentlyContinue) {
     function ls   { eza --icons @args }
     function ll   { eza --icons -la --git @args }
     function la   { eza --icons -la @args }
     function tree { eza --icons --tree @args }
-		function lsd { eza --icons -l --only-dirs @args }
+    function lsd { eza --icons -l --only-dirs @args }
 } else {
-		Set-Alias -Name l   -Value Invoke-ListLong        -Option AllScope
-		Set-Alias -Name ll  -Value Invoke-ListAll          -Option AllScope
-		Set-Alias -Name la  -Value Invoke-ListAll          -Option AllScope
-		Set-Alias -Name lsd -Value Invoke-ListDirectories  -Option AllScope
-		Set-Alias -Name tree -Value Invoke-ListLong -Option AllScope
+    Set-Alias -Name l   -Value Invoke-ListLong        -Option AllScope
+    Set-Alias -Name ll  -Value Invoke-ListAll          -Option AllScope
+    Set-Alias -Name la  -Value Invoke-ListAll          -Option AllScope
+    Set-Alias -Name lsd -Value Invoke-ListDirectories  -Option AllScope
+    Set-Alias -Name tree -Value Invoke-ListLong -Option AllScope
 }
 
 

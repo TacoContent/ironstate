@@ -87,9 +87,23 @@ function Test-ExpressionNamespaceKnown {
   # provide them) - i.e. this reference belongs to a namespace this pass
   # actually knows about, as opposed to a bare id/fact name that may only
   # exist in a *later* pass's context (see the '-Soft' param below).
+  #
+  # 'facts' is a special case: gathered host facts are fully known up front,
+  # but user-defined 'fact' values (sharing the same 'facts.<name>' surface)
+  # are populated progressively as tasks run - the namespace key existing
+  # doesn't mean *this specific* fact does yet, unlike 'vars'/'package'/
+  # 'inputs', which are always complete by the time any pass sees them. So
+  # for 'facts.*' specifically, defer unless the full path already resolves
+  # to a value, rather than deferring only on an unrecognized top segment.
   param($Context, [Parameter(Mandatory)][string] $Path)
   $top = (Get-TemplatePathSegments -Path $Path)[0]
-  return ($Context -is [System.Collections.IDictionary]) -and ($top -is [string]) -and $Context.Contains($top)
+  if (-not (($Context -is [System.Collections.IDictionary]) -and ($top -is [string]) -and $Context.Contains($top))) {
+    return $false
+  }
+  if ($top -eq 'facts') {
+    return $null -ne (Resolve-TemplateContext -Context $Context -Path $Path)
+  }
+  return $true
 }
 
 function Resolve-TemplateExpression {

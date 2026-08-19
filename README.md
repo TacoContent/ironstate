@@ -301,9 +301,9 @@ vars:
   editor: nvim
 ```
 
-Facts and vars share **one flat namespace** in `when` (bare names, no prefix - vars win on collision). They're also available to `${{ }}` string templating with an explicit prefix: `${{ facts.computer_name }}`, `${{ vars.editor }}` (alongside the existing `${{ package.* }}`/`${{ inputs.* }}` used by modular packages - see [Template expressions](#template-expressions)). This is the one deliberate inconsistency in the design: `when` uses bare names because that's how the condition grammar reads; `${{ }}` needs the prefix because it also has to disambiguate `package`/`inputs`.
+Facts and vars share **one flat namespace** in `when` (bare `facts.<key>`/`vars.<key>`, vars win on collision at the top level). They're also available to `${{ }}` string templating with the same prefix: `${{ facts.computer_name }}`, `${{ vars.editor }}` (alongside the existing `${{ package.* }}`/`${{ inputs.* }}` used by modular packages - see [Template expressions](#template-expressions)).
 
-`id`-registered results and `fact` values join this same flat namespace, **without** a prefix in either `when` *or* `${{ }}` (unlike facts/vars, which need `facts.`/`vars.` in templates) - see the next section.
+`id`-registered results join this same flat namespace, **without** a prefix, in either `when` *or* `${{ }}` - see the next section. `fact` values are the one exception: they're registered under `facts.<name>` (see [`fact`](#fact)), not bare, since a user-defined fact is a counterpart to gathered facts, sharing that same namespace - `${{ facts.pwsh_system_profile }}`, not `${{ pwsh_system_profile }}`.
 
 ## Registering results (`id`)
 
@@ -359,7 +359,7 @@ A task with `id` but no loop never gets a `.results` key - it stays exactly as i
 
 **Ordering matters**: this only works because tasks are dispatched sequentially and each one's `when`/`${{ }}` are resolved *immediately before* it runs (not all up front) - see [Architecture](#architecture). Referencing an `id` that hasn't executed yet (written later in the file, skipped by an earlier `when`/`-Tags`, or never run because it's a `-Apply`-gated real command evaluated during a dry-run) resolves to `$null`/the zero-value defaults, not an error - write comparisons defensively (e.g. `foo_stat != null and foo_stat.rc != 0`) if that distinction matters. In dry-run, `changed` is still accurately predicted for every module (it doesn't require actually running anything), but `rc`/`stdout`/`stderr` stay at their zero-value defaults for every module since nothing actually runs without `-Apply`.
 
-`fact` (see below) is the write-your-own-value counterpart to `id`: it always actually applies (dry-run included), since it's pure bookkeeping with no real system side effect - useful when you want a value available for later `when`/`${{ }}` previews without gating it behind an `id`'d real action.
+`fact` (see below) is the write-your-own-value counterpart to `id`: it always actually applies (dry-run included), since it's pure bookkeeping with no real system side effect - useful when you want a value available for later `when`/`${{ }}` previews without gating it behind an `id`'d real action. Unlike `id`, a fact registers under the `facts.<name>` namespace (see [Facts](#facts)/[Vars](#vars)), not bare.
 
 ### Native `pwsh` results
 
@@ -375,7 +375,7 @@ tasks:
   - name: set program files directory fact
     fact:
       name: program_files_dir
-      value: ${{ pf.ProgramFilesDir }}
+      value: ${{ pf.ProgramFilesDir }}   # -> referenced later as ${{ facts.program_files_dir }}
 ```
 
 This only applies to `host: pwsh` (the only host with a real "object" concept - an external process like `cmd`/`node`/`npx tsx` only ever produces text) and only when exactly one such object comes out; a command producing plain text, zero objects, or more than one object just gets the usual `rc`/`stdout`/`stdout_lines`/`stderr`/`stderr_lines` shape.
@@ -661,12 +661,13 @@ tasks:
 
 ### `fact`
 
-Sets an arbitrary named value - the write-your-own-data counterpart to gathered facts and `id`-registered results, sharing the same flat namespace (see [Registering results](#registering-results-id)). Reuses the present/absent state machine like `log`: `state: present` (default) or `latest` (re)sets the fact every time it's reached; `state: absent` unsets it. No real idempotency - a fact always fires when reached, and always actually applies (dry-run included, since it's pure bookkeeping with no real system side effect).
+Sets an arbitrary named value - the write-your-own-data counterpart to gathered facts, registered under the same `facts.<name>` namespace (see [Facts](#facts)/[Vars](#vars)), distinct from `id`-registered results (see [Registering results](#registering-results-id)). Reuses the present/absent state machine like `log`: `state: present` (default) or `latest` (re)sets the fact every time it's reached; `state: absent` unsets it. No real idempotency - a fact always fires when reached, and always actually applies (dry-run included, since it's pure bookkeeping with no real system side effect).
 
 | Field | Required | Description |
 | --- | --- | --- |
-| `name` | yes | Name this fact is stored under (not to be confused with the `registry` module below - this is the in-memory fact/`id` namespace, not the Windows registry) |
-| `value` | yes, unless `state: absent` | Any YAML value - scalar, list, or nested mapping. May reference `${{ <id> }}`/`${{ facts.* }}`/`${{ vars.* }}`, resolved before being stored |
+| `name` | yes | Name this fact is registered under, as `facts.<name>` (not to be confused with the `registry` module below - this is the in-memory fact namespace, not the Windows registry) |
+| `shell` | no | Runs this command (same shape as [`shell`](#shell)) to compute the fact's value, instead of a literal `value`. See below |
+| `value` | yes, unless `state: absent` or `shell` is given | Any YAML value - scalar, list, or nested mapping. May reference `${{ <id> }}`/`${{ facts.* }}`/`${{ vars.* }}`, resolved before being stored |
 
 ```yaml
 tasks:
@@ -692,6 +693,32 @@ tasks:
     fact:
       name: bar
       value: "${{ bar }}"   # the whole { changed, rc, stdout, ... } object from the 'id: bar' task above
+```
+
+#### `fact` with an embedded `shell`
+
+A fact can compute its own value by running a command directly, instead of referencing a separately-`id`'d `shell` task's result. This command **always actually runs, even without `-Apply`** - the same dry-run exception the fact registration itself already gets, since a fact has no real system side effect and a dry-run preview of a later `when`/`${{ }}` reference needs a real value to check, not a zero-result stand-in:
+
+```yaml
+tasks:
+  - name: PowerShell profile directory fact
+    fact:
+      name: pwsh_profile_dir
+      shell:
+        command: Write-Output $PROFILE
+      value: "${{ stdout | dirname }}"
+```
+
+If `value` is omitted, the fact is set directly to the command's trimmed stdout. If `value` is given, it's resolved *after* the command runs, against this same task's own bare `rc`/`stdout`/`stdout_lines`/`stderr`/`stderr_lines` (the same self-reference convention `failed_when` uses - see [Failing a task](#failing-a-task-failed_when-continue_on_error)) alongside the usual `facts`/`vars`/`id`-registry context, so it can also fall back to a var or combine with something else already registered. `failed_when` on the same task sees the same fields:
+
+```yaml
+  - name: PowerShell profile directory fact
+    fact:
+      name: pwsh_profile_dir
+      shell:
+        command: Write-Output $PROFILE
+      value: "${{ stdout | dirname }}"
+    failed_when: rc != 0 or (stdout | length == 0)
 ```
 
 ### `registry`
@@ -879,10 +906,10 @@ tasks:
 | `${{ package.state }}` | The `state` on the `include:` action (default `present` if omitted) |
 | `${{ package.tags }}` | The `tags` array on the `include:` action (default `[]`) |
 | `${{ inputs.<key> }}` | `with.<key>` on the `include:` action (dotted paths like `${{ inputs.<key>.<nested> }}` work for nested values) |
-| `${{ facts.<key> }}` | A gathered host fact (see [Facts](#facts)) |
+| `${{ facts.<key> }}` | A gathered host fact, or an earlier task's `fact` (see [Facts](#facts) and [`fact`](#fact)) |
 | `${{ vars.<key> }}` | A user-defined var (see [Vars](#vars)) |
 | `${{ item }}` / `${{ item.<key> }}` | The current loop value, inside a task with `with`/`items` (see [Looping](#looping-withitems)) |
-| `${{ <id> }}` / `${{ <id>.<field> }}` | An earlier task's `id`-registered result or `fact` (see [Registering results](#registering-results-id)) |
+| `${{ <id> }}` / `${{ <id>.<field> }}` | An earlier task's `id`-registered result (see [Registering results](#registering-results-id)) |
 
 Any of these paths can index into a list with `[N]` (0-indexed), interspersed with dotted access - e.g. `${{ example_task.results[0].rc }}` for a looped task's first iteration. `when` supports the same `[N]` indexing in its bare (non-`${{ }}`) grammar.
 

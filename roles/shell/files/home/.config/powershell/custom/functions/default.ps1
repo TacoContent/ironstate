@@ -4,9 +4,6 @@ function which($cmd) {
     Get-Command $cmd -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
 }
 
-function .. { Set-Location .. }
-function ... { Set-Location ../.. }
-
 function reload { . $PROFILE }
 
 function versions {

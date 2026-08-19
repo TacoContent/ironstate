@@ -21,3 +21,12 @@ tasks:
       paths:
         - ~/.cargo/bin
       state: present
+
+  - name: PowerShell Cargo Environment
+    blockinfile:
+      create: false
+      dest: ${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}
+      block: |
+        if (Test-Path "$HOME/.cargo/env.ps1") {
+          . "$HOME/.cargo/env.ps1"
+        }

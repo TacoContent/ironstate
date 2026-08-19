@@ -169,16 +169,24 @@ function Resolve-PackageAction {
 
 function Merge-FlatContext {
   # Builds the single flat dict 'when' conditions and the per-leaf deferred
-  # '${{ }}' pass resolve bare names against: facts, then a leaf's owning
-  # package's own local vars (see Tasks.psm1's 'PackageVars' on a leaf),
-  # then site-level vars (override), then the growing id/fact registry
-  # (override) - last write wins, so a registered/fact name can shadow a
-  # fact or var of the same name, and a site-level var can shadow a
-  # package's own local default of the same name (Ansible role-defaults-
-  # style precedence).
-  param($Facts = @{}, $PackageVars = @{}, $Vars = @{}, $Registry = @{})
+  # '${{ }}' pass resolve names against. Gathered host facts and
+  # user-registered 'fact' values are merged together (user facts win on
+  # collision) and nested under one 'facts' key - not flattened to bare
+  # top-level names - so both need the 'facts.' prefix, matching the
+  # documented '${{ facts.<key> }}' / bare 'facts.<key>' grammar. Everything
+  # else - a leaf's owning package's own local vars (see Tasks.psm1's
+  # 'PackageVars' on a leaf), then site-level vars (override), then the
+  # growing id-registry (override) - stays flattened to bare top-level names:
+  # last write wins, so a site-level var can shadow a package's own local
+  # default of the same name (Ansible role-defaults-style precedence).
+  param($Facts = @{}, $UserFacts = @{}, $PackageVars = @{}, $Vars = @{}, $Registry = @{})
+
+  $mergedFacts = @{}
+  foreach ($key in $Facts.Keys) { $mergedFacts[$key] = $Facts[$key] }
+  foreach ($key in $UserFacts.Keys) { $mergedFacts[$key] = $UserFacts[$key] }
+
   $flat = @{}
-  foreach ($key in $Facts.Keys) { $flat[$key] = $Facts[$key] }
+  $flat['facts'] = $mergedFacts
   foreach ($key in $PackageVars.Keys) { $flat[$key] = $PackageVars[$key] }
   foreach ($key in $Vars.Keys) { $flat[$key] = $Vars[$key] }
   foreach ($key in $Registry.Keys) { $flat[$key] = $Registry[$key] }

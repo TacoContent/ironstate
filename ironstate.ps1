@@ -200,6 +200,7 @@ function Invoke-Tasks {
 
   $commandAvailability = @{}
   $registry = @{}
+  $userFacts = @{}
   $results = [System.Collections.Generic.List[object]]::new()
   $stoppedOnFailure = $false
 
@@ -228,7 +229,21 @@ function Invoke-Tasks {
       }
     }
 
-    $flatContext = Merge-FlatContext -Facts $Facts -PackageVars $leaf.PackageVars -Vars $Vars -Registry $registry
+    $flatContext = Merge-FlatContext -Facts $Facts -UserFacts $userFacts -PackageVars $leaf.PackageVars -Vars $Vars -Registry $registry
+
+    # A 'fact' with an embedded 'shell' computes its value from that
+    # command's own result, which doesn't exist yet at this point - defer
+    # 'value's template resolution (if given) until after the command has
+    # run, instead of resolving it here alongside everything else (which
+    # would only ever see an unresolved reference and omit the field).
+    $hasEmbeddedShell = ($module -eq 'fact') -and [bool] (Get-Prop $leaf.Item 'shell')
+    $deferredFactValue = $null
+    $hasDeferredFactValue = $false
+    if ($hasEmbeddedShell -and $leaf.Item.Contains('value')) {
+      $deferredFactValue = $leaf.Item['value']
+      $hasDeferredFactValue = $true
+      $leaf.Item.Remove('value')
+    }
 
     # Strict (no '-Soft'): by now every remaining '${{ }}' reference should
     # be resolvable - facts/vars/package/inputs already were, earlier, in
@@ -243,7 +258,11 @@ function Invoke-Tasks {
       continue
     }
 
-    $result = Invoke-PackageItem -Module $module -Name $leaf.Name -Item $leaf.Item -Handler $handler -Apply:$Apply
+    # A fact's embedded 'shell' has no real system side effect (same
+    # rationale as the fact registry mutation below) - always actually runs,
+    # even without '-Apply', so dry-run previews of later 'when'/'${{ }}'
+    # references see a real computed value instead of a zero-result stand-in.
+    $result = Invoke-PackageItem -Module $module -Name $leaf.Name -Item $leaf.Item -Handler $handler -Apply:($Apply -or $hasEmbeddedShell)
 
     $changed = ($result.Action -ne 'Skip')
     $failed = ($result.Exec.rc -ne 0)
@@ -270,8 +289,25 @@ function Invoke-Tasks {
     if ($module -eq 'fact') {
       $factName = Get-Prop $leaf.Item 'name'
       if ($factName) {
-        if ($result.Action -eq 'Uninstall') { $registry.Remove($factName) }
-        else { $registry[$factName] = Get-Prop $leaf.Item 'value' }
+        if ($result.Action -eq 'Uninstall') {
+          $userFacts.Remove($factName)
+        } elseif ($hasEmbeddedShell) {
+          if ($hasDeferredFactValue) {
+            # Resolve the deferred 'value' now that the embedded shell has
+            # run, against facts/vars/id-registry plus this leaf's own bare
+            # rc/stdout/stdout_lines/stderr/stderr_lines (self-reference,
+            # same convention 'failed_when' uses above).
+            $valueContext = $flatContext.Clone()
+            foreach ($key in $result.Exec.Keys) { $valueContext[$key] = $result.Exec[$key] }
+            $valueWrapper = @{ value = $deferredFactValue }
+            Resolve-TemplatesInPlace -Data $valueWrapper -Context $valueContext -PackageName $label
+            $userFacts[$factName] = $valueWrapper.value
+          } else {
+            $userFacts[$factName] = ([string] $result.Exec.stdout).Trim()
+          }
+        } else {
+          $userFacts[$factName] = Get-Prop $leaf.Item 'value'
+        }
       }
     }
 

@@ -51,7 +51,9 @@
       "description": "Condition(s) gating this task/action and everything nested under it (AND'd with every ancestor task's own 'when'). A single expression string, or a list of expressions (implicit AND) - matches Ansible. Bare dotted/indexed identifiers (e.g. 'foo.rc', 'foo.results[0].rc') resolve against facts/vars/id-registered results/facts (no '${{ }}' wrapper); operators: == != < <= > >=, and, or, not, in/not in, is/is not, and a '|' filter pipeline (e.g. 'value | default(\"x\") == \"x\"'). See README.md for the full grammar.",
       "oneOf": [
         { "type": "string" },
-        { "type": "array", "items": { "type": "string" } }
+        { "type": "array", "items": { "type": "string" } },
+        { "type": "array", "items": { "anyOf": [ { "type": "string" }, { "type": "boolean"}] } },
+        { "type": "boolean" }
       ]
     },
     "taskItem": {
@@ -440,16 +442,20 @@
     },
     "factItem": {
       "type": "object",
-      "description": "Sets an arbitrary named value for later tasks to reference (bare '${{ name }}' in templates, bare 'name'/'name.field' in 'when') - a user-defined counterpart to gathered facts and 'id'-registered results, sharing the same flat namespace. Reuses the present/absent state machine like 'log': 'state: present' (default) or 'latest' (re)sets the fact every time this is reached; 'state: absent' unsets it. No real idempotency - a fact always fires when reached.",
+      "description": "Sets an arbitrary named value for later tasks to reference - registered under the 'facts' namespace alongside gathered host facts (bare 'facts.<name>' / 'facts.<name>.<field>' in 'when', '${{ facts.<name> }}' in templates - a user-defined counterpart to gathered facts, distinct from 'id'-registered results). Reuses the present/absent state machine like 'log': 'state: present' (default) or 'latest' (re)sets the fact every time this is reached; 'state: absent' unsets it. No real idempotency - a fact always fires when reached.",
       "additionalProperties": false,
       "required": ["name"],
       "properties": {
         "name": {
           "type": "string",
-          "description": "Registry key this fact is stored under."
+          "description": "Name this fact is registered under, as 'facts.<name>'."
+        },
+        "shell": {
+          "$ref": "#/$defs/shellItem",
+          "description": "Runs this command to compute the fact's value, instead of (or alongside) a literal 'value'. Always actually runs, even without '-Apply' - a fact has no real system side effect, so dry-run previews of later 'when'/'${{ }}' references need it to behave the same as a real run (the one exception to '-Apply' gating, alongside the fact's own registration below). If 'value' is omitted, the fact is set to the command's trimmed stdout. If 'value' is given, it's resolved *after* the command runs, against this task's own bare 'rc'/'stdout'/'stdout_lines'/'stderr'/'stderr_lines' (same self-reference convention as 'failed_when') alongside the usual facts/vars/id-registered context - e.g. 'value: \"${{ stdout | dirname }}\"'."
         },
         "value": {
-          "description": "Any YAML value - scalar, list, or nested mapping. May reference '${{ <id> }}' / '${{ facts.* }}' / '${{ vars.* }}', resolved before being stored. Required unless 'state' is 'absent'."
+          "description": "Any YAML value - scalar, list, or nested mapping. May reference '${{ <id> }}' / '${{ facts.* }}' / '${{ vars.* }}', resolved before being stored. Required unless 'state' is 'absent' or 'shell' is given (see 'shell')."
         },
         "state": { "$ref": "#/$defs/state" }
       }

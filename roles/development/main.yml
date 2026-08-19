@@ -16,9 +16,10 @@ tasks:
           Set-Location '${{ shell.pwsh.ws | default('~/Development') }}'
         }
 
-  - name: Test
-    blockinfile:
-      create: true
-      dest: ${{ shell.pwsh.aliases | default('~/.config/powershell/Microsoft.PowerShell_profile.ps1') | dirname | join('dev.ps1') }}
-      block: |
-        Write-Output "Test block"
+  # - name: Test
+  #   when: false
+  #   blockinfile:
+  #     create: true
+  #     dest: ${{ shell.pwsh.aliases | default('~/.config/powershell/Microsoft.PowerShell_profile.ps1') | dirname | join('dev.ps1') }}
+  #     block: |
+  #       Write-Output "Test block"
