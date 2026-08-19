@@ -107,7 +107,8 @@ install/windows/
         ├── Go.psm1
         ├── Eget.psm1
         ├── Zip.psm1
-        ├── Symlinks.psm1
+        ├── Symlinks.psm1          ← thin wrapper over File.psm1's 'link' type
+        ├── File.psm1
         ├── Copy.psm1
         ├── Shell.psm1
         ├── BlockInFile.psm1
@@ -116,9 +117,20 @@ install/windows/
         ├── Fact.psm1
         ├── Registry.psm1
         └── ScheduledTask.psm1
+    └── Filters/
+        ├── default.ps1
+        ├── null.ps1
+        ├── upper.ps1
+        ├── lower.ps1
+        ├── trim.ps1
+        ├── quote.ps1
+        ├── ternary.ps1
+        └── toggle.ps1
 ```
 
 Each `Handlers/*.psm1` file exports a single `Get-<Module>Handler` function returning a `Test`/`Describe`/`Install`/`Uninstall` set of script blocks - unchanged in shape from before. To add a new module, drop a new module in `Handlers/`, register it in `Get-PackageManagerHandlers` in `ironstate.ps1`, and add it to `$script:NoCommandCheckModules` if it isn't backed by an external CLI.
+
+Each `Filters/*.ps1` file is a standalone script - just its own `param($Value, [object[]] $ArgValues)` block plus logic - named for the filter it implements (`upper.ps1` → the `upper` filter). `Expressions.psm1` loads every file in `Filters/` at import time, so adding a new `|` filter is just adding a file there - no registration step.
 
 ## Task/action model
 
@@ -241,7 +253,7 @@ This grammar lives in `modules/Expressions.psm1` and is shared with `${{ }}` tem
 - `in`/`not in`: right-hand side a list → membership check; a string → substring containment.
 - A bare variable with no operator is truthy-checked directly (Ansible-style `when: some_var`).
 - `is`/`is not` type-tests: `mapping` (alias `map`), `boolean` (alias `bool`), `string`, `number`, `list`, `defined`, `none` (alias `null`). Use these instead of `==`/truthy checks when you need to know a value's actual type rather than whether it casts to `true` - notably, `some_map == true` is **also true for any non-empty mapping**, since both go through the same truthy cast, so `is mapping`/`is boolean` are the only reliable way to tell "a boolean `true`" apart from "a map" (see `packages/languages/main.yml`, where a var can be either a blanket `true` or a per-key map).
-- `value | filter(args)` pipes a value through a named filter, Jinja-style, and chains left-to-right (`value | trim | upper`). Built-in filters: `default(fallback)` (the piped value if it's non-null, else `fallback`), `toggle(fallback)` (the piped value if it's a **string**, else `fallback` - for a var that's normally an on/off boolean flag but may instead be set to a string to name a specific override, e.g. `jdk: true` vs. `jdk: 'Eclipse.Temurin.21'` - see the `packages/languages/java` example below), `upper`/`lower`/`trim` (string case/whitespace; pass `null` through unchanged rather than erroring). Filter binds tighter than comparisons, so `java_version | default("25") == "25"` filters first, then compares.
+- `value | filter(args)` pipes a value through a named filter, Jinja-style, and chains left-to-right (`value | trim | upper`). Built-in filters: `default(fallback)` (the piped value if it's non-null, else `fallback`), `toggle(fallback)` (the piped value if it's a **string**, else `fallback` - for a var that's normally an on/off boolean flag but may instead be set to a string to name a specific override, e.g. `jdk: true` vs. `jdk: 'Eclipse.Temurin.21'` - see the `packages/languages/java` example below), `upper`/`lower`/`trim` (string case/whitespace; pass `null` through unchanged rather than erroring). Filter binds tighter than comparisons, so `java_version | default("25") == "25"` filters first, then compares. Each filter is a standalone script in `modules/Filters/`, named for the filter itself (e.g. `upper.ps1` is the `upper` filter) and loaded automatically at import - add a new filter by adding a file there, nothing else to register.
 
 ```yaml
 tasks:
@@ -443,19 +455,60 @@ Each module's own fields (documented inline in `site.yml`) still include `state`
 
 ### `symlinks`
 
+A thin wrapper over `file` (`type: link`) - see below. Kept as its own module for the simpler `src`/`dest` shape.
+
 | Field | Required | Description |
 | --- | --- | --- |
 | `src` | yes | Link target (`~` expansion supported) |
 | `dest` | yes | Link path (`~` expansion supported) |
+| `force` | no | Replace whatever already exists at `dest` if it isn't already the right symlink. Default `true` - unlike `file`'s own `force` (default `false`), this preserves the original always-replace behavior. Set `false` to warn and skip instead |
+
+### `file`
+
+Modeled on Ansible's [`file`](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/file_module.html): manages a path as a plain file, directory, symlink, or hard link.
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `path` | yes | Path to manage (`~` expansion supported) |
+| `type` | no | `file` (default, creates an empty file if missing, no-op otherwise), `directory` (creates it and any missing parents), `link` (symlink to `src`), `hard` (hard link to `src`), `touch` (always updates the timestamp, creating an empty file first if missing - like Unix `touch`) |
+| `src` | one of `type: link`/`type: hard` | Existing path the link points to |
+| `force` | no | When `path` already exists as something other than `type`, replace it. Default `false` - warns and skips instead |
+
+**Note:** `state` here is this codebase's usual `present`/`absent`/`latest` (see [Task/action model](#taskaction-model)) - unlike Ansible's own `file` module, which overloads `state` to also mean the target kind (`file`/`directory`/`link`/`hard`/`touch`) plus `absent`. That's what `type` is for instead, so this module's dispatch stays consistent with every other handler. `absent` removes whatever is at `path` - recursively for a real directory, but a link/hard link is only ever unlinked, never recursed into, so removing a directory symlink can't delete the target's contents.
+
+```yaml
+tasks:
+  - name: custom PowerShell scripts directory
+    file:
+      path: ~/.config/powershell/custom
+      type: directory
+
+  - name: pin a specific config as the active one
+    file:
+      path: ~/.config/app/active.json
+      type: link
+      src: ~/.config/app/profiles/work.json
+```
 
 ### `copy`
 
 | Field | Required | Description |
 | --- | --- | --- |
-| `src` | yes | Source file. Resolved relative to the install system directory (`install/windows`, or the owning package's own directory — see [Includes](#includes)) unless it's absolute or `~`-prefixed |
-| `dest` | yes | Destination file (`~` expansion supported) |
+| `src` | yes | Source file or directory. Resolved relative to the install system directory (`install/windows`, or the owning package's own directory — see [Includes](#includes)) unless it's absolute or `~`-prefixed |
+| `dest` | yes | Destination path (`~` expansion supported) - a directory when `src` is a directory |
 
 `present`/`latest` copy `src` over `dest` whenever their SHA256 hashes differ; `absent` removes `dest`.
+
+If `src` is a directory, every file under it is copied recursively, preserving subdirectory structure - rsync/Ansible style: a trailing `/` on `src` (e.g. `files/custom/`) copies its *contents* directly into `dest`, while no trailing slash (e.g. `files/custom`) nests it as `dest/custom/...` instead. `dest` is created as a directory either way. `present`/`latest` compare each file's SHA256 hash individually (extra files already in `dest` that aren't under `src` are left alone - this isn't a mirror); `absent` removes only the files this task copied, then prunes any subdirectories left empty as a result - never `dest` itself.
+
+```yaml
+tasks:
+  - name: custom PowerShell source files
+    copy:
+      src: "files/home/.config/powershell/custom/"  # trailing slash: contents only
+      dest: "~/.config/powershell/custom"
+      state: present
+```
 
 ### `shell`
 
@@ -518,7 +571,8 @@ Modeled on Ansible's [`blockinfile`](https://docs.ansible.com/projects/ansible/l
 | --- | --- | --- |
 | `dest` | yes | File to manage (`~` expansion supported) |
 | `block` | yes, unless `state: absent` | Content to place between the markers. Use a YAML block scalar (`\|`) for multiline content |
-| `marker` | no | Template for both marker lines; `{mark}` is replaced with `marker_begin`/`marker_end`. Default `# {mark} MANAGED BLOCK` |
+| `marker` | no | Template for both marker lines; `{mark}` is replaced with `marker_begin`/`marker_end`, `{name}` with the identifier from `marker_name` (see below). Default `# {mark} IRONSTATE MANAGED - {name}` |
+| `marker_name` | no | Identifier substituted for `{name}` in `marker`, so multiple `blockinfile` tasks can target the same `dest` without one overwriting another's block. Defaults to this task's own `name`, then to `dest`'s file name, if not set |
 | `marker_begin` | no | Substituted for `{mark}` in the opening marker line. Default `BEGIN` |
 | `marker_end` | no | Substituted for `{mark}` in the closing marker line. Default `END` |
 | `insertafter` | no | Where to insert the block when the markers aren't already present: `EOF` (default), `BOF`, or a regex - inserted after the last matching line (falls back to `EOF` if nothing matches). Ignored if `insertbefore` is set |
@@ -528,16 +582,25 @@ Modeled on Ansible's [`blockinfile`](https://docs.ansible.com/projects/ansible/l
 
 If the marker lines are already present, the block between them is replaced in place. `present`/`latest` write the block whenever its current content doesn't already match; `absent` removes the marker lines and everything between them.
 
+> **Note:** the default `marker` template gained a `{name}` token (see `marker_name` above). A block written before this change (no name in its marker) won't match the new default and will be treated as not-installed - the next `present`/`latest` run inserts a second, newly-marked block below the old one rather than replacing it in place. Either delete the old marker block by hand once, or pin `marker` to the old `# {mark} IRONSTATE MANAGED` template for that task to keep matching it.
+
 ```yaml
 tasks:
-  - name: powershell profile env
+  # Two blockinfile tasks targeting the same dest - each gets its own
+  # marker pair (from its own 'name') so neither overwrites the other.
+  - name: dev/ws aliases
     blockinfile:
       dest: ~/.config/powershell/profile.ps1
-      marker: "# {mark} MANAGED BLOCK - shell environment"
       create: true
       block: |
+        function dev { Set-Location ~/Development }
+
+  - name: shell environment
+    blockinfile:
+      dest: ~/.config/powershell/profile.ps1
+      marker_name: "Override 123" # overrides the identifier instead of using the task's own name
+      block: |
         $env:VIRTUAL_ENV_DISABLE_PROMPT = 1
-      state: present
 
   - name: gitconfig core section
     blockinfile:

@@ -1,15 +1,72 @@
 ---
+vars:
+  monitoring: false
+  cli: false
+  tweaks: false
+  terminal: false
+  languages: false
+    # rust: false
+    # python: false
+    # nodejs: false
+    # golang: false
+    # java: false
+      # jre: false
+      # jdk: EclipseAdoptium.Temurin.21.JDK
+    # dotnet: false
+    # ruby: false
+      # install:
+      #   override: '/verysilent /tasks="assocfiles,modpath" /DIR="d:\ruby" /currentuser'
+  shell:
+    pwsh:
+      profile: '~/.config/powershell/Microsoft.PowerShell_profile.ps1'
+      aliases: '~/.config/powershell/custom/aliases/dev.ps1'
+      dev: '~/Development'
+      ws: '~/Development'
+      omp:
+        profile: '~/.config/powershell/default.omp.json'
+
+  defaults:
+    shell:
+      pwsh:
+        profile: '~/.config/powershell/Microsoft.PowerShell_profile.ps1'
+        aliases: '~/.config/powershell/custom/aliases/dev.ps1'
+        dev: '~/Development'
+        ws: '~/Development'
+        omp:
+          profile: '~/.config/powershell/default.omp.json'
 
 tasks:
 
+  - name: Install Package Managers
+    include:
+      name: roles/package-managers
+      state: latest
+
   - name: Install Languages
+    when: (languages is mapping) or (languages is boolean and languages)
     include:
       name: roles/languages
       state: present
     tags:
       - languages
 
+  - name: Set up Development Environment
+    include:
+      name: roles/development
+      state: present
+    tags:
+      - development
+
+  - name: Set up Shell Environment
+    when: (shell is mapping) or (shell is boolean and shell)
+    include:
+      name: roles/shell
+      state: present
+    tags:
+      - shell
+
   - name: System Tweak Tools
+    when: (tweaks is mapping) or (tweaks is boolean and tweaks)
     include:
       name: packages/tweaks
       state: present
@@ -19,6 +76,7 @@ tasks:
       - utility
 
   - name: Install Windows Terminal
+    when: (terminal is mapping) or (terminal is boolean and terminal)
     include:
       name: packages/terminal
       state: present
@@ -29,7 +87,7 @@ tasks:
     include:
       name: packages/smartctl
       state: present
-    when: monitoring
+    when: (monitoring is mapping) or (monitoring is boolean and monitoring) 
     tags:
       - smartctl
       - monitor
@@ -38,247 +96,10 @@ tasks:
     include:
       name: packages/cli
       state: present
-    when: cli
+    when: (cli is mapping) or (cli is boolean and cli)
     tags:
       - cli
 
-  - tags: [cli]
-    eget:
-      package: zyedidia/eget
-      state: latest
-      args:
-        - --to=~/.local/bin/eget.exe
-        - --upgrade-only
-
-
-  - tags: [git, cli]
-    eget:
-      package: dandavison/delta
-      state: present
-      args:
-        - --to=~/.local/bin/delta.exe
-        - --upgrade-only
-
-  - tags: [cli]
-    eget:
-      package: bootandy/dust
-      state: present
-      args:
-        - --to=~/.local/bin/dust.exe
-        - --upgrade-only
-
-
-  - tags: [system-info, cli]
-    eget:
-      package: fastfetch-cli/fastfetch
-      state: present
-      args:
-        - --to=~/.local/bin/fastfetch.exe
-        - --upgrade-only
-        - --asset=".zip"
-
-
-  - tags: [security, cli, totp]
-    eget:
-      package: pcarrier/gauth
-      state: present
-      args:
-        - --to=~/.local/bin/gauth.exe
-        - --upgrade-only
-
-  - tags: [security, cli, password-store]
-    eget:
-      package: reyamira/pass-cli
-      state: present
-      args:
-        - --to=~/.local/bin/pass-cli.exe
-        - --upgrade-only
-        - --asset=".tar.gz"
-
-  - tags: [git, cli]
-    eget:
-      package: byawitz/ggh
-      state: present
-      args:
-        - --to=~/.local/bin/ggh.exe
-        - --upgrade-only
-
-  - tags: [git, gist, cli]
-    eget:
-      package: akunzai/gistui
-      state: present
-      args:
-        - --to=~/.local/bin/gistui.exe
-        - --upgrade-only
-
-  - tags: [git, changelog, cli]
-    eget:
-      package: orhun/git-cliff
-      state: present
-      args:
-        - --to=~/.local/bin/git-cliff.exe
-        - --upgrade-only
-
-  - tags: [tui, cli]
-    eget:
-      package: charmbracelet/gum
-      state: present
-      args:
-        - --to=~/.local/bin/gum.exe
-        - --upgrade-only
-
-  - tags: [process, cli]
-    eget:
-      package: dalance/procs/
-      state: present
-      args:
-        - --to=~/.local/bin/procs.exe
-        - --upgrade-only
-
-  - tags: [text, cli]
-    eget:
-      package: chmln/sd
-      state: present
-      args:
-        - --to=~/.local/bin/sd.exe
-        - --upgrade-only
-
-  - tags: [git, versioning, cli]
-    eget:
-      package: caarlos0/svu
-      state: present
-      args:
-        - --to=~/.local/bin/svu.exe
-        - --upgrade-only
-        - --asset=".zip"
-
-  - tags: [security, cli, totp]
-    eget:
-      package: yitsushi/totp-cli
-      state: present
-      args:
-        - --to=~/.local/bin/totp.exe
-        - --upgrade-only
-        - --asset=".zip"
-
-  - tags: [hosts, cli]
-    eget:
-      package: guumaster/hostctl
-      state: present
-      args:
-        - --to=~/.local/bin/hostctl.exe
-        - --upgrade-only
-        - --asset="64-bit.zip"
-
-  - tags: [kubernetes, cli]
-    eget:
-      package: kdash-rs/kdash
-      state: absent
-      args:
-        - --to=~/.local/bin/kdash.exe
-        - --upgrade-only
-        - --asset=".zip"
-
-  - tags: [kubernetes, cli]
-    eget:
-      package: stern/stern
-      state: absent
-      args:
-        - --to=~/.local/bin/stern.exe
-        - --upgrade-only
-        - --asset=".zip"
-
-  - tags: [kubernetes, cli]
-    eget:
-      package: derailed/k9s
-      state: absent
-      args:
-        - --to=~/.local/bin/k9s.exe
-        - --upgrade-only
-        - --asset=".zip"
-
-  - tags: [kubernetes, cli]
-    eget:
-      package: derailed/popeye
-      state: absent
-      args:
-        - --to=~/.local/bin/popeye.exe
-        - --upgrade-only
-        - --asset=".zip"
-
-  - tags: [security, cli, sbom]
-    eget:
-      package: anchore/syft
-      state: absent
-      args:
-        - --to=~/.local/bin/syft.exe
-        - --upgrade-only
-        - --asset=".zip"
-
-  - tags: [security, cli, vulnerability-scanning]
-    eget:
-      package: anchore/grype
-      state: absent
-      args:
-        - --to=~/.local/bin/grype.exe
-        - --upgrade-only
-        - --asset=".zip"
-
-  - tags: [network, cli]
-    eget:
-      package: hanshuaikang/NBping
-      state: present
-      args:
-        - --to=~/.local/bin/nbping.exe
-        - --upgrade-only
-        - --asset=".zip"
-
-  - tags: [weather, cli]
-    eget:
-      package: Tairesh/rustormy
-      state: present
-      args:
-        - --to=~/.local/bin/rustormy.exe
-        - --upgrade-only
-        - --asset=".zip"
-
-  - tags: [shell, cli]
-    eget:
-      package: koalaman/shellcheck
-      state: present
-      args:
-        - --to=~/.local/bin/shellcheck.exe
-        - --upgrade-only
-        - --asset=".zip"
-
-  - tags: [ssh, cli]
-    eget:
-      package: akinoiro/ssh-list
-      state: present
-      args:
-        - --to=~/.local/bin/ssh-list.exe
-        - --upgrade-only
-        - --asset=".zip"
-
-  - tags: [ai, cli]
-    eget:
-      package: anomalyco/opencode
-      state: present
-      args:
-        - --to=~/.local/bin/opencode.exe
-        - --upgrade-only
-        - --asset=".zip"
-
-  - tags: [cli]
-    go:
-      package: github.com/dhth/act3
-      version: latest
-      state: present
-
-  - tags: [security, cli]
-    pipx:
-      package: pwdgen
-      state: present
 
   - name: register local bins
     path:

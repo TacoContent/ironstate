@@ -82,7 +82,7 @@ $ErrorActionPreference = 'Stop'
 
 # Modules that aren't backed by an external CLI on PATH, so the usual
 # "is the manager installed?" Get-Command check doesn't apply to them.
-$script:NoCommandCheckModules = @('symlinks', 'zip', 'copy', 'shell', 'blockinfile', 'log', 'path', 'fact', 'registry', 'scheduled_task')
+$script:NoCommandCheckModules = @('symlinks', 'zip', 'copy', 'shell', 'blockinfile', 'log', 'path', 'fact', 'registry', 'scheduled_task', 'file')
 
 # Modules whose task-tree name doesn't match the CLI binary it drives.
 $script:ModuleCommandNames = @{ chocolatey = 'choco' }
@@ -112,6 +112,7 @@ function Get-PackageManagerHandlers {
     eget           = Get-EgetHandler
     zip            = Get-ZipHandler
     symlinks       = Get-SymlinksHandler
+    file           = Get-FileHandler
     copy           = Get-CopyHandler
     shell          = Get-ShellHandler
     blockinfile    = Get-BlockInFileHandler
@@ -136,7 +137,7 @@ function Invoke-PackageItem {
 
   $label = if ($Name) { $Name } else { Get-ItemLabel -Item $Item }
   $state = Get-ItemState -Item $Item
-  $installed = & $Handler.Test $Item
+  $installed = & $Handler.Test $Item $Name
   $action = Resolve-PackageAction -State $state -IsInstalled $installed
 
   # A handler's Install/Uninstall may return a { rc, stdout, stdout_lines,
@@ -154,7 +155,7 @@ function Invoke-PackageItem {
     } else {
       Write-Host "[$Module] $description"
       try {
-        $execResult = if ($action -eq 'Install') { & $Handler.Install $Item } else { & $Handler.Uninstall $Item }
+        $execResult = if ($action -eq 'Install') { & $Handler.Install $Item $Name } else { & $Handler.Uninstall $Item $Name }
       } catch {
         $message = $_.Exception.Message
         Write-Warning "[$Module] $label threw: $message"
@@ -204,7 +205,11 @@ function Invoke-Tasks {
 
   foreach ($leaf in @($Leaves)) {
     $module = $leaf.Module
-    $label = if ($leaf.Name) { $leaf.Name } else { '<unnamed>' }
+    $label =
+      if ($leaf.Name) { $leaf.Name }
+      elseif (Get-Prop $leaf.Item 'name') { Get-Prop $leaf.Item 'name' }
+      elseif (Get-Prop $leaf.Item 'package') { Get-Prop $leaf.Item 'package' }
+      else { '<unnamed>' }
 
     $handler = $Handlers[$module]
     if (-not $handler) {

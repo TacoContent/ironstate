@@ -121,7 +121,8 @@ tasks:
       source: winget
       state: ${{ package.state }}
 
-  - tags: 
+  - name: Install Chezmoi
+    tags: 
       - dotfiles
       - cli
     winget:

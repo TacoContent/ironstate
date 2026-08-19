@@ -47,11 +47,13 @@ function Get-PathHandler {
     Describe  = {
       param($Item, $Action)
       $paths = (Get-WantedPaths -Item $Item) -join ', '
-      if ($Action -eq 'Uninstall') { "remove from PATH: $paths" } else { "add to PATH: $paths" }
+      $scope = Get-Prop $Item 'scope' 'User'
+      if ($Action -eq 'Uninstall') { "remove from PATH: $paths (scope: $scope)" } else { "add to PATH: $paths (scope: $scope)" }
     }
     Install   = {
       param($Item)
       $wanted = Get-WantedPaths -Item $Item
+      $scope = Get-Prop $Item 'scope' 'User'
       $updated = [System.Collections.Generic.List[string]]::new()
       foreach ($p in (Get-UserPathEntries)) { $updated.Add($p) }
 
@@ -60,15 +62,16 @@ function Get-PathHandler {
         if ($updated -notcontains $p) { $updated.Add($p); $added.Add($p) }
       }
 
-      [Environment]::SetEnvironmentVariable('PATH', ($updated -join ';'), 'User')
+      [Environment]::SetEnvironmentVariable('PATH', ($updated -join ';'), $scope)
       foreach ($p in $added) { $env:PATH = "$env:PATH;$p" }
     }
     Uninstall = {
       param($Item)
       $unwanted = Get-WantedPaths -Item $Item
+      $scope = Get-Prop $Item 'scope' 'User'
 
       $updated = @(Get-UserPathEntries | Where-Object { $unwanted -notcontains $_ })
-      [Environment]::SetEnvironmentVariable('PATH', ($updated -join ';'), 'User')
+      [Environment]::SetEnvironmentVariable('PATH', ($updated -join ';'), $scope)
 
       $liveUpdated = @($env:PATH -split ';' | Where-Object { $unwanted -notcontains $_ })
       $env:PATH = ($liveUpdated -join ';')

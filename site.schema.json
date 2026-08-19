@@ -102,6 +102,7 @@
         "eget": { "$ref": "#/$defs/egetItem" },
         "zip": { "$ref": "#/$defs/zipItem" },
         "symlinks": { "$ref": "#/$defs/symlinkItem" },
+        "file": { "$ref": "#/$defs/fileItem" },
         "copy": { "$ref": "#/$defs/copyItem" },
         "shell": { "$ref": "#/$defs/shellItem" },
         "blockinfile": { "$ref": "#/$defs/blockInFileItem" },
@@ -226,7 +227,7 @@
     },
     "symlinkItem": {
       "type": "object",
-      "description": "A symbolic link created from src to dest.",
+      "description": "A symbolic link created from src to dest. A thin wrapper over 'file' (type: link) - see fileItem.",
       "additionalProperties": false,
       "required": ["src", "dest"],
       "properties": {
@@ -238,22 +239,55 @@
           "type": "string",
           "description": "Link path. '~' expansion is supported."
         },
+        "force": {
+          "type": "boolean",
+          "default": true,
+          "description": "Replace whatever already exists at 'dest' if it isn't already the right symlink. Default true, unlike 'file's own 'force' (default false) - preserves this module's original always-replace behavior. Set false to instead warn and skip when 'dest' exists as something else."
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "fileItem": {
+      "type": "object",
+      "description": "Manages 'path' as a file, directory, symlink, or hard link, modeled on Ansible's file module. Unlike Ansible, the target kind is 'type' rather than an overloaded 'state' - 'state' here is always this codebase's usual present/absent/latest.",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path to manage. '~' expansion is supported."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["file", "directory", "link", "hard", "touch"],
+          "default": "file",
+          "description": "What kind of thing 'path' should be. 'file' creates an empty file if missing (no-op otherwise); 'directory' creates it (and parents) if missing; 'link' is a symlink to 'src'; 'hard' is a hard link to 'src'; 'touch' always updates the timestamp (creating an empty file first if missing), like Unix 'touch'."
+        },
+        "src": {
+          "type": "string",
+          "description": "Existing path the link points to. Required when 'type' is 'link' or 'hard'. '~' expansion is supported."
+        },
+        "force": {
+          "type": "boolean",
+          "default": false,
+          "description": "When 'path' already exists as something other than 'type', replace it. Default false - warns and skips instead, rather than destroying whatever's already there."
+        },
         "state": { "$ref": "#/$defs/state" }
       }
     },
     "copyItem": {
       "type": "object",
-      "description": "Copies a file from 'src' to 'dest'.",
+      "description": "Copies 'src' to 'dest'. If 'src' is a directory, every file under it is copied recursively.",
       "additionalProperties": false,
       "required": ["src", "dest"],
       "properties": {
         "src": {
           "type": "string",
-          "description": "Source file path. Resolved relative to the install system directory (install/windows, or the owning package's own directory for packages/<name>/main.yml) unless it is absolute, '~'-prefixed, or a URL."
+          "description": "Source file or directory path. Resolved relative to the install system directory (install/windows, or the owning package's own directory for packages/<name>/main.yml) unless it is absolute, '~'-prefixed, or a URL. If this is a directory, a trailing '/' copies its contents directly into 'dest'; without one, it nests as 'dest/<src's folder name>/...' (rsync/Ansible convention)."
         },
         "dest": {
           "type": "string",
-          "description": "Destination file path. '~' expansion is supported."
+          "description": "Destination path. '~' expansion is supported. A directory when 'src' is a directory."
         },
         "state": { "$ref": "#/$defs/state" }
       }
@@ -309,8 +343,12 @@
         },
         "marker": {
           "type": "string",
-          "default": "# {mark} MANAGED BLOCK",
-          "description": "Template for both marker lines; '{mark}' is replaced with 'marker_begin'/'marker_end'. Change this (e.g. to use a different comment syntax) if the file's syntax doesn't support '#' comments."
+          "default": "# {mark} IRONSTATE MANAGED - {name}",
+          "description": "Template for both marker lines; '{mark}' is replaced with 'marker_begin'/'marker_end', '{name}' with the identifier from 'marker_name' (see below). Change this (e.g. to use a different comment syntax) if the file's syntax doesn't support '#' comments. A custom template with no '{name}' token produces a fixed, unlabeled marker."
+        },
+        "marker_name": {
+          "type": "string",
+          "description": "Identifier substituted for '{name}' in 'marker', distinguishing this block from any other blockinfile task targeting the same 'dest'. Defaults to this task's own 'name', then to 'dest's file name, if not set."
         },
         "marker_begin": {
           "type": "string",

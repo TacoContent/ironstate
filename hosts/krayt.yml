@@ -21,5 +21,3 @@ vars:
       aliases: '~/.config/powershell/custom/aliases/default.ps1'
       dev: '~/Development'
       ws: '~/Development'
-      omp:
-        profile: '~/.config/powershell/default.omp.json'

@@ -28,8 +28,10 @@
 
   'pipeline' is a Jinja-style filter chain: 'value | default(x)',
   'value | trim | upper', etc. - see $script:ExpressionFilters below for the
-  filter registry. It binds tighter than comparisons, so
-  'a | default("x") == "x"' filters first, then compares.
+  filter registry, populated from modules/Filters/ (one file per filter -
+  add a new filter by adding a file there, nothing else to wire up). It
+  binds tighter than comparisons, so 'a | default("x") == "x"' filters
+  first, then compares.
 
   'is'/'is not' tests (Jinja-flavored) check a resolved value's runtime type
   rather than its truthiness - needed because '==' and bare truthy checks
@@ -89,63 +91,14 @@ function Resolve-TemplateContext {
 
 # --- filter registry ---------------------------------------------------
 
-# Every filter is null-in/null-out except 'default', which is the one that
-# *handles* null - that's what lets a package write
-# '${{ languages.java.jdk | default("Oracle.JDK.25") }}' to mean "use the
-# user's override if they set one, else this built-in default".
-$script:ExpressionFilters = @{
-  'default' = {
-    param($Value, [object[]] $ArgValues)
-    if ($ArgValues.Count -ne 1) { throw "'default' filter expects exactly 1 argument" }
-    if ($null -eq $Value) { return $ArgValues[0] }
-    return $Value
-  }
-  'null' = {
-    param($Value, [object[]] $ArgValues)
-    if ([string]::IsNullOrWhiteSpace($Value)) { return $null }
-    return $Value
-  }
-  'upper' = {
-    param($Value, [object[]] $ArgValues)
-    if ($null -eq $Value) { return $null }
-    return ([string] $Value).ToUpperInvariant()
-  }
-  'lower' = {
-    param($Value, [object[]] $ArgValues)
-    if ($null -eq $Value) { return $null }
-    return ([string] $Value).ToLowerInvariant()
-  }
-  'trim' = {
-    param($Value, [object[]] $ArgValues)
-    if ($null -eq $Value) { return $null }
-    return ([string] $Value).Trim()
-  }
-  'quote' = {
-    param($Value, [object[]] $ArgValues)
-    if ($null -eq $Value) { return $null }
-    if ([string]::IsNullOrWhiteSpace($Value)) { return $null }
-    $q = '"'
-    if ($ArgValues.Count -eq 1) { $q = $ArgValues[0] }
-    return "$q$Value$q"
-  }
-  'ternary' = {
-    param($Value, [object[]] $ArgValues)
-    if ($ArgValues.Count -ne 2) { throw "'ternary' filter expects exactly 2 arguments" }
-    if ($Value) { return $ArgValues[0] } else { return $ArgValues[1] }
-  }
-  'toggle' = {
-    # Like 'default', but treats a bare boolean the same as unset - for a
-    # var that's normally an on/off flag (e.g. 'jdk: true' meaning "install
-    # it, with the built-in default package") but may instead be set to a
-    # string to name a specific override (e.g. 'jdk: Eclipse.Temurin.21').
-    # Only a string counts as an explicit override; null *or* a boolean
-    # (true or false) falls back - a 'when:' clause is the right place to
-    # act on the true/false distinction itself (see packages/languages/java).
-    param($Value, [object[]] $ArgValues)
-    if ($ArgValues.Count -ne 1) { throw "'toggle' filter expects exactly 1 argument" }
-    if ($Value -is [string]) { return $Value }
-    return $ArgValues[0]
-  }
+# Populated below from modules/Filters/*.ps1 - one file per filter, named
+# for the filter itself (e.g. 'Filters/upper.ps1' -> the 'upper' filter).
+# Each file is a plain script (its own 'param($Value, [object[]] $ArgValues)'
+# block), invoked positionally by Invoke-ExpressionFilter - so adding a new
+# filter is just adding a file here, no registry entry to hand-wire.
+$script:ExpressionFilters = @{}
+Get-ChildItem -Path (Join-Path $PSScriptRoot 'Filters') -Filter '*.ps1' | ForEach-Object {
+  $script:ExpressionFilters[$_.BaseName] = $_.FullName
 }
 
 function Invoke-ExpressionFilter {

@@ -1,23 +1,39 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-  Handler for the 'symlinks' group.
+  Handler for the 'symlinks' group: a symbolic link from 'src' to 'dest'.
+
+.DESCRIPTION
+  Thin wrapper over File.psm1's 'link' type - translates 'src'/'dest' into
+  a { path; type: link; src; force } item and delegates every Test/Install/
+  Uninstall to it, rather than duplicating symlink-creation logic.
+
+  'force' defaults to true here (unlike File.psm1's own default of false),
+  preserving this handler's original behavior of always replacing whatever
+  was already at 'dest' - set 'force: false' to opt into File.psm1's safer
+  warn-and-skip behavior instead.
 #>
 
 Set-StrictMode -Version Latest
 
 Import-Module (Join-Path $PSScriptRoot '..\Common.psm1')
+Import-Module (Join-Path $PSScriptRoot 'File.psm1')
+
+function ConvertTo-FileLinkItem {
+  param($Item)
+  @{
+    path  = Get-Prop $Item 'dest'
+    type  = 'link'
+    src   = Get-Prop $Item 'src'
+    force = [bool] (Get-Prop $Item 'force' $true)
+  }
+}
 
 function Get-SymlinksHandler {
   [PSCustomObject]@{
     Test      = {
       param($Item)
-      $dest = Resolve-UserPath (Get-Prop $Item 'dest')
-      if (-not (Test-Path $dest)) { return $false }
-      $src = Resolve-UserPath (Get-Prop $Item 'src')
-      if (-not (Test-Path $src)) { Write-Warning "Source path for symlink does not exist: $src"; return $false }
-      $existing = Get-Item -Path $dest -Force
-      return ($existing.LinkType -eq 'SymbolicLink') -and ($existing.Target -contains $src)
+      Test-FileItemPresent -Item (ConvertTo-FileLinkItem -Item $Item)
     }
     Describe  = {
       param($Item, $Action)
@@ -27,16 +43,11 @@ function Get-SymlinksHandler {
     }
     Install   = {
       param($Item)
-      $dest = Resolve-UserPath (Get-Prop $Item 'dest')
-      $src = Resolve-UserPath (Get-Prop $Item 'src')
-      if (-not (Test-Path $src)) { Write-Warning "Source path for symlink does not exist, skipping: $src"; return }
-      if (Test-Path $dest) { Remove-Item -Path $dest -Force }
-      New-Item -ItemType SymbolicLink -Path $dest -Target $src -Force | Out-Null
+      Install-FileItem -Item (ConvertTo-FileLinkItem -Item $Item)
     }
     Uninstall = {
       param($Item)
-      $dest = Resolve-UserPath (Get-Prop $Item 'dest')
-      if (Test-Path $dest) { Remove-Item -Path $dest -Force }
+      Uninstall-FileItem -Item (ConvertTo-FileLinkItem -Item $Item)
     }
   }
 }

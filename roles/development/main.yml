@@ -1,0 +1,24 @@
+---
+
+tasks:
+
+  - name: Set up development alias
+    blockinfile:
+      create: true
+      dest: ${{ shell.pwsh.aliases | default('~/.config/powershell/Microsoft.PowerShell_profile.ps1') | dirname | join('dev.ps1') }}
+      block: |
+        Remove-Item Alias:dev -ErrorAction SilentlyContinue
+        Remove-Item Alias:ws -ErrorAction SilentlyContinue
+        function dev {
+          Set-Location '${{ shell.pwsh.dev | default('~/Development') }}'
+        }
+        function ws {
+          Set-Location '${{ shell.pwsh.ws | default('~/Development') }}'
+        }
+
+  - name: Test
+    blockinfile:
+      create: true
+      dest: ${{ shell.pwsh.aliases | default('~/.config/powershell/Microsoft.PowerShell_profile.ps1') | dirname | join('dev.ps1') }}
+      block: |
+        Write-Output "Test block"

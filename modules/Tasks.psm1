@@ -104,7 +104,7 @@ function Expand-TaskTree {
     if ($null -eq $item) { continue }
 
     if ($item.Contains('with') -or $item.Contains('items')) {
-      $loopLabel = Get-Prop $item 'name' '<unnamed>'
+      $loopLabel = Get-Prop $item 'name' (Get-Prop $item 'package' '<unnamed>')
       if ($item.Contains('with') -and $item.Contains('items')) {
         Write-Warning "Task '$loopLabel' has both 'with' and 'items'; using 'items' and ignoring 'with'."
       }
@@ -140,7 +140,7 @@ function Expand-TaskTree {
 
     $effectiveTags = @($ParentTags + @(Get-Prop $item 'tags' @()) | Select-Object -Unique)
     $effectiveWhen = @($ParentWhen) + @(Get-Prop $item 'when' @())
-    $label = Get-Prop $item 'name' '<unnamed>'
+    $label = Get-Prop $item 'name' (Get-Prop $item 'package' '<unnamed>')
 
     if ($item.Contains('actions')) {
       if ($item.Contains('id')) { Write-Warning "Task '$label' has an 'id' but is a grouping task (has 'actions'); 'id' is only supported on leaf actions - ignoring." }

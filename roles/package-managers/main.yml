@@ -1,0 +1,22 @@
+---
+tasks:
+  - name: Install eget
+    when: true
+    eget:
+      package: zyedidia/eget
+      state: latest
+      args:
+        - --to=~/.local/bin/eget.exe
+        - --upgrade-only
+
+  - name: Install Chocolatey
+    when: true
+    shell:
+      creates:
+        - C:\ProgramData\chocolatey\
+        - C:\ProgramData\chocolatey\bin\
+        - C:\ProgramData\chocolatey\bin\choco.exe
+      command: |
+        Set-ExecutionPolicy Bypass -Scope Process -Force; 
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072;
+        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))

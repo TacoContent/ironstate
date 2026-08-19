@@ -34,7 +34,7 @@ function Get-FactHandler {
     }
     Describe  = {
       param($Item, $Action)
-      $name = Get-Prop $Item 'name' '<unnamed>'
+      $name = Get-Prop $Item 'name' (Get-Prop $item 'package' '<unnamed>')
       if ($Action -eq 'Uninstall') { "unset fact '$name'" }
       else {
         $value = Get-Prop $Item 'value'

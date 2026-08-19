@@ -7,9 +7,15 @@
 
 .DESCRIPTION
   A block is wrapped in a pair of marker lines built from 'marker' (default
-  '# {mark} MANAGED BLOCK') with '{mark}' replaced by 'marker_begin'/
-  'marker_end' (default BEGIN/END). Only the text between those exact marker
-  lines is ever touched - everything else in the file is left alone.
+  '# {mark} IRONSTATE MANAGED - {name}') with '{mark}' replaced by
+  'marker_begin'/'marker_end' (default BEGIN/END) and '{name}' replaced by
+  an identifier - 'marker_name' if set, else the task's own 'name', else
+  'dest's file name - so multiple blockinfile tasks can share the same
+  'dest' without one overwriting another's block. Only the text between
+  those exact marker lines is ever touched - everything else in the file is
+  left alone. A custom 'marker' template with no '{name}' token is left as
+  a fixed, unlabeled marker - '{name}' substitution is a no-op when the
+  token isn't present, matching how '{mark}' already behaves.
 
   If the markers already exist in the file, the block between them is
   replaced in place. Otherwise the new block is inserted per 'insertafter'/
@@ -27,14 +33,28 @@ Set-StrictMode -Version Latest
 
 Import-Module (Join-Path $PSScriptRoot '..\Common.psm1')
 
-$script:DefaultMarker = '# {mark} MANAGED BLOCK'
+$script:DefaultMarker = '# {mark} IRONSTATE MANAGED - {name}'
 
 function Get-BlockMarkers {
-  param([string] $Marker, [string] $MarkerBegin, [string] $MarkerEnd)
+  param([string] $Marker, [string] $MarkerBegin, [string] $MarkerEnd, [string] $Name)
   [PSCustomObject]@{
-    Begin = $Marker.Replace('{mark}', $MarkerBegin)
-    End   = $Marker.Replace('{mark}', $MarkerEnd)
+    Begin = $Marker.Replace('{mark}', $MarkerBegin).Replace('{name}', $Name)
+    End   = $Marker.Replace('{mark}', $MarkerEnd).Replace('{name}', $Name)
   }
+}
+
+function Resolve-BlockIdentifier {
+  # 'marker_name' wins if set, else the task's own display name, else
+  # 'dest's file name - always non-empty since 'dest' is required, so
+  # '{name}' in the default marker always resolves to something distinct
+  # per task even when neither 'marker_name' nor the task's 'name' is set.
+  param($Item, [string] $Name)
+  $override = Get-Prop $Item 'marker_name'
+  if ($override) { return $override }
+  if ($Name) { return $Name }
+  $dest = Get-Prop $Item 'dest'
+  if ($dest) { return (Split-Path (Resolve-UserPath $dest) -Leaf) }
+  return ''
 }
 
 function Get-FileLines {
@@ -114,7 +134,7 @@ function Backup-BlockInFileDest {
 }
 
 function Test-BlockInFilePresent {
-  param($Item)
+  param($Item, [string] $Name)
 
   $dest = Resolve-UserPath (Get-Prop $Item 'dest')
   if (-not (Test-Path $dest)) { return $false }
@@ -122,7 +142,8 @@ function Test-BlockInFilePresent {
   $markers = Get-BlockMarkers `
     -Marker (Get-Prop $Item 'marker' $script:DefaultMarker) `
     -MarkerBegin (Get-Prop $Item 'marker_begin' 'BEGIN') `
-    -MarkerEnd (Get-Prop $Item 'marker_end' 'END')
+    -MarkerEnd (Get-Prop $Item 'marker_end' 'END') `
+    -Name (Resolve-BlockIdentifier -Item $Item -Name $Name)
 
   $lines = Get-FileLines -Path $dest
   $range = Find-BlockRange -Lines $lines -BeginMarker $markers.Begin -EndMarker $markers.End
@@ -137,7 +158,7 @@ function Test-BlockInFilePresent {
 }
 
 function Set-BlockInFile {
-  param($Item)
+  param($Item, [string] $Name)
 
   $dest = Resolve-UserPath (Get-Prop $Item 'dest')
   $create = [bool] (Get-Prop $Item 'create' $false)
@@ -150,7 +171,8 @@ function Set-BlockInFile {
   $markers = Get-BlockMarkers `
     -Marker (Get-Prop $Item 'marker' $script:DefaultMarker) `
     -MarkerBegin (Get-Prop $Item 'marker_begin' 'BEGIN') `
-    -MarkerEnd (Get-Prop $Item 'marker_end' 'END')
+    -MarkerEnd (Get-Prop $Item 'marker_end' 'END') `
+    -Name (Resolve-BlockIdentifier -Item $Item -Name $Name)
 
   $lines = [System.Collections.Generic.List[string]]::new()
   if ($exists) { $lines.AddRange([string[]] (Get-FileLines -Path $dest)) }
@@ -178,7 +200,7 @@ function Set-BlockInFile {
 }
 
 function Remove-BlockInFile {
-  param($Item)
+  param($Item, [string] $Name)
 
   $dest = Resolve-UserPath (Get-Prop $Item 'dest')
   if (-not (Test-Path $dest)) { return }
@@ -186,7 +208,8 @@ function Remove-BlockInFile {
   $markers = Get-BlockMarkers `
     -Marker (Get-Prop $Item 'marker' $script:DefaultMarker) `
     -MarkerBegin (Get-Prop $Item 'marker_begin' 'BEGIN') `
-    -MarkerEnd (Get-Prop $Item 'marker_end' 'END')
+    -MarkerEnd (Get-Prop $Item 'marker_end' 'END') `
+    -Name (Resolve-BlockIdentifier -Item $Item -Name $Name)
 
   $lines = [System.Collections.Generic.List[string]]::new()
   $lines.AddRange([string[]] (Get-FileLines -Path $dest))
@@ -203,21 +226,21 @@ function Remove-BlockInFile {
 function Get-BlockInFileHandler {
   [PSCustomObject]@{
     Test      = {
-      param($Item)
-      Test-BlockInFilePresent -Item $Item
+      param($Item, $Name)
+      Test-BlockInFilePresent -Item $Item -Name $Name
     }
     Describe  = {
       param($Item, $Action)
       $dest = Resolve-UserPath (Get-Prop $Item 'dest')
-      if ($Action -eq 'Uninstall') { "remove managed block from $dest" } else { "manage block in $dest" }
+      if ($Action -eq 'Uninstall') { "remove ironstate managed block from $dest" } else { "manage block in $dest" }
     }
     Install   = {
-      param($Item)
-      Set-BlockInFile -Item $Item
+      param($Item, $Name)
+      Set-BlockInFile -Item $Item -Name $Name
     }
     Uninstall = {
-      param($Item)
-      Remove-BlockInFile -Item $Item
+      param($Item, $Name)
+      Remove-BlockInFile -Item $Item -Name $Name
     }
   }
 }
