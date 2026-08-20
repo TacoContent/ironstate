@@ -1,0 +1,59 @@
+---
+tasks:
+
+  - name: Development Folder Fact
+    tags:
+      - development
+    fact:
+      name: home_dev
+      value: 
+        root: ${{ shell.pwsh.dev | default(development.root) | default('~/Development') }}
+        oss: ${{ shell.pwsh.dev | default(development.root) | default('~/Development') | join('oss') }}
+        work: ${{ shell.pwsh.dev | default(development.root) | default('~/Development') | join('work') }}
+
+  - name: Setup ~/Development
+    tags:
+      - development
+    file:
+      path: '${{ facts.home_dev.root }}'
+      type: directory
+      state: present
+
+  - name: copy folder icon
+    tags:
+      - development
+    copy:
+      src: files/folder.ico
+      dest: '${{ facts.home_dev.root }}/folder.ico'
+  
+  # - name: copy desktop.ini
+  #   tags:
+  #     - development
+  #   template:
+  #     src: files/desktop.ini.j2
+  #     dest: '${{ facts.home_dev.root }}/desktop.ini'
+  #     engine: jinja
+  #     vars:
+  #       icon_file: '${{ facts.home_dev.root }}/folder.ico'
+
+  # - name: Set desktop.ini attributes
+  #   tags:
+  #     - development
+  #   shell:
+  #     command: attrib +h +s '${{ facts.home_dev.root }}/desktop.ini'
+
+  - name: Setup OSS Development Workspace
+    tags:
+      - development
+    symlinks:
+      src: ${{ development.oss }}
+      dest: ${{ facts.home_dev.oss }}
+      state: ${{ package.state }}
+
+  - name: Setup Work Development Workspace
+    tags:
+      - development
+    symlinks:
+      src: ${{ development.work }}
+      dest: ${{ facts.home_dev.work }}
+      state: ${{ package.state }}

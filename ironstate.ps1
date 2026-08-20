@@ -82,7 +82,7 @@ $ErrorActionPreference = 'Stop'
 
 # Modules that aren't backed by an external CLI on PATH, so the usual
 # "is the manager installed?" Get-Command check doesn't apply to them.
-$script:NoCommandCheckModules = @('symlinks', 'zip', 'copy', 'shell', 'blockinfile', 'log', 'path', 'fact', 'registry', 'scheduled_task', 'file')
+$script:NoCommandCheckModules = @('symlinks', 'zip', 'copy', 'shell', 'blockinfile', 'log', 'path', 'fact', 'registry', 'scheduled_task', 'file', 'template')
 
 # Modules whose task-tree name doesn't match the CLI binary it drives.
 $script:ModuleCommandNames = @{ chocolatey = 'choco' }
@@ -114,6 +114,7 @@ function Get-PackageManagerHandlers {
     symlinks       = Get-SymlinksHandler
     file           = Get-FileHandler
     copy           = Get-CopyHandler
+    template       = Get-TemplateHandler
     shell          = Get-ShellHandler
     blockinfile    = Get-BlockInFileHandler
     log            = Get-LogHandler
@@ -132,12 +133,13 @@ function Invoke-PackageItem {
     [string] $Name,
     [Parameter(Mandatory)] $Item,
     [Parameter(Mandatory)][PSCustomObject] $Handler,
+    [hashtable] $Context = @{},
     [switch] $Apply
   )
 
   $label = if ($Name) { $Name } else { Get-ItemLabel -Item $Item }
   $state = Get-ItemState -Item $Item
-  $installed = & $Handler.Test $Item $Name
+  $installed = & $Handler.Test $Item $Name $Context
   $action = Resolve-PackageAction -State $state -IsInstalled $installed
 
   # A handler's Install/Uninstall may return a { rc, stdout, stdout_lines,
@@ -149,13 +151,13 @@ function Invoke-PackageItem {
   if ($action -eq 'Skip') {
     Write-Verbose "[$Module] $label - state=$state, installed=$installed -> skip"
   } else {
-    $description = & $Handler.Describe $Item $action
+    $description = & $Handler.Describe $Item $action $Context
     if (-not $Apply) {
       Write-Host "[DryRun][$Module] $description"
     } else {
       Write-Host "[$Module] $description"
       try {
-        $execResult = if ($action -eq 'Install') { & $Handler.Install $Item $Name } else { & $Handler.Uninstall $Item $Name }
+        $execResult = if ($action -eq 'Install') { & $Handler.Install $Item $Name $Context } else { & $Handler.Uninstall $Item $Name $Context }
       } catch {
         $message = $_.Exception.Message
         Write-Warning "[$Module] $label threw: $message"
@@ -262,7 +264,7 @@ function Invoke-Tasks {
     # rationale as the fact registry mutation below) - always actually runs,
     # even without '-Apply', so dry-run previews of later 'when'/'${{ }}'
     # references see a real computed value instead of a zero-result stand-in.
-    $result = Invoke-PackageItem -Module $module -Name $leaf.Name -Item $leaf.Item -Handler $handler -Apply:($Apply -or $hasEmbeddedShell)
+    $result = Invoke-PackageItem -Module $module -Name $leaf.Name -Item $leaf.Item -Handler $handler -Context $flatContext -Apply:($Apply -or $hasEmbeddedShell)
 
     $changed = ($result.Action -ne 'Skip')
     $failed = ($result.Exec.rc -ne 0)

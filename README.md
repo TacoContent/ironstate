@@ -510,6 +510,41 @@ tasks:
       state: present
 ```
 
+### `template`
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `src` | yes | Template source file. Resolved the same way as `copy.src` |
+| `dest` | yes | Destination path for the rendered output (`~` expansion supported) |
+| `engine` | yes | Which template engine renders `src`: `jinja`, `eps`, or `herestring` (see below) |
+| `vars` | no | Extra key/value pairs layered on top of facts/vars/registry for this render only (last-write-wins, shallow merge) |
+
+`present`/`latest` render `src` and write it to `dest` whenever the freshly-rendered content differs from what's already there (a plain string compare - the template equivalent of `copy`'s SHA256 hash compare); `absent` removes `dest`. The render context is the same facts/vars/id-registry context `when`/`${{ }}` already resolve against, with this task's own `vars` layered on top.
+
+Three engines, in increasing order of power (and decreasing sandboxing):
+
+- **`jinja`** - a sandboxed, block-capable engine built on the same expression grammar as `when`/`${{ }}` (see [Template expressions](#template-expressions)): `{{ expr }}` output, `{% if %}`/`{% elif %}`/`{% else %}`/`{% endif %}`, `{% for x in iterable %}`/`{% endfor %}` (nesting supported), and `{% set x = expr %}`. No cmdlet/command invocation exists in the grammar at all, so a template can only read/compare/filter context values - never cause a side effect.
+- **`eps`** - the real PowerShell Gallery [`EPS`](https://github.com/straightdave/eps) module: `<%= expr %>` (output), `<%# ... %>` (comment), and `<% ... %>` (scriptlet - arbitrary PowerShell statements, including control flow). Installs the `EPS` module on first use if it isn't already present (`Install-Module -Scope CurrentUser`). Unlike `jinja`/`herestring`, this is **full, unrestricted PowerShell** - there is no sandboxed mode in the upstream module (its `-Safe` switch only isolates variable scope, not what the template's code can do).
+- **`herestring`** - looks like a PowerShell expandable here-string, but isn't one: bare `$Name.Path` and `$(...)` interpolation only, evaluated through the same sandboxed grammar as `jinja` - no block constructs. The simplest tier, for plain variable substitution.
+
+```yaml
+tasks:
+  - name: Render global gitconfig
+    template:
+      src: templates/gitconfig.j2
+      dest: ~/.gitconfig
+      engine: jinja
+
+  - name: Render per-profile gitconfig
+    items: ${{ vars.git.profiles | default([]) }}
+    template:
+      src: templates/gitconfig.profile.j2
+      dest: ~/.gitconfig-${{ item.name }}
+      engine: jinja
+      vars:
+        profile: ${{ item }}
+```
+
 ### `shell`
 
 | Field | Required | Description |
@@ -570,7 +605,8 @@ Modeled on Ansible's [`blockinfile`](https://docs.ansible.com/projects/ansible/l
 | Field | Required | Description |
 | --- | --- | --- |
 | `dest` | yes | File to manage (`~` expansion supported) |
-| `block` | yes, unless `state: absent` | Content to place between the markers. Use a YAML block scalar (`\|`) for multiline content |
+| `block` | one of `block`/`template`, unless `state: absent` | Content to place between the markers. Use a YAML block scalar (`\|`) for multiline content |
+| `template` | one of `block`/`template` | Renders a template and uses its output as the block's content instead of a literal `block` string - same `src`/`engine`/`vars` fields as the [`template`](#template) module (minus `dest`/`state`, which this task's own `dest`/`state` already cover). Wins if both `block` and `template` are given |
 | `marker` | no | Template for both marker lines; `{mark}` is replaced with `marker_begin`/`marker_end`, `{name}` with the identifier from `marker_name` (see below). Default `# {mark} IRONSTATE MANAGED - {name}` |
 | `marker_name` | no | Identifier substituted for `{name}` in `marker`, so multiple `blockinfile` tasks can target the same `dest` without one overwriting another's block. Defaults to this task's own `name`, then to `dest`'s file name, if not set |
 | `marker_begin` | no | Substituted for `{mark}` in the opening marker line. Default `BEGIN` |
@@ -608,6 +644,16 @@ tasks:
       marker_begin: "managed-start"
       marker_end: "managed-end"
       insertafter: BOF
+
+  - name: dev/ws aliases, rendered from a template instead of a literal block
+    blockinfile:
+      dest: ~/.config/powershell/profile.ps1
+      create: true
+      template:
+        src: templates/dev-aliases.ps1.j2
+        engine: jinja
+        vars:
+          dev_path: ~/Development
       block: |
         [core]
           autocrlf = false

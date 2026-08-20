@@ -1,0 +1,59 @@
+---
+
+tasks:
+
+  - name: Install Git
+    tags:
+      - git
+      - development
+    winget:
+      package: Git.Git
+      state: present
+
+  - name: Install Delta
+    tags:
+      - git
+      - development
+    eget:
+      package: dandavison/delta
+      state: present
+      args:
+        - --to=~/.local/bin/delta.exe
+        - --upgrade-only
+
+  - name: Render global gitconfig
+    tags: 
+      - git
+      - development
+    blockinfile:
+      create: true
+      template:
+        src: templates/gitconfig.j2
+        engine: jinja
+      dest: ~/.gitconfig
+      insertbefore: BOF
+
+  - name: Render per-profile gitconfig
+    tags: 
+      - git
+      - development
+    items: ${{ vars.git.profiles | default([]) }}
+    template:
+      src: templates/gitconfig.profile.j2
+      dest: ~/.gitconfig-${{ item.name }}
+      engine: jinja
+      vars:
+        profile: ${{ item }}
+
+  - name: Render enterprise gitconfig
+    tags: 
+      - git
+      - development
+    when: github.enterprise is defined
+    blockinfile:
+      template:
+        src: templates/gitconfig.enterprise.urls.j2
+        engine: jinja
+        vars:
+          enterprise: ${{ github.enterprise | default([]) }}
+      dest: ~/.gitconfig

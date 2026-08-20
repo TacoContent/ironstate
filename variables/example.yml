@@ -1,0 +1,38 @@
+vars:
+  git:
+    ssh_rewrite: true
+    user:
+      name: "John Doe"
+      email: "john.doe@example.com"
+    profiles:
+      - name: work
+        gitdirs: 
+          - "gitdir:~/Development/work/"
+          - "gitdir/i:${{ development.work }}"
+        
+        user:
+          name: "John Doe"
+          email: "john.doe@my-company.com"
+      - name: oss
+        gitdirs: 
+          - "gitdir:~/Development/oss/"
+          - "gitdir/i:${{ development.oss }}"
+        user:
+          name: "John Doe"
+          email: "john.doe@example.com"
+
+  github:
+    commercial:
+      host: github.com
+      identity_file: ~/.ssh/id_rsa
+    enterprise:
+      - host: github.my-company.com
+        identity_file: ~/.ssh/id_ed25519
+        orgs:
+          - ent-org-a
+          - ent-org-b
+          - ent-org-c
+
+  ssh:
+    authorized_keys:
+      - github_user: fake_user

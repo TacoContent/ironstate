@@ -1,0 +1,9 @@
+# Managed by ironstate — do not edit directly.
+# Profile: {{ profile.name }} — applied for repos under {{ profile.gitdir }}
+
+[user]
+        name = {{ profile.user.name }}
+        email = {{ profile.user.email }}
+{% if profile.user.signingkey is defined and profile.user.signingkey | length > 0 %}
+        signingkey = {{ profile.user.signingkey }}
+{% endif %}

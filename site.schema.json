@@ -106,6 +106,7 @@
         "symlinks": { "$ref": "#/$defs/symlinkItem" },
         "file": { "$ref": "#/$defs/fileItem" },
         "copy": { "$ref": "#/$defs/copyItem" },
+        "template": { "$ref": "#/$defs/templateItem" },
         "shell": { "$ref": "#/$defs/shellItem" },
         "blockinfile": { "$ref": "#/$defs/blockInFileItem" },
         "log": { "$ref": "#/$defs/logItem" },
@@ -294,6 +295,53 @@
         "state": { "$ref": "#/$defs/state" }
       }
     },
+    "templateItem": {
+      "type": "object",
+      "description": "Renders 'src' through the given template 'engine' and writes the result to 'dest'.",
+      "additionalProperties": false,
+      "required": ["src", "dest", "engine"],
+      "properties": {
+        "src": {
+          "type": "string",
+          "description": "Template source file. Resolved relative to the install system directory (install/windows, or the owning package's own directory for packages/<name>/main.yml) unless it is absolute, '~'-prefixed, or a URL - same resolution rule as 'copy.src'."
+        },
+        "dest": {
+          "type": "string",
+          "description": "Destination file path for the rendered output. '~' expansion is supported."
+        },
+        "engine": {
+          "type": "string",
+          "enum": ["jinja", "eps", "herestring"],
+          "description": "Which template engine renders 'src': 'jinja' (sandboxed, block-capable - '{{ }}', '{% if/for/set %}'), 'eps' (the PowerShell Gallery EPS module - full unrestricted PowerShell in '<% %>'/'<%= %>'), or 'herestring' ('$Name.Path' / '$(...)' interpolation only, same sandboxed grammar as 'jinja', no block constructs)."
+        },
+        "vars": {
+          "type": "object",
+          "description": "Extra key/value pairs layered on top of facts/vars/registry for this render only (last-write-wins, shallow merge)."
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "templateSourceItem": {
+      "type": "object",
+      "description": "A template to render - 'src'/'engine'/'vars' only, no 'dest'/'state' (the embedding field, e.g. 'blockinfile.template', owns those itself).",
+      "additionalProperties": false,
+      "required": ["src", "engine"],
+      "properties": {
+        "src": {
+          "type": "string",
+          "description": "Template source file. Resolved relative to the install system directory (install/windows, or the owning package's own directory for packages/<name>/main.yml) unless it is absolute, '~'-prefixed, or a URL - same resolution rule as 'copy.src'."
+        },
+        "engine": {
+          "type": "string",
+          "enum": ["jinja", "eps", "herestring"],
+          "description": "Which template engine renders 'src': 'jinja' (sandboxed, block-capable - '{{ }}', '{% if/for/set %}'), 'eps' (the PowerShell Gallery EPS module - full unrestricted PowerShell in '<% %>'/'<%= %>'), or 'herestring' ('$Name.Path' / '$(...)' interpolation only, same sandboxed grammar as 'jinja', no block constructs)."
+        },
+        "vars": {
+          "type": "object",
+          "description": "Extra key/value pairs layered on top of facts/vars/registry for this render only (last-write-wins, shallow merge)."
+        }
+      }
+    },
     "shellItem": {
       "type": "object",
       "description": "Runs an inline PowerShell command or a script file. Exactly one of 'command' or 'script' should be given.",
@@ -341,7 +389,11 @@
         },
         "block": {
           "type": "string",
-          "description": "Content to place between the markers. Use a YAML block scalar ('|') for multiline content. Required unless 'state' is 'absent'."
+          "description": "Content to place between the markers. Use a YAML block scalar ('|') for multiline content. One of 'block'/'template' is required unless 'state' is 'absent'; 'template' wins if both are given."
+        },
+        "template": {
+          "$ref": "#/$defs/templateSourceItem",
+          "description": "Renders a template (same 'src'/'engine'/'vars' shape as the 'template' module) and uses its output as the block's content instead of a literal 'block' string."
         },
         "marker": {
           "type": "string",

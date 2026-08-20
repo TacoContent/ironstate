@@ -1,6 +1,10 @@
 ---
 
 vars:
+  development:
+    root: d:/Development
+    oss: d:/Development/projects/github
+    work: d:/Development/work/imanage
   monitoring: false
   cli: false
   languages: false
@@ -21,3 +25,28 @@ vars:
       aliases: '~/.config/powershell/custom/aliases/default.ps1'
       dev: '~/Development'
       ws: '~/Development'
+
+tasks:
+  - name: Setup ~/Development
+    tags:
+      - machine
+    file:
+      path: '${{ shell.pwsh.dev | default("~/Development") }}'
+      type: directory
+      state: present
+
+  - name: Setup OSS Development Workspace
+    tags:
+      - machine
+    symlinks:
+      src: ${{ development.oss }}
+      dest: ${{ shell.pwsh.ws | default("~/Development") | join("oss")}}
+      state: ${{ package.state }}
+
+  - name: Setup Work Development Workspace
+    tags:
+      - machine
+    symlinks:
+      src: ${{ development.work }}
+      dest: ${{ shell.pwsh.ws | default("~/Development") | join("work")}}
+      state: ${{ package.state }}

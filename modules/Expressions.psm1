@@ -448,11 +448,28 @@ function Get-ExpressionValue {
   switch ($Node.Type) {
     'Literal' { return $Node.Value }
     'Var'     { return Resolve-TemplateContext -Context $Context -Path $Node.Path }
-    'List'    { return @($Node.Items | ForEach-Object { Get-ExpressionValue -Node $_ -Context $Context }) }
+    'List'    {
+      # Built via .Add(), not '@(... | ForEach-Object ...)' - a 0- or
+      # 1-item list literal (e.g. '[]', or '[x]' where x itself evaluates
+      # to an array) would otherwise be unrolled into zero/one *bare*
+      # output objects crossing this function's own return boundary,
+      # rather than surviving as one list-shaped value - same hazard as
+      # the 'Filter' case just below.
+      $items = [System.Collections.Generic.List[object]]::new()
+      foreach ($itemNode in $Node.Items) { $items.Add((Get-ExpressionValue -Node $itemNode -Context $Context)) }
+      return ,$items.ToArray()
+    }
     'Filter'  {
+      # Built via .Add(), not '@(... | ForEach-Object ...)' - an argument
+      # that itself evaluates to an array (e.g. 'default([])') would
+      # otherwise be unrolled by the pipe operator, silently vanishing from
+      # $argValues instead of surviving as one (empty-array-valued)
+      # argument - same enumeration hazard called out in Tasks.psm1's
+      # 'with'/'items' handling.
       $value = Get-ExpressionValue -Node $Node.Left -Context $Context
-      $argValues = @($Node.Args | ForEach-Object { Get-ExpressionValue -Node $_ -Context $Context })
-      return Invoke-ExpressionFilter -Name $Node.Name -Value $value -ArgValues $argValues
+      $argValues = [System.Collections.Generic.List[object]]::new()
+      foreach ($argNode in $Node.Args) { $argValues.Add((Get-ExpressionValue -Node $argNode -Context $Context)) }
+      return Invoke-ExpressionFilter -Name $Node.Name -Value $value -ArgValues $argValues.ToArray()
     }
     'Or'  { return (Get-ExpressionValue -Node $Node.Left -Context $Context) -or (Get-ExpressionValue -Node $Node.Right -Context $Context) }
     'And' { return (Get-ExpressionValue -Node $Node.Left -Context $Context) -and (Get-ExpressionValue -Node $Node.Right -Context $Context) }

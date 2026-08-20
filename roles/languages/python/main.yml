@@ -1,10 +1,5 @@
 ---
 
-vars:
-  defaults:
-    languages:
-      python: 'Python.Python.3.13'
-
 tasks:
   - name: Install Python
     tags:

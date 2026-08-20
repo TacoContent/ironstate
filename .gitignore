@@ -1,3 +1,8 @@
+variables/**
+!variables/.gitkeep
+!variables/example.yml
+
+
 # Created by https://www.toptal.com/developers/gitignore/api/windows,powershell,visualstudiocode
 # Edit at https://www.toptal.com/developers/gitignore?templates=windows,powershell,visualstudiocode
 

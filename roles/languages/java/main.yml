@@ -1,11 +1,5 @@
 ---
 
-vars:
-  defaults:
-    languages:
-      java:
-        jre: false
-        jdk: Microsoft.OpenJDK.25
 
 tasks:
   - name: Install Java JDK

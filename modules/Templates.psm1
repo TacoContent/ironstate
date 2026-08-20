@@ -248,4 +248,4 @@ function Resolve-TemplatesInPlace {
   }
 }
 
-Export-ModuleMember -Function Resolve-TemplatesInPlace, Resolve-TemplateContext
+Export-ModuleMember -Function Resolve-TemplatesInPlace, Resolve-TemplateContext, ConvertTo-TemplateDisplayString

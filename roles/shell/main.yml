@@ -1,11 +1,17 @@
 ---
 
 tasks:
-  # - name: Install PowerShell
-  #   winget:
-  #     package: Microsoft.Powershell
-  #     source: winget
-  #     state: present
+  - name: Install Microsoft.PowerShell
+    winget:
+      package: Microsoft.PowerShell
+      source: winget
+      state: present
+
+  - name: Install Microsoft.Coreutils
+    winget:
+      package: Microsoft.Coreutils
+      source: winget
+      state: present
 
   - name: PowerShell System Profile Path Fact
     fact:
@@ -35,31 +41,35 @@ tasks:
     blockinfile:
       create: false
       state: present
+      insertafter: EOF
       dest: "${{ facts.pwsh_system_profile }}"
       block: |
-        $PROFILE_PATH = "${{ facts.pwsh_user_profile }}"
+        $PROFILE_PATH = "${{ facts.pwsh_user_profile | resolve }}"
         if (Test-Path $PROFILE_PATH) {
-            . $PROFILE_PATH
+          . $PROFILE_PATH
         }
 
   - name: Import PowerShell Modules
     blockinfile:
       create: true
       state: present
+      insertbefore: BOF
       dest: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}"
       block: |
+        Write-Output "Loading Profile from $PROFILE";
         $env:VIRTUAL_ENV_DISABLE_PROMPT = 1;
-        
-        $modules = @("posh-git", "Terminal-Icons");
+        $modules = @(
+          "Microsoft.WinGet.CommandNotFound",
+          "posh-git",
+          "Terminal-Icons"
+        );
         $modules | ForEach-Object {
           if ( !(Get-Module -ListAvailable -Name "$_") ) {
             Install-Module $_ -Scope CurrentUser -Force;
           }
         };
+        $modules | ForEach-Object { Import-Module -Name $_; }
 
-        $modules | ForEach-Object {
-          Import-Module -Name $_;
-        }
   - name: Configure PowerShell Host Colors
     blockinfile:
       create: true
@@ -102,12 +112,12 @@ tasks:
       block: |
         # Load custom shell extensions from ${{ facts.pwsh_user_profile_path }}/custom/<category>/*.ps1
         foreach ($category in @("aliases", "exports", "functions", "sources")) {
-            $customDir = Join-Path "${{ facts.pwsh_user_profile_path }}" "custom/$category"
-            if (Test-Path $customDir) {
-                Get-ChildItem -Path $customDir -Filter *.ps1 -File | ForEach-Object {
-                    . $_.FullName
-                }
+          $customDir = Join-Path "${{ facts.pwsh_user_profile_path }}" "custom/$category"
+          if (Test-Path $customDir) {
+            Get-ChildItem -Path $customDir -Filter *.ps1 -File | ForEach-Object {
+              . $_.FullName
             }
+          }
         }
 
   - name: Install Oh-My-Posh
@@ -128,12 +138,6 @@ tasks:
       dest: "${{ shell.pwsh.omp.profile | default(defaults.shell.pwsh.omp.profile) }}"
       state: present
 
-  # - name: Ensure Custom PowerShell Directory Exists
-  #   file:
-  #     path: "${{ facts.pwsh_user_profile_path }}/custom2"
-  #     type: directory
-  #     state: present
-
   - name: Copy Custom PowerShell Files
     copy:
       src: "files/home/.config/powershell/custom/"
@@ -148,5 +152,5 @@ tasks:
       dest: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}"
       block: |
         if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {
-            oh-my-posh init pwsh --config "${{ shell.pwsh.omp.profile | default(defaults.shell.pwsh.omp.profile) }}" | Invoke-Expression
+          oh-my-posh init pwsh --config "${{ shell.pwsh.omp.profile | default(defaults.shell.pwsh.omp.profile) }}" | Invoke-Expression
         }

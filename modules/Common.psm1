@@ -26,10 +26,10 @@ function Resolve-UserPath {
 }
 
 function Resolve-InstallRelativePath {
-  # Resolves a 'copy.src' / 'shell.script' path against the directory that
-  # owns the YAML file it came from (install/windows root, or a package's
-  # own directory for packages/<name>/main.yml). URLs, '~' paths, and
-  # already-rooted paths pass through untouched.
+  # Resolves a 'copy.src' / 'shell.script' / 'template.src' path against the
+  # directory that owns the YAML file it came from (install/windows root, or
+  # a package's own directory for packages/<name>/main.yml). URLs, '~'
+  # paths, and already-rooted paths pass through untouched.
   param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $BaseDir)
 
   if ($Path -match '^(https?://|~)') { return $Path }
@@ -40,7 +40,7 @@ function Resolve-InstallRelativePath {
 function Resolve-RelativePathsInTaskList {
   # Recurses through a task/action list (same 'actions' grouping rule as
   # Tasks.psm1's Expand-TaskTree, but structural only - no when/tags) looking
-  # for 'copy'/'shell' leaves at any depth.
+  # for 'copy'/'shell'/'template'/'blockinfile.template' leaves at any depth.
   param($Tasks, [Parameter(Mandatory)][string] $BaseDir)
 
   foreach ($item in @($Tasks)) {
@@ -54,6 +54,19 @@ function Resolve-RelativePathsInTaskList {
     if ($item.Contains('copy')) {
       $src = Get-Prop $item['copy'] 'src'
       if ($src) { $item['copy']['src'] = Resolve-InstallRelativePath -Path $src -BaseDir $BaseDir }
+    }
+
+    if ($item.Contains('template')) {
+      $src = Get-Prop $item['template'] 'src'
+      if ($src) { $item['template']['src'] = Resolve-InstallRelativePath -Path $src -BaseDir $BaseDir }
+    }
+
+    if ($item.Contains('blockinfile')) {
+      $tpl = Get-Prop $item['blockinfile'] 'template'
+      if ($tpl -is [System.Collections.IDictionary]) {
+        $tplSrc = Get-Prop $tpl 'src'
+        if ($tplSrc) { $tpl['src'] = Resolve-InstallRelativePath -Path $tplSrc -BaseDir $BaseDir }
+      }
     }
 
     if ($item.Contains('shell')) {

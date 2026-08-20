@@ -1,6 +1,10 @@
 ---
 
 vars:
+  development:
+    root: d:/Development
+    oss: d:/Development/projects/github
+    work: d:/Development/work/imanage
   monitoring: false
   cli: false
   languages: false

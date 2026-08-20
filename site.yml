@@ -26,6 +26,16 @@ vars:
         profile: '~/.config/powershell/default.omp.json'
 
   defaults:
+    languages:
+      java:
+        jre: false
+        jdk: Microsoft.OpenJDK.25
+      nodejs: OpenJS.NodeJS
+      dotnet:
+        runtime: false # Microsoft.DotNet.Runtime.10
+        sdk: Microsoft.DotNet.SDK.10
+      python: 'Python.Python.3.13'
+      ruby: RubyInstallerTeam.Ruby.4.0
     shell:
       pwsh:
         profile: '~/.config/powershell/Microsoft.PowerShell_profile.ps1'
@@ -105,6 +115,7 @@ tasks:
     path:
       paths:
         - ~/.local/bin
+        - ~/bin
       state: present
 
   # Includes: define a package once under packages/<name>/main.yml (using
@@ -112,13 +123,17 @@ tasks:
   # See README.md's "Includes" section for the full mechanism, including
   # 'src'/'script' path resolution and '${{ ... }}' template expressions.
   - name: install lolcat
-    tags: [lolcat, cli]
+    tags: 
+      - lolcat
+      - cli
     include:
       name: packages/lolcat
       state: present
 
   - name: install sysinternals
-    tags: [sysinternals, cli]
+    tags: 
+      - sysinternals
+      - cli
     include:
       name: packages/sysinternals
       state: latest

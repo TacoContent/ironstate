@@ -1,8 +1,5 @@
 ---
-vars:
-  defaults:
-    languages:
-      nodejs: OpenJS.NodeJS
+
 tasks:
   - name: Install Node.js
     winget:

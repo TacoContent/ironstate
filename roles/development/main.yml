@@ -2,6 +2,21 @@
 
 tasks:
 
+  - name: Set up Git
+    tags:
+      - git
+      - development
+    include:
+      name: roles/development/git
+      state: present
+
+  - name: Set up Development Folders
+    tags:
+      - development
+    include:
+      name: roles/development/folder
+      state: present
+
   - name: Set up development alias
     blockinfile:
       create: true

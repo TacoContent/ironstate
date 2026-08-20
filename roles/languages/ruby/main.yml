@@ -1,10 +1,5 @@
 ---
 
-vars:
-  defaults:
-    languages:
-      ruby: RubyInstallerTeam.Ruby.4.0
-
 tasks:
   - name: Install Ruby
     tags:

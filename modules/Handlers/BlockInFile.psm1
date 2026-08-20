@@ -25,13 +25,37 @@
 
   "installed" (used by the present/absent/latest state machine in
   Common.psm1) means the marker block exists AND its content already
-  matches 'block' exactly - the same "exact match" convention Copy.psm1 and
-  Symlinks.psm1 use for their own Test.
+  matches 'block' (or the rendered 'template', see below) exactly - the
+  same "exact match" convention Copy.psm1 and Symlinks.psm1 use for their
+  own Test.
+
+  'template' is a 'src'/'engine'/'vars' object (same shape as the
+  'template' module's own fields, minus 'dest'/'state' - this handler
+  already owns those via 'dest'/'state') - when given instead of 'block',
+  the block's content is Handlers/Template.psm1's
+  Get-TemplateRenderedContent render of that template, rather than a
+  literal string. Mutually exclusive with 'block' in practice (not
+  schema-enforced, matching this codebase's existing convention for e.g.
+  'shell's 'command'/'script') - 'template' wins if both are given.
 #>
 
 Set-StrictMode -Version Latest
 
 Import-Module (Join-Path $PSScriptRoot '..\Common.psm1')
+Import-Module (Join-Path $PSScriptRoot 'Template.psm1')
+
+function Get-BlockInFileContent {
+  # Resolves this task's desired block content: a rendered template if
+  # 'template' is set, else the literal 'block' string (default '').
+  param($Item, $Context)
+  $templateSpec = Get-Prop $Item 'template'
+  if ($templateSpec) {
+    $rendered = Get-TemplateRenderedContent -Item $templateSpec -Context $Context
+    if ($null -ne $rendered) { return $rendered }
+    return ''
+  }
+  return Get-Prop $Item 'block' ''
+}
 
 $script:DefaultMarker = '# {mark} IRONSTATE MANAGED - {name}'
 
@@ -61,24 +85,29 @@ function Get-FileLines {
   # Splits a file's content into lines, normalizing CRLF -> LF first.
   # Returns @() for a missing or empty file (including a 'dest' that turns
   # out to be a directory - Test-Path is true for those too, but reading one
-  # as a file yields no content). The leading ',' guards against PowerShell
-  # unrolling a 0- or 1-element array across the function return boundary -
-  # without it, a 0-element array comes back to the caller as $null (and a
-  # 1-element one as its bare element, not a list) - see the same note on
-  # Common.psm1's Copy-DeepData.
+  # as a file yields no content). Deliberately returns a *plain* array, with
+  # no leading-comma "protect the 0/1-element case across the return
+  # boundary" trick - every call site below wraps the call in '@(...)'
+  # itself instead, which already guarantees an array of the right shape
+  # for 0/1/N elements. Mixing the two conventions is what caused a real
+  # bug: '@(Get-X)' around a comma-protected return double-wraps a multi-
+  # element result into a single array *element*, and casting that to
+  # '[string[]]' silently ToString()-joins it into one line (see
+  # Set-BlockInFile's history) - so don't reintroduce the leading comma
+  # here without also dropping every caller's '@()' wrap, or vice versa.
   param([string] $Path)
-  if (-not (Test-Path $Path)) { return ,@() }
+  if (-not (Test-Path $Path)) { return @() }
   $raw = Get-Content -Path $Path -Raw -ErrorAction SilentlyContinue
-  if ([string]::IsNullOrEmpty($raw)) { return ,@() }
-  return ,@(($raw -replace "`r`n", "`n") -split "`n")
+  if ([string]::IsNullOrEmpty($raw)) { return @() }
+  return ($raw -replace "`r`n", "`n") -split "`n"
 }
 
 function Get-DesiredBlockLines {
-  # Same 0-/1-element return-boundary guard as Get-FileLines above.
+  # Same plain-array convention as Get-FileLines above - see its comment.
   param([string] $Block)
-  if ([string]::IsNullOrEmpty($Block)) { return ,@() }
+  if ([string]::IsNullOrEmpty($Block)) { return @() }
   $normalized = ($Block -replace "`r`n", "`n").TrimEnd("`n")
-  return ,@($normalized -split "`n")
+  return $normalized -split "`n"
 }
 
 function Find-BlockRange {
@@ -141,7 +170,7 @@ function Backup-BlockInFileDest {
 }
 
 function Test-BlockInFilePresent {
-  param($Item, [string] $Name)
+  param($Item, [string] $Name, $Context)
 
   $dest = Resolve-UserPath (Get-Prop $Item 'dest')
   if (-not (Test-Path $dest)) { return $false }
@@ -152,7 +181,7 @@ function Test-BlockInFilePresent {
     -MarkerEnd (Get-Prop $Item 'marker_end' 'END') `
     -Name (Resolve-BlockIdentifier -Item $Item -Name $Name)
 
-  $lines = Get-FileLines -Path $dest
+  $lines = @(Get-FileLines -Path $dest)
   $range = Find-BlockRange -Lines $lines -BeginMarker $markers.Begin -EndMarker $markers.End
   if (-not $range) { return $false }
 
@@ -160,12 +189,12 @@ function Test-BlockInFilePresent {
     $lines[($range.BeginIndex + 1)..($range.EndIndex - 1)]
   } else { @() }
 
-  $desiredBlockLines = Get-DesiredBlockLines -Block (Get-Prop $Item 'block' '')
+  $desiredBlockLines = @(Get-DesiredBlockLines -Block (Get-BlockInFileContent -Item $Item -Context $Context))
   return (@($existingBlockLines) -join "`n") -eq (@($desiredBlockLines) -join "`n")
 }
 
 function Set-BlockInFile {
-  param($Item, [string] $Name)
+  param($Item, [string] $Name, $Context)
 
   $dest = Resolve-UserPath (Get-Prop $Item 'dest')
   $create = [bool] (Get-Prop $Item 'create' $false)
@@ -182,9 +211,9 @@ function Set-BlockInFile {
     -Name (Resolve-BlockIdentifier -Item $Item -Name $Name)
 
   $lines = [System.Collections.Generic.List[string]]::new()
-  if ($exists) { $lines.AddRange([string[]] (Get-FileLines -Path $dest)) }
+  if ($exists) { $lines.AddRange([string[]] @(Get-FileLines -Path $dest)) }
 
-  [string[]] $newBlockLines = @($markers.Begin) + @(Get-DesiredBlockLines -Block (Get-Prop $Item 'block' '')) + @($markers.End)
+  [string[]] $newBlockLines = @($markers.Begin) + @(Get-DesiredBlockLines -Block (Get-BlockInFileContent -Item $Item -Context $Context)) + @($markers.End)
 
   $range = Find-BlockRange -Lines $lines.ToArray() -BeginMarker $markers.Begin -EndMarker $markers.End
 
@@ -219,7 +248,7 @@ function Remove-BlockInFile {
     -Name (Resolve-BlockIdentifier -Item $Item -Name $Name)
 
   $lines = [System.Collections.Generic.List[string]]::new()
-  $lines.AddRange([string[]] (Get-FileLines -Path $dest))
+  $lines.AddRange([string[]] @(Get-FileLines -Path $dest))
 
   $range = Find-BlockRange -Lines $lines.ToArray() -BeginMarker $markers.Begin -EndMarker $markers.End
   if (-not $range) { return }
@@ -233,17 +262,17 @@ function Remove-BlockInFile {
 function Get-BlockInFileHandler {
   [PSCustomObject]@{
     Test      = {
-      param($Item, $Name)
-      Test-BlockInFilePresent -Item $Item -Name $Name
+      param($Item, $Name, $Context)
+      Test-BlockInFilePresent -Item $Item -Name $Name -Context $Context
     }
     Describe  = {
-      param($Item, $Action)
+      param($Item, $Action, $Context)
       $dest = Resolve-UserPath (Get-Prop $Item 'dest')
       if ($Action -eq 'Uninstall') { "remove ironstate managed block from $dest" } else { "manage block in $dest" }
     }
     Install   = {
-      param($Item, $Name)
-      Set-BlockInFile -Item $Item -Name $Name
+      param($Item, $Name, $Context)
+      Set-BlockInFile -Item $Item -Name $Name -Context $Context
     }
     Uninstall = {
       param($Item, $Name)
