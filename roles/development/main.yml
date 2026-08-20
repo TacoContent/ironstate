@@ -17,6 +17,20 @@ tasks:
       name: roles/development/folder
       state: present
 
+  - name: Set up Development Tools
+    tags:
+      - development
+    include:
+      name: roles/development/tools
+      state: present
+
+  - name: Set up Development Agents
+    tags:
+      - development
+    include:
+      name: roles/development/agents
+      state: present
+
   - name: Set up development alias
     blockinfile:
       create: true
@@ -30,11 +44,3 @@ tasks:
         function ws {
           Set-Location '${{ shell.pwsh.ws | default('~/Development') }}'
         }
-
-  # - name: Test
-  #   when: false
-  #   blockinfile:
-  #     create: true
-  #     dest: ${{ shell.pwsh.aliases | default('~/.config/powershell/Microsoft.PowerShell_profile.ps1') | dirname | join('dev.ps1') }}
-  #     block: |
-  #       Write-Output "Test block"

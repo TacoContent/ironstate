@@ -4,6 +4,7 @@ vars:
   cli: false
   tweaks: false
   terminal: false
+  security: false
   languages: false
     # rust: false
     # python: false
@@ -92,6 +93,14 @@ tasks:
       state: present
     tags:
       - terminal
+
+  - name: Install Security Tools
+    when: (security is mapping) or (security is boolean and security)
+    include:
+      name: roles/security
+      state: present
+    tags:
+      - security
 
   - name: Install smartmontools
     include:

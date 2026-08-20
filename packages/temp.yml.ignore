@@ -2,13 +2,7 @@
 
 tasks:
 
-  - tags: [git, cli]
-    eget:
-      package: dandavison/delta
-      state: present
-      args:
-        - --to=~/.local/bin/delta.exe
-        - --upgrade-only
+  
 
   - tags: [cli]
     eget:
@@ -29,46 +23,14 @@ tasks:
         - --asset=".zip"
 
 
-  - tags: [security, cli, totp]
-    eget:
-      package: pcarrier/gauth
-      state: present
-      args:
-        - --to=~/.local/bin/gauth.exe
-        - --upgrade-only
+  
 
-  - tags: [security, cli, password-store]
-    eget:
-      package: reyamira/pass-cli
-      state: present
-      args:
-        - --to=~/.local/bin/pass-cli.exe
-        - --upgrade-only
-        - --asset=".tar.gz"
 
-  - tags: [git, cli]
-    eget:
-      package: byawitz/ggh
-      state: present
-      args:
-        - --to=~/.local/bin/ggh.exe
-        - --upgrade-only
 
-  - tags: [git, gist, cli]
-    eget:
-      package: akunzai/gistui
-      state: present
-      args:
-        - --to=~/.local/bin/gistui.exe
-        - --upgrade-only
 
-  - tags: [git, changelog, cli]
-    eget:
-      package: orhun/git-cliff
-      state: present
-      args:
-        - --to=~/.local/bin/git-cliff.exe
-        - --upgrade-only
+  
+
+
 
   - tags: [tui, cli]
     eget:
@@ -94,14 +56,7 @@ tasks:
         - --to=~/.local/bin/sd.exe
         - --upgrade-only
 
-  - tags: [git, versioning, cli]
-    eget:
-      package: caarlos0/svu
-      state: present
-      args:
-        - --to=~/.local/bin/svu.exe
-        - --upgrade-only
-        - --asset=".zip"
+
 
   - tags: [security, cli, totp]
     eget:
@@ -202,31 +157,4 @@ tasks:
         - --upgrade-only
         - --asset=".zip"
 
-  - tags: [ssh, cli]
-    eget:
-      package: akinoiro/ssh-list
-      state: present
-      args:
-        - --to=~/.local/bin/ssh-list.exe
-        - --upgrade-only
-        - --asset=".zip"
 
-  - tags: [ai, cli]
-    eget:
-      package: anomalyco/opencode
-      state: present
-      args:
-        - --to=~/.local/bin/opencode.exe
-        - --upgrade-only
-        - --asset=".zip"
-
-  - tags: [cli]
-    go:
-      package: github.com/dhth/act3
-      version: latest
-      state: present
-
-  - tags: [security, cli]
-    pipx:
-      package: pwdgen
-      state: present

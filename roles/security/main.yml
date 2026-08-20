@@ -1,0 +1,34 @@
+---
+
+tasks:
+
+  - tags: 
+      - security
+      - cli
+      - password-store
+    eget:
+      package: reyamira/pass-cli
+      state: present
+      args:
+        - --to=~/.local/bin/pass-cli.exe
+        - --upgrade-only
+        - --asset=".tar.gz"
+
+  - tags: 
+      - security
+      - cli
+      - totp
+    eget:
+      package: pcarrier/gauth
+      state: present
+      args:
+        - --to=~/.local/bin/gauth.exe
+        - --upgrade-only
+
+  - name: Install pwdgen
+    tags: 
+      - security
+      - cli
+    pipx:
+      package: pwdgen
+      state: present

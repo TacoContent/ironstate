@@ -3,9 +3,10 @@
 vars:
   development:
     root: d:/Development
-    oss: d:/Development/projects/github
+    oss: d:/Development/projects
     work: d:/Development/work/imanage
   monitoring: false
+  security: true
   cli: false
   languages: false
     # rust: true

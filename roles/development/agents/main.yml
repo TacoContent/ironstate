@@ -1,0 +1,15 @@
+---
+
+tasks:
+
+  - name: Install OpenCode
+    tags: 
+      - ai
+      - development
+    eget:
+      package: anomalyco/opencode
+      state: present
+      args:
+        - --to=~/.local/bin/opencode.exe
+        - --upgrade-only
+        - --asset=".zip"

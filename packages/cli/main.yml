@@ -131,14 +131,6 @@ tasks:
       state: ${{ package.state }}
 
   - tags: 
-      - git
-      - cli
-    winget:
-      package: GitHub.cli
-      source: winget
-      state: ${{ package.state }}
-
-  - tags: 
       - task
       - cli
     winget:

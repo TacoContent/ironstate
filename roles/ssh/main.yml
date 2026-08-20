@@ -1,0 +1,15 @@
+---
+
+tasks: 
+
+  - name: Install ssh-list
+    tags:
+    - ssh
+    - cli
+    eget:
+      package: akinoiro/ssh-list
+      state: present
+      args:
+        - --to=~/.local/bin/ssh-list.exe
+        - --upgrade-only
+        - --asset=".zip
