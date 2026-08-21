@@ -10,6 +10,14 @@ tasks:
       name: roles/development/git
       state: present
 
+  - name: Set up GitHub SSH hosts
+    tags:
+      - github
+      - development
+    include:
+      name: roles/development/github
+      state: present
+
   - name: Set up Development Folders
     tags:
       - development

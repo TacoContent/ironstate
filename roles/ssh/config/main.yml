@@ -1,0 +1,12 @@
+---
+
+tasks:
+  - name: Render SSH host config
+    tags:
+      - ssh
+    when: ssh.hosts is defined
+    ssh_host_block:
+      create: true
+      dest: ~/.ssh/config
+      marker_name: hosts
+      hosts: ${{ vars.ssh.hosts | default([]) }}

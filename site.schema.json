@@ -51,9 +51,8 @@
       "description": "Condition(s) gating this task/action and everything nested under it (AND'd with every ancestor task's own 'when'). A single expression string, or a list of expressions (implicit AND) - matches Ansible. Bare dotted/indexed identifiers (e.g. 'foo.rc', 'foo.results[0].rc') resolve against facts/vars/id-registered results/facts (no '${{ }}' wrapper); operators: == != < <= > >=, and, or, not, in/not in, is/is not, and a '|' filter pipeline (e.g. 'value | default(\"x\") == \"x\"'). See README.md for the full grammar.",
       "oneOf": [
         { "type": "string" },
-        { "type": "array", "items": { "type": "string" } },
-        { "type": "array", "items": { "anyOf": [ { "type": "string" }, { "type": "boolean"}] } },
-        { "type": "boolean" }
+        { "type": "boolean" },
+        { "type": "array", "items": { "anyOf": [ { "type": "string" }, { "type": "boolean" } ] } }
       ]
     },
     "taskItem": {
@@ -84,8 +83,11 @@
           "description": "When true, a failed leaf (see 'failed_when') is logged and the run continues to the next task instead of stopping immediately - matches Ansible's 'ignore_errors'. The leaf's registered result (if it has an 'id') still reports 'failed: true'."
         },
         "items": {
-          "type": "array",
-          "description": "Materializes this task once per entry (Ansible 'loop'-style) *before* anything else about it is evaluated - name, tags, when, id, its module fields, or a nested 'actions'/'include'. Each copy gets '${{ item }}'/'${{ item.<key> }}' resolved against that one entry. Wins over 'with' if both are set."
+          "description": "Materializes this task once per entry (Ansible 'loop'-style) *before* anything else about it is evaluated - name, tags, when, id, its module fields, or a nested 'actions'/'include'. Each copy gets '${{ item }}'/'${{ item.<key> }}' resolved against that one entry. Wins over 'with' if both are set. May also be a single '${{ vars.* }}'/'${{ facts.* }}' template expression that resolves to a list (e.g. '${{ vars.ssh.authorized_keys }}') - resolved before task-tree flattening, so the loop still sees a real list at run time.",
+          "oneOf": [
+            { "type": "array" },
+            { "$ref": "#/$defs/templateString" }
+          ]
         },
         "with": {
           "description": "A single reference value made available as '${{ item }}'/'${{ item.<key> }}' - like 'items' but materializes exactly one copy, without iterating. Ignored if 'items' is also set."
@@ -109,6 +111,7 @@
         "template": { "$ref": "#/$defs/templateItem" },
         "shell": { "$ref": "#/$defs/shellItem" },
         "blockinfile": { "$ref": "#/$defs/blockInFileItem" },
+        "ssh_host_block": { "$ref": "#/$defs/sshHostBlockItem" },
         "log": { "$ref": "#/$defs/logItem" },
         "path": { "$ref": "#/$defs/pathItem" },
         "fact": { "$ref": "#/$defs/factItem" },
@@ -404,6 +407,96 @@
         "marker_name": {
           "type": "string",
           "description": "Identifier substituted for '{name}' in 'marker', distinguishing this block from any other blockinfile task targeting the same 'dest'. Defaults to this task's own 'name', then to 'dest's file name, if not set."
+        },
+        "marker_begin": {
+          "type": "string",
+          "default": "BEGIN",
+          "description": "Substituted for '{mark}' in the opening marker line."
+        },
+        "marker_end": {
+          "type": "string",
+          "default": "END",
+          "description": "Substituted for '{mark}' in the closing marker line."
+        },
+        "insertafter": {
+          "type": "string",
+          "default": "EOF",
+          "description": "Where to insert the block when the markers aren't already present: 'EOF' (default, end of file), 'BOF' (beginning of file), or a regex - the block is inserted after the last matching line (falls back to EOF if nothing matches). Ignored if 'insertbefore' is also set."
+        },
+        "insertbefore": {
+          "type": "string",
+          "description": "Like 'insertafter', but inserts before the first matching line ('BOF' for beginning of file). Takes precedence over 'insertafter' when both are set."
+        },
+        "create": {
+          "type": "boolean",
+          "default": false,
+          "description": "Create 'dest' (and its parent directory) if it doesn't exist. If false and 'dest' is missing, the item is skipped with a warning."
+        },
+        "backup": {
+          "type": "boolean",
+          "default": false,
+          "description": "Write a timestamped copy of 'dest' (dest.<yyyyMMddHHmmss>.bak) before changing it."
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "sshHostEntryItem": {
+      "type": "object",
+      "description": "One ssh_config 'Host' entry. Field names may be snake_case/camelCase/PascalCase - normalized to the PascalCase OpenSSH expects (e.g. 'host_name'/'hostName'/'HostName' all become 'HostName'). Not validated against real OpenSSH keywords - the caller is trusted to know what they're configuring.",
+      "required": ["host"],
+      "properties": {
+        "host": {
+          "type": "string",
+          "description": "Becomes this entry's 'Host <value>' header line."
+        },
+        "comment": {
+          "type": "string",
+          "description": "Rendered verbatim as a '# <comment>' line above this entry's 'Host' line, overriding the owning task's own 'comment_template' for this one entry."
+        }
+      },
+      "additionalProperties": {
+        "description": "Any other field becomes '<PascalCaseKey> <value>' (booleans render as yes/no). A list-valued field is singularized (trailing 's' dropped from the PascalCased key, e.g. 'identity_files' -> 'IdentityFile') and repeated once per entry, since directives like 'IdentityFile' have no plural form.",
+        "oneOf": [
+          { "type": "string" },
+          { "type": "number" },
+          { "type": "boolean" },
+          { "type": "array", "items": { "oneOf": [ { "type": "string" }, { "type": "number" } ] } }
+        ]
+      }
+    },
+    "sshHostBlockItem": {
+      "type": "object",
+      "description": "Renders one or more ssh_config 'Host' blocks from structured data (see 'sshHostEntryItem') into a marker-delimited block in 'dest', reusing 'blockinfile's marker/insert/backup model - multiple 'ssh_host_block'/'blockinfile' tasks can share the same 'dest' as long as each uses its own 'marker_name'.",
+      "additionalProperties": false,
+      "required": ["dest", "hosts"],
+      "properties": {
+        "dest": {
+          "type": "string",
+          "description": "File to manage, e.g. '~/.ssh/config'. '~' expansion is supported."
+        },
+        "hosts": {
+          "description": "One or more host entries to render, in order. May also be a single '${{ vars.* }}'/'${{ facts.* }}' template expression that resolves to a list.",
+          "oneOf": [
+            { "type": "array", "items": { "$ref": "#/$defs/sshHostEntryItem" } },
+            { "$ref": "#/$defs/templateString" }
+          ]
+        },
+        "defaults": {
+          "type": "object",
+          "description": "Fields merged underneath every entry in 'hosts' - an entry's own fields win. Lets a set of hosts share common fields (e.g. '{ user: git, identities_only: yes }') without repeating them on every entry."
+        },
+        "comment_template": {
+          "type": "string",
+          "description": "Auto-builds a 'comment' for any entry that doesn't set its own literal one, e.g. 'Enterprise: {host} (orgs: {orgs})' - '{key}' is replaced with that entry's own field (a list joins with ', '). Any key referenced this way is treated as comment metadata, not a directive, so it's excluded from the entry's rendered directive list too (same treatment as 'host'/'comment')."
+        },
+        "marker": {
+          "type": "string",
+          "default": "# {mark} IRONSTATE MANAGED - {name}",
+          "description": "Template for both marker lines; '{mark}' is replaced with 'marker_begin'/'marker_end', '{name}' with the identifier from 'marker_name' (see below). Change this (e.g. to use a different comment syntax) if the file's syntax doesn't support '#' comments. A custom template with no '{name}' token produces a fixed, unlabeled marker."
+        },
+        "marker_name": {
+          "type": "string",
+          "description": "Identifier substituted for '{name}' in 'marker', distinguishing this block from any other blockinfile/ssh_host_block task targeting the same 'dest'. Defaults to this task's own 'name', then to 'dest's file name, if not set."
         },
         "marker_begin": {
           "type": "string",

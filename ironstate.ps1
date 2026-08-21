@@ -82,7 +82,7 @@ $ErrorActionPreference = 'Stop'
 
 # Modules that aren't backed by an external CLI on PATH, so the usual
 # "is the manager installed?" Get-Command check doesn't apply to them.
-$script:NoCommandCheckModules = @('symlinks', 'zip', 'copy', 'shell', 'blockinfile', 'log', 'path', 'fact', 'registry', 'scheduled_task', 'file', 'template', 'assert')
+$script:NoCommandCheckModules = @('symlinks', 'zip', 'copy', 'shell', 'blockinfile', 'log', 'path', 'fact', 'registry', 'scheduled_task', 'file', 'template', 'assert', 'ssh_host_block')
 
 # Modules whose task-tree name doesn't match the CLI binary it drives.
 $script:ModuleCommandNames = @{ chocolatey = 'choco' }
@@ -117,6 +117,7 @@ function Get-PackageManagerHandlers {
     template       = Get-TemplateHandler
     shell          = Get-ShellHandler
     blockinfile    = Get-BlockInFileHandler
+    ssh_host_block = Get-SshHostBlockHandler
     log            = Get-LogHandler
     path           = Get-PathHandler
     fact           = Get-FactHandler

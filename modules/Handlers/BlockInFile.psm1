@@ -281,4 +281,4 @@ function Get-BlockInFileHandler {
   }
 }
 
-Export-ModuleMember -Function Get-BlockInFileHandler
+Export-ModuleMember -Function Get-BlockInFileHandler, Get-BlockMarkers, Resolve-BlockIdentifier, Get-FileLines, Get-DesiredBlockLines, Find-BlockRange, Get-BlockInsertIndex, Write-BlockInFileLines, Backup-BlockInFileDest

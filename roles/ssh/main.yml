@@ -4,7 +4,7 @@ tasks:
 
   - name: Install ssh-list
     tags:
-    - ssh
+      - ssh
     eget:
       package: akinoiro/ssh-list
       state: present
@@ -13,44 +13,14 @@ tasks:
         - --upgrade-only
         - --asset=".zip"
 
-  # ssh.authorized_keys is a list of entries, each one of:
-  #   - github_user: <name>   -> fetched from https://github.com/<name>.keys
-  #   - public_key: <content> -> used as-is
-  #   - file: <path>          -> local file's content
-  # looped so any mix of the three, and more than one of each, can coexist -
-  # each gets its own marker-delimited block (via 'marker_name') so one
-  # entry's block never overwrites another's.
-  - name: Add public keys to authorized_keys
+  - name: Ensure authorized_keys are set up
     tags:
       - ssh
-    when: ssh.authorized_keys is defined
-    items: "${{ vars.ssh.authorized_keys }}"
-    actions:
-      - name: Add GitHub user's public key(s) to authorized_keys
-        when: "${{ item.github_user is defined }}"
-        blockinfile:
-          dest: ~/.ssh/authorized_keys
-          marker_name: "github-${{ item.github_user }}"
-          block: "${{ lookup('url', 'https://github.com/', item.github_user, '.keys') }}"
-          create: yes
-          state: present
+    include:
+      name: roles/ssh/authorized_keys
 
-      - name: Add raw public key to authorized_keys
-        when: 
-          - "${{ item.public_key is defined }}"
-          - "${{ item.public_key | length > 0 }}"
-        blockinfile:
-          dest: ~/.ssh/authorized_keys
-          marker_name: "${{ item.public_key | sha1 }}"
-          block: "${{ item.public_key }}"
-          create: yes
-          state: present
-
-      - name: Add public key from file to authorized_keys
-        when: "${{ item.file is defined }}"
-        blockinfile:
-          dest: ~/.ssh/authorized_keys
-          marker_name: "file-${{ item.file | basename }}"
-          block: "${{ lookup('file', item.file) }}"
-          create: yes
-          state: present
+  - name: Ensure SSH host config is set up
+    tags:
+      - ssh
+    include:
+      name: roles/ssh/config

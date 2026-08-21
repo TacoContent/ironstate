@@ -1,0 +1,33 @@
+---
+
+tasks:
+  - name: Render commercial GitHub SSH host
+    tags:
+      - github
+      - development
+    when: github.commercial is defined
+    ssh_host_block:
+      create: true
+      dest: ~/.ssh/config
+      marker_name: github-commercial
+      hosts:
+        - comment: "Commercial github"
+          host: ${{ github.commercial.host }}
+          identity_file: ${{ github.commercial.identity_file }}
+          user: git
+          identities_only: yes
+
+  - name: Render enterprise GitHub SSH hosts
+    tags:
+      - github
+      - development
+    when: github.enterprise is defined
+    ssh_host_block:
+      create: true
+      dest: ~/.ssh/config
+      marker_name: github-enterprise
+      comment_template: "Enterprise: {host} (orgs: {orgs})"
+      defaults:
+        user: git
+        identities_only: yes
+      hosts: ${{ github.enterprise | default([]) }}
