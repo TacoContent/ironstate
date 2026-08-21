@@ -28,3 +28,8 @@ vars:
       ws: '~/Development'
       omp:
         profile: '~/.config/powershell/default.omp.json'
+
+tasks:
+
+  - include:
+      name: hosts/camalot

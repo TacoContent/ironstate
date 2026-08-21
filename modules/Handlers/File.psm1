@@ -76,8 +76,9 @@ function Test-FileItemPresent {
     'directory' { return $kind -eq 'directory' }
     'link' {
       if ($kind -ne 'link') { return $false }
-      $src = Resolve-UserPath (Get-Prop $Item 'src')
-      return (Get-Item -Path $path -Force).Target -contains $src
+      $src = ConvertTo-NormalizedPathString -Path (Resolve-UserPath (Get-Prop $Item 'src'))
+      $targets = @((Get-Item -Path $path -Force).Target | ForEach-Object { ConvertTo-NormalizedPathString -Path $_ })
+      return $targets -contains $src
     }
     'hard' {
       if ($kind -ne 'hard') { return $false }

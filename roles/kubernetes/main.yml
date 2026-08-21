@@ -1,0 +1,66 @@
+---
+
+vars:
+  kubernetes:
+    kdash:
+      enabled: false
+      state: present
+    stern:
+      enabled: false
+      state: present
+    k9s:
+      enabled: false
+      state: present
+    popeye:
+      enabled: false
+      state: present
+
+tasks:
+
+  - name: Install KDash
+    tags: 
+      - kubernetes
+    when: ${{ kubernetes.kdash.enabled | default(false) }}
+    eget:
+      package: kdash-rs/kdash
+      state: ${{ kubernetes.kdash.state }}
+      args:
+        - --to=~/.local/bin/kdash.exe
+        - --upgrade-only
+        - --asset=".zip"
+
+  - name: Install Stern
+    tags: 
+      - kubernetes
+    when: ${{ kubernetes.stern.enabled | default(false) }}
+    eget:
+      package: stern/stern
+      state: ${{ kubernetes.stern.state }}
+      args:
+        - --to=~/.local/bin/stern.exe
+        - --upgrade-only
+        - --asset=".zip"
+
+  - name: Install K9s
+    tags: 
+      - kubernetes
+    when: ${{ kubernetes.k9s.enabled | default(false) }}
+    eget:
+      package: derailed/k9s
+      state: ${{ kubernetes.k9s.state }}
+      args:
+        - --to=~/.local/bin/k9s.exe
+        - --upgrade-only
+        - --asset=".zip"
+
+  - name: Install Popeye
+    tags: 
+      - kubernetes
+    when: ${{ kubernetes.popeye.enabled | default(false) }}
+    eget:
+      package: derailed/popeye
+      state: ${{ kubernetes.popeye.state }}
+      args:
+        - --to=~/.local/bin/popeye.exe
+        - --upgrade-only
+        - --asset=".zip"

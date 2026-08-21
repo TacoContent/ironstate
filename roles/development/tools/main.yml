@@ -71,11 +71,21 @@ tasks:
       - development
       - git
       - versioning
-      - cli
     eget:
       package: caarlos0/svu
       state: present
       args:
         - --to=~/.local/bin/svu.exe
+        - --upgrade-only
+        - --asset=".zip"
+
+  - tags: 
+      - shell
+      - development
+    eget:
+      package: koalaman/shellcheck
+      state: present
+      args:
+        - --to=~/.local/bin/shellcheck.exe
         - --upgrade-only
         - --asset=".zip"

@@ -767,6 +767,30 @@ If `value` is omitted, the fact is set directly to the command's trimmed stdout.
     failed_when: rc != 0 or (stdout | length == 0)
 ```
 
+### `assert`
+
+Fails this task unless every `that` condition holds. `that` uses the same bare-expression grammar as [`when` conditions](#when-conditions) - dotted/indexed identifiers, `== != < <= > >=`, `and`/`or`/`not`, `in`/`not in`, `is`/`is not`, and `|` filters - evaluated against facts/vars/id-registered results. There's no real idempotent "already applied" state (like `log`/`fact`): the check always fires when reached, and - unlike `log`/`fact` - it's always actually evaluated even without `-Apply`, since the check *is* the point and has no system side effect to skip in a dry run.
+
+A failing `that` becomes this leaf's `rc: 1` (message in `stderr`); a passing one becomes `rc: 0` (message in `stdout`). From there it's an ordinary leaf: default `failed_when`/`continue_on_error` behavior applies exactly as it would to any other module (see [Failing a task](#failing-a-task-failed_when-continue_on_error)) - a failed assert stops the run unless `continue_on_error: true`.
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `that` | yes | Condition(s) that must all be true. A single expression string, or a list of expressions (implicit AND) - matches `when` |
+| `fail_msg` | no | Error message used verbatim when one or more `that` conditions are false. Without it, a message is built from the task's `name` and every failing condition |
+| `success_msg` | no | Message used verbatim when every `that` condition is true. Without it, a message is built from the task's `name` and the number of conditions checked |
+
+```yaml
+tasks:
+  - name: Verify local bin path fact
+    assert:
+      that:
+        - facts.local_bin_path is defined
+        - facts.local_bin_path | length > 0
+        - facts.local_bin_path | exists
+      fail_msg: "Local bin path fact is not defined or empty. Please define 'facts.local_bin_path' in your inventory or host vars."
+      success_msg: "Local bin path fact is defined and valid."
+```
+
 ### `registry`
 
 Writes one or more named values under a single registry key.

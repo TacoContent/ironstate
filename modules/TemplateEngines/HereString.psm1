@@ -31,7 +31,7 @@ function Get-HereStringExpressionSpans {
   # tracks paren-depth *and* quote state (same backslash-escaping rule used
   # elsewhere in this codebase) so a filter call's own parens/quotes inside
   # don't falsely close it. An unterminated '$(' leaves the remainder
-  # untouched, matching Templates.psm1's Get-TemplateExpressionSpans
+  # untouched, matching Expressions.psm1's Get-TemplateExpressionSpans
   # convention. A lone '$' not followed by '(' or an identifier character
   # is left as a literal '$', not a span.
   param([Parameter(Mandatory)][string] $Text)

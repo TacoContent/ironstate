@@ -1,5 +1,7 @@
 ---
 vars:
+  local:
+    bin_path: ~/.local/bin
   monitoring: false
   cli: false
   tweaks: false
@@ -45,104 +47,22 @@ vars:
         ws: '~/Development'
         omp:
           profile: '~/.config/powershell/default.omp.json'
-
+# intentionally left empty
+# tasks can be defined in hosts/<hostname>.yml or in variables/<username>.yml 
+# to allow specific tasks to be run for a specific host or user.
+# this can be tasks that are meant to be applied to all.
 tasks:
 
-  - name: Install Package Managers
-    include:
-      name: roles/package-managers
-      state: latest
+  - name: Local Binaries Path Fact
+    fact:
+      name: local_bin_path
+      value: ${{ local.bin_path | default('~/.local/bin') }}
 
-  - name: Install Languages
-    when: (languages is mapping) or (languages is boolean and languages)
-    include:
-      name: roles/languages
-      state: present
-    tags:
-      - languages
-
-  - name: Set up Development Environment
-    include:
-      name: roles/development
-      state: present
-    tags:
-      - development
-
-  - name: Set up Shell Environment
-    when: (shell is mapping) or (shell is boolean and shell)
-    include:
-      name: roles/shell
-      state: present
-    tags:
-      - shell
-
-  - name: System Tweak Tools
-    when: (tweaks is mapping) or (tweaks is boolean and tweaks)
-    include:
-      name: packages/tweaks
-      state: present
-    tags:
-      - tweaks
-      - configuration
-      - utility
-
-  - name: Install Windows Terminal
-    when: (terminal is mapping) or (terminal is boolean and terminal)
-    include:
-      name: packages/terminal
-      state: present
-    tags:
-      - terminal
-
-  - name: Install Security Tools
-    when: (security is mapping) or (security is boolean and security)
-    include:
-      name: roles/security
-      state: present
-    tags:
-      - security
-
-  - name: Install smartmontools
-    include:
-      name: packages/smartctl
-      state: present
-    when: (monitoring is mapping) or (monitoring is boolean and monitoring) 
-    tags:
-      - smartctl
-      - monitor
-
-  - name: Install CLI Tools
-    include:
-      name: packages/cli
-      state: present
-    when: (cli is mapping) or (cli is boolean and cli)
-    tags:
-      - cli
-
-
-  - name: register local bins
-    path:
-      paths:
-        - ~/.local/bin
-        - ~/bin
-      state: present
-
-  # Includes: define a package once under packages/<name>/main.yml (using
-  # the same 'tasks:' shape as this file) and pull it in with 'include:'.
-  # See README.md's "Includes" section for the full mechanism, including
-  # 'src'/'script' path resolution and '${{ ... }}' template expressions.
-  - name: install lolcat
-    tags: 
-      - lolcat
-      - cli
-    include:
-      name: packages/lolcat
-      state: present
-
-  - name: install sysinternals
-    tags: 
-      - sysinternals
-      - cli
-    include:
-      name: packages/sysinternals
-      state: latest
+  - name: Verify Local Binaries Path Fact
+    assert:
+      that:
+        - facts.local_bin_path is defined
+        - facts.local_bin_path | length > 0
+        - facts.local_bin_path | exists
+      fail_msg: "Local bin path fact is not defined or empty. Please define 'vars.local.bin_path' in your inventory or host vars."
+      success_msg: "Local bin path fact is defined and valid. Path: ${{ facts.local_bin_path }}"

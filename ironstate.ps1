@@ -82,7 +82,7 @@ $ErrorActionPreference = 'Stop'
 
 # Modules that aren't backed by an external CLI on PATH, so the usual
 # "is the manager installed?" Get-Command check doesn't apply to them.
-$script:NoCommandCheckModules = @('symlinks', 'zip', 'copy', 'shell', 'blockinfile', 'log', 'path', 'fact', 'registry', 'scheduled_task', 'file', 'template')
+$script:NoCommandCheckModules = @('symlinks', 'zip', 'copy', 'shell', 'blockinfile', 'log', 'path', 'fact', 'registry', 'scheduled_task', 'file', 'template', 'assert')
 
 # Modules whose task-tree name doesn't match the CLI binary it drives.
 $script:ModuleCommandNames = @{ chocolatey = 'choco' }
@@ -122,6 +122,7 @@ function Get-PackageManagerHandlers {
     fact           = Get-FactHandler
     registry       = Get-RegistryHandler
     scheduled_task = Get-ScheduledTaskHandler
+    assert         = Get-AssertHandler
   }
 }
 
@@ -264,7 +265,11 @@ function Invoke-Tasks {
     # rationale as the fact registry mutation below) - always actually runs,
     # even without '-Apply', so dry-run previews of later 'when'/'${{ }}'
     # references see a real computed value instead of a zero-result stand-in.
-    $result = Invoke-PackageItem -Module $module -Name $leaf.Name -Item $leaf.Item -Handler $handler -Context $flatContext -Apply:($Apply -or $hasEmbeddedShell)
+    # 'assert' gets the same treatment for a different reason: it has no
+    # system side effect at all - it *is* the check - so a dry run must
+    # still actually evaluate it, or 'continue_on_error'/later 'when's would
+    # never see a real pass/fail.
+    $result = Invoke-PackageItem -Module $module -Name $leaf.Name -Item $leaf.Item -Handler $handler -Context $flatContext -Apply:($Apply -or $hasEmbeddedShell -or ($module -eq 'assert'))
 
     $changed = ($result.Action -ne 'Skip')
     $failed = ($result.Exec.rc -ne 0)

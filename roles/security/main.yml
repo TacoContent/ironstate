@@ -2,7 +2,8 @@
 
 tasks:
 
-  - tags: 
+  - name: Install Pass CLI
+    tags: 
       - security
       - cli
       - password-store
@@ -14,7 +15,20 @@ tasks:
         - --upgrade-only
         - --asset=".tar.gz"
 
-  - tags: 
+  - name: Install COTP
+    tags:
+      - security
+      - cli
+      - totp
+    eget:
+      package: replydev/cotp
+      state: ${{ package.state }}
+      args:
+        - --to=~/.local/bin/cotp.exe
+        - --upgrade-only
+
+  - name: Install GAuth
+    tags: 
       - security
       - cli
       - totp
@@ -32,3 +46,36 @@ tasks:
     pipx:
       package: pwdgen
       state: present
+
+  - name: Install Age
+    tags: 
+      - security
+      - cli
+    winget:
+      package: FiloSottile.age
+      source: winget
+      state: ${{ package.state }}
+
+  - name: Install Syft
+    tags: 
+      - security
+      - sbom
+    eget:
+      package: anchore/syft
+      state: absent
+      args:
+        - --to=~/.local/bin/syft.exe
+        - --upgrade-only
+        - --asset=".zip"
+
+  - name: Install Grype
+    tags: 
+      - security
+      - vulnerability-scanning
+    eget:
+      package: anchore/grype
+      state: absent
+      args:
+        - --to=~/.local/bin/grype.exe
+        - --upgrade-only
+        - --asset=".zip"

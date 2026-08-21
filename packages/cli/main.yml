@@ -1,125 +1,127 @@
 ---
 
 tasks:
-  - tags: 
+  - name: Install Gum
+    tags: 
+      - tui
+      - cli
+    eget:
+      package: charmbracelet/gum
+      state: present
+      args:
+        - --to=${{ facts.local_bin_path | join("gum.exe") }}
+        - --upgrade-only
+
+  - name: Install JQ
+    tags: 
       - json
       - cli
     eget:
       package: jqlang/jq
       state: ${{ package.state }}
       args:
-        - --to=~/.local/bin/jq.exe
+        - --to=${{ facts.local_bin_path | join("jq.exe") }}
         - --upgrade-only
 
-  - tags: 
+  - name: Install YQ
+    tags: 
       - yaml
       - cli
     eget:
       package: mikefarah/yq
       state: ${{ package.state }}
       args:
-        - --to=~/.local/bin/yq.exe
+        - --to=${{ facts.local_bin_path | join("yq.exe") }}
         - --upgrade-only
         - --asset=".exe"
 
-  - tags: 
+  - name: Install Bat
+    tags:
       - cli
     eget:
       package: sharkdp/bat
       state: ${{ package.state }}
       args:
-        - --to=~/.local/bin/bat.exe
+        - --to=${{ facts.local_bin_path | join("bat.exe") }}
         - --upgrade-only
 
-  - tags: 
+  - name: Install FD
+    tags: 
       - cli
     eget:
       package: sharkdp/fd
       state: ${{ package.state }}
       args:
-        - --to=~/.local/bin/fd.exe
+        - --to=${{ facts.local_bin_path | join("fd.exe") }}
         - --upgrade-only
         - --asset="-gnu.zip"
 
-  - tags: 
+  - name: Install Andcli
+    tags: 
       - cli
     eget:
       package: tjblackheart/andcli
       state: ${{ package.state }}
       args:
-        - --to=~/.local/bin/andcli.exe
+        - --to=${{ facts.local_bin_path | join("andcli.exe") }}
         - --upgrade-only
 
-  - tags: 
+  - name: Install Clipboard
+    tags:
       - clipboard
       - cli
     eget:
       package: Slackadays/Clipboard
       state: ${{ package.state }}
       args:
-        - --to=~/.local/bin/cb.exe
+        - --to=${{ facts.local_bin_path | join("cb.exe") }}
         - --upgrade-only
 
-  - tags: 
-      - security
-      - cli
-      - totp
-    eget:
-      package: replydev/cotp
-      state: ${{ package.state }}
-      args:
-        - --to=~/.local/bin/cotp.exe
-        - --upgrade-only
-
-  - tags: 
+  - name: Install Envdiff
+    tags: 
       - env
       - cli
     eget:
       package: GBerghoff/envdiff
       state: ${{ package.state }}
       args:
-        - --to=~/.local/bin/envdiff.exe
+        - --to=${{ facts.local_bin_path | join("envdiff.exe") }}
         - --upgrade-only
         - --asset=".zip"
 
-  - tags: 
+  - name: Install Envfetch
+    tags:
       - env
       - cli
     eget:
       package: ankddev/envfetch
       state: ${{ package.state }}
       args:
-        - --to=~/.local/bin/envfetch.exe
+        - --to=${{ facts.local_bin_path | join("envfetch.exe") }}
         - --upgrade-only
         - --asset=".exe"
 
-  - tags: 
+  - name: Install Envx
+    tags: 
       - env
       - cli
     eget:
       package: mikeleppane/envx
       state: ${{ package.state }}
       args:
-        - --to=~/.local/bin/envx.exe
+        - --to=${{ facts.local_bin_path | join("envx.exe") }}
         - --upgrade-only
 
-  - tags: 
+  - name: Install Fx
+    tags: 
       - json
       - cli
     eget:
       package: antonmedv/fx
       state: ${{ package.state }}
       args:
-        - --to=~/.local/bin/fx.exe
+        - --to=${{ facts.local_bin_path | join("fx.exe") }}
         - --upgrade-only
-
-  - tags: 
-      - security
-      - cli
-    winget:
-      package: FiloSottile.age
-      source: winget
-      state: ${{ package.state }}
 
   - name: Install Chezmoi
     tags: 
@@ -130,7 +132,8 @@ tasks:
       source: winget
       state: ${{ package.state }}
 
-  - tags: 
+  - name: Install Task
+    tags: 
       - task
       - cli
     winget:
@@ -138,7 +141,8 @@ tasks:
       source: winget
       state: ${{ package.state }}
 
-  - tags: 
+  - name: Install Croc
+    tags:
       - file-transfer
       - cli
     winget:
@@ -146,7 +150,8 @@ tasks:
       source: winget
       state: ${{ package.state }}
 
-  - tags: 
+  - name: Install Superfile
+    tags: 
       - files
       - cli
     winget:
@@ -154,9 +159,102 @@ tasks:
       source: winget
       state: ${{ package.state }}
 
-  - tags: 
+  - name: Install Tealdeer
+    tags: 
       - docs
       - cli
     cargo:
       package: tealdeer
       state: ${{ package.state }}
+
+  - name: Install Dust
+    tags: 
+      - cli
+    eget:
+      package: bootandy/dust
+      state: present
+      args:
+        - --to=${{ facts.local_bin_path | join("dust.exe") }}
+        - --upgrade-only
+
+  - name: Install Fastfetch
+    tags:
+      - system-info
+      - cli
+    eget:
+      package: fastfetch-cli/fastfetch
+      state: present
+      args:
+        - --to=${{ facts.local_bin_path | join("fastfetch.exe") }}
+        - --upgrade-only
+        - --asset=".zip"
+
+  - name: Install Procs
+    tags: 
+      - process
+      - cli
+    eget:
+      package: dalance/procs/
+      state: present
+      args:
+        - --to=${{ facts.local_bin_path | join("procs.exe") }}
+        - --upgrade-only
+
+  - name: Install Sd
+    tags:
+      - text
+      - cli
+    eget:
+      package: chmln/sd
+      state: present
+      args:
+        - --to=${{ facts.local_bin_path | join("sd.exe") }}
+        - --upgrade-only
+
+  - name: Install totp-cli
+    tags: 
+      - security
+      - cli
+      - totp
+    eget:
+      package: yitsushi/totp-cli
+      state: present
+      args:
+        - --to=${{ facts.local_bin_path | join("totp.exe") }}
+        - --upgrade-only
+        - --asset=".zip"
+
+  - name: Install Hostctl
+    tags: 
+      - hosts
+      - cli
+    eget:
+      package: guumaster/hostctl
+      state: present
+      args:
+        - --to=${{ facts.local_bin_path | join("hostctl.exe") }}
+        - --upgrade-only
+        - --asset="64-bit.zip"
+
+  - tags: 
+      - weather
+      - cli
+    eget:
+      package: Tairesh/rustormy
+      state: present
+      args:
+        - --to=${{ facts.local_bin_path | join("rustormy.exe") }}
+        - --upgrade-only
+        - --asset=".zip"
+
+  - name: Install NBping
+    tags: 
+      - network
+      - cli
+    eget:
+      package: hanshuaikang/NBping
+      state: present
+      args:
+        - --to=${{ facts.local_bin_path | join("nbping.exe") }}
+        - --upgrade-only
+        - --asset=".zip"

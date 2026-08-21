@@ -112,6 +112,7 @@
         "log": { "$ref": "#/$defs/logItem" },
         "path": { "$ref": "#/$defs/pathItem" },
         "fact": { "$ref": "#/$defs/factItem" },
+        "assert": { "$ref": "#/$defs/assertItem" },
         "registry": { "$ref": "#/$defs/registryItem" },
         "scheduled_task": { "$ref": "#/$defs/scheduledTaskItem" },
         "include": { "$ref": "#/$defs/includeItem" }
@@ -510,6 +511,29 @@
           "description": "Any YAML value - scalar, list, or nested mapping. May reference '${{ <id> }}' / '${{ facts.* }}' / '${{ vars.* }}', resolved before being stored. Required unless 'state' is 'absent' or 'shell' is given (see 'shell')."
         },
         "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "assertItem": {
+      "type": "object",
+      "description": "Fails this task unless every 'that' condition holds. 'that' uses the same bare-expression grammar as 'when' (dotted/indexed identifiers, comparisons, and/or/not, in/not in, is/is not, '|' filters), evaluated against facts/vars/id-registered results. A failure becomes this leaf's 'rc: 1' (message in 'stderr'), a pass becomes 'rc: 0' (message in 'stdout') - ordinary 'failed_when'/'continue_on_error' apply on top of that like any other leaf. Always actually evaluated, even without '-Apply' - the check has no system side effect to skip in a dry run.",
+      "additionalProperties": false,
+      "required": ["that"],
+      "properties": {
+        "that": {
+          "description": "Condition(s) that must all be true. A single expression string, or a list of expressions (implicit AND) - matches 'when'.",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
+        },
+        "fail_msg": {
+          "type": "string",
+          "description": "Error message used verbatim when one or more 'that' conditions are false. Without it, a message is built from the task's name and every failing condition."
+        },
+        "success_msg": {
+          "type": "string",
+          "description": "Message used verbatim when every 'that' condition is true. Without it, a message is built from the task's name and the number of conditions checked."
+        }
       }
     },
     "registryValueItem": {

@@ -28,59 +28,6 @@ Set-StrictMode -Version Latest
 
 Import-Module (Join-Path $PSScriptRoot 'Expressions.psm1') -Force
 
-function Get-TemplateExpressionSpans {
-  # Scans $Text for every '${{ ... }}' occurrence, returning each as
-  # @{ Start; End (exclusive); Expression (trimmed inner text) }. Hand-rolled
-  # rather than a regex so a filter argument's string literal can safely
-  # contain '}}' without falsely terminating the span - tracks quote state
-  # with the same backslash-escaping rule as Expressions.psm1's tokenizer.
-  param([Parameter(Mandatory)][string] $Text)
-
-  $spans = [System.Collections.Generic.List[object]]::new()
-  $len = $Text.Length
-  $i = 0
-
-  while ($i -lt $len) {
-    $start = $Text.IndexOf('${{', $i)
-    if ($start -lt 0) { break }
-
-    $j = $start + 3
-    $quote = $null
-    $end = -1
-    while ($j -lt $len) {
-      $c = $Text[$j]
-      if ($quote) {
-        if ($c -eq '\' -and ($j + 1) -lt $len) { $j += 2; continue }
-        if ($c -eq $quote) { $quote = $null }
-        $j++
-        continue
-      }
-      if ($c -eq "'" -or $c -eq '"') { $quote = $c; $j++; continue }
-      if ($c -eq '}' -and ($j + 1) -lt $len -and $Text[$j + 1] -eq '}') { $end = $j; break }
-      $j++
-    }
-
-    if ($end -lt 0) { break } # unterminated '${{' - leave the rest of the string untouched
-
-    $inner = $Text.Substring($start + 3, $end - ($start + 3))
-    $spans.Add([pscustomobject]@{ Start = $start; End = $end + 2; Expression = $inner.Trim() })
-    $i = $end + 2
-  }
-
-  return ,$spans.ToArray()
-}
-
-function ConvertTo-TemplateDisplayString {
-  # Used only when an expression is interpolated into a larger string
-  # (as opposed to being the string's entire value).
-  param($Value)
-  if ($null -eq $Value) { return '' }
-  if (($Value -is [System.Collections.IEnumerable]) -and ($Value -isnot [string])) {
-    return (@($Value) -join ', ')
-  }
-  return [string] $Value
-}
-
 function Test-ExpressionNamespaceKnown {
   # True when a Var path's top-level segment is itself a key present in
   # $Context (e.g. 'facts'/'vars'/'package'/'inputs' at the call sites that

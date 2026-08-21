@@ -25,6 +25,19 @@ function Resolve-UserPath {
   return $Path
 }
 
+function ConvertTo-NormalizedPathString {
+  # Normalizes separators/trailing-slash so two strings referring to the
+  # same filesystem path compare equal regardless of slash direction - e.g.
+  # a YAML-authored 'd:/Development/oss' vs. a real symlink's own '.Target',
+  # which Windows always reports with backslashes (see File.psm1's 'link'
+  # Test). Comparison itself still relies on PowerShell's usual
+  # case-insensitive string equality/'-contains' - this only fixes the
+  # separator mismatch.
+  param([string] $Path)
+  if (-not $Path) { return $Path }
+  return $Path.Replace('/', '\').TrimEnd('\')
+}
+
 function Resolve-InstallRelativePath {
   # Resolves a 'copy.src' / 'shell.script' / 'template.src' path against the
   # directory that owns the YAML file it came from (install/windows root, or

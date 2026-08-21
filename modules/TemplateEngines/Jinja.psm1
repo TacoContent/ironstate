@@ -56,7 +56,7 @@ function ConvertTo-JinjaTagToken {
 
 function Get-JinjaTemplateTokens {
   # Scans $Content for '{{ ... }}' and '{% ... %}' spans, quote-aware (same
-  # backslash-escaping rule as Templates.psm1's Get-TemplateExpressionSpans)
+  # backslash-escaping rule as Expressions.psm1's Get-TemplateExpressionSpans)
   # so a filter argument's string literal can safely contain '}}'/'%}'
   # without falsely terminating the tag. Text between/around tags becomes
   # 'Text' tokens. An unterminated tag leaves the remainder as plain text.

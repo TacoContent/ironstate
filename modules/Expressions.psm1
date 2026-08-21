@@ -23,6 +23,7 @@
     pipeline    := primary ("|" IDENT ("(" (expr ("," expr)*)? ")")?)*
     primary     := STRING | NUMBER | "true" | "false" | "null"
                  | "[" (expr ("," expr)*)? "]"
+                 | IDENT "(" (expr ("," expr)*)? ")"          (bare filter call, no piped value)
                  | IDENT (("." IDENT) | ("[" NUMBER "]"))*   (dotted/indexed variable path)
                  | "(" expr ")"
 
@@ -31,7 +32,21 @@
   filter registry, populated from modules/Filters/ (one file per filter -
   add a new filter by adding a file there, nothing else to wire up). It
   binds tighter than comparisons, so 'a | default("x") == "x"' filters
-  first, then compares.
+  first, then compares. A filter that's really a function rather than a
+  transform of some upstream value (e.g. 'lookup') can also be called bare -
+  'lookup("url", "...")' - instead of piping a throwaway value into it just
+  to get pipeline syntax; see 'primary' above. A bare call only applies to
+  the very first token of an identifier, before any '.'/'[' - 'a.b(...)' is
+  not a thing.
+
+  A STRING literal may itself contain '${{ ... }}' span(s) - e.g.
+  'lookup("url", "https://github.com/${{ ssh.authorized_keys.github_user }}.keys")'
+  - evaluated against this same expression's $Context and substituted as
+  text (see Expand-ExpressionLiteralText, invoked from Get-ExpressionValue's
+  'Literal' case). This is the one place expression text and '${{ }}'
+  template text nest inside each other; a string literal has no other way
+  to reference a variable, since this grammar has no string-concatenation
+  operator.
 
   'is'/'is not' tests (Jinja-flavored) check a resolved value's runtime type
   rather than its truthiness - needed because '==' and bare truthy checks
@@ -87,6 +102,63 @@ function Resolve-TemplateContext {
     }
   }
   return $current
+}
+
+# --- '${{ ... }}' span scanning (shared: Templates.psm1's field-level
+# substitution, and this module's own nested-string-literal expansion
+# below) ---------------------------------------------------------------
+
+function Get-TemplateExpressionSpans {
+  # Scans $Text for every '${{ ... }}' occurrence, returning each as
+  # @{ Start; End (exclusive); Expression (trimmed inner text) }. Hand-rolled
+  # rather than a regex so a filter argument's string literal can safely
+  # contain '}}' without falsely terminating the span - tracks quote state
+  # with the same backslash-escaping rule as this module's own tokenizer.
+  param([Parameter(Mandatory)][string] $Text)
+
+  $spans = [System.Collections.Generic.List[object]]::new()
+  $len = $Text.Length
+  $i = 0
+
+  while ($i -lt $len) {
+    $start = $Text.IndexOf('${{', $i)
+    if ($start -lt 0) { break }
+
+    $j = $start + 3
+    $quote = $null
+    $end = -1
+    while ($j -lt $len) {
+      $c = $Text[$j]
+      if ($quote) {
+        if ($c -eq '\' -and ($j + 1) -lt $len) { $j += 2; continue }
+        if ($c -eq $quote) { $quote = $null }
+        $j++
+        continue
+      }
+      if ($c -eq "'" -or $c -eq '"') { $quote = $c; $j++; continue }
+      if ($c -eq '}' -and ($j + 1) -lt $len -and $Text[$j + 1] -eq '}') { $end = $j; break }
+      $j++
+    }
+
+    if ($end -lt 0) { break } # unterminated '${{' - leave the rest of the string untouched
+
+    $inner = $Text.Substring($start + 3, $end - ($start + 3))
+    $spans.Add([pscustomobject]@{ Start = $start; End = $end + 2; Expression = $inner.Trim() })
+    $i = $end + 2
+  }
+
+  return ,$spans.ToArray()
+}
+
+function ConvertTo-TemplateDisplayString {
+  # Used only when an expression is interpolated into a larger string
+  # (as opposed to being the string's entire value).
+  param($Value)
+  if ($null -eq $Value) { return '' }
+  if (($Value -is [System.Collections.IEnumerable]) -and ($Value -isnot [string])) {
+    return (@($Value) -join ', ')
+  }
+  return [string] $Value
 }
 
 # --- filter registry ---------------------------------------------------
@@ -291,6 +363,26 @@ function Parse-ExpressionMembership {
   return $left
 }
 
+function Parse-ExpressionCallArguments {
+  # Shared '(' expr (',' expr)* ')' argument-list parser - used both for a
+  # '| filter(args)' pipeline step and a bare 'filter(args)' call (see
+  # Parse-ExpressionPrimary's 'ident' case). Assumes the current token is
+  # 'lparen'; consumes through the matching 'rparen'.
+  param($Parser)
+  Move-ExpressionNext $Parser
+  $callArgs = [System.Collections.Generic.List[object]]::new()
+  if ((Get-ExpressionCurrentToken $Parser).Type -ne 'rparen') {
+    $callArgs.Add((Parse-ExpressionExpr -Parser $Parser))
+    while ((Get-ExpressionCurrentToken $Parser).Type -eq 'comma') {
+      Move-ExpressionNext $Parser
+      $callArgs.Add((Parse-ExpressionExpr -Parser $Parser))
+    }
+  }
+  if ((Get-ExpressionCurrentToken $Parser).Type -ne 'rparen') { throw "Expected ')' after call arguments in expression" }
+  Move-ExpressionNext $Parser
+  return ,$callArgs.ToArray()
+}
+
 function Parse-ExpressionPipeline {
   # 'value | filter(args)' filter chain - see $script:ExpressionFilters.
   # Binds tighter than comparisons/membership so 'a | default("x") == "x"'
@@ -303,21 +395,11 @@ function Parse-ExpressionPipeline {
     if ($nameTok.Type -ne 'ident') { throw "Expected a filter name after '|' in expression" }
     Move-ExpressionNext $Parser
 
-    $filterArgs = [System.Collections.Generic.List[object]]::new()
-    if ((Get-ExpressionCurrentToken $Parser).Type -eq 'lparen') {
-      Move-ExpressionNext $Parser
-      if ((Get-ExpressionCurrentToken $Parser).Type -ne 'rparen') {
-        $filterArgs.Add((Parse-ExpressionExpr -Parser $Parser))
-        while ((Get-ExpressionCurrentToken $Parser).Type -eq 'comma') {
-          Move-ExpressionNext $Parser
-          $filterArgs.Add((Parse-ExpressionExpr -Parser $Parser))
-        }
-      }
-      if ((Get-ExpressionCurrentToken $Parser).Type -ne 'rparen') { throw "Expected ')' after filter arguments in expression" }
-      Move-ExpressionNext $Parser
-    }
+    $filterArgs =
+      if ((Get-ExpressionCurrentToken $Parser).Type -eq 'lparen') { Parse-ExpressionCallArguments -Parser $Parser }
+      else { @() }
 
-    $left = @{ Type = 'Filter'; Name = $nameTok.Value; Args = $filterArgs.ToArray(); Left = $left }
+    $left = @{ Type = 'Filter'; Name = $nameTok.Value; Args = $filterArgs; Left = $left }
   }
   return $left
 }
@@ -353,13 +435,29 @@ function Parse-ExpressionPrimary {
       return @{ Type = 'List'; Items = $items.ToArray() }
     }
     'ident' {
-      # Built as a single dotted/bracketed path string (e.g.
+      $name = $tok.Value
+      Move-ExpressionNext $Parser
+
+      # A bare 'name(args)' - i.e. an identifier immediately followed by
+      # '(', before any '.'/'[' - is a direct call into the same filter
+      # registry a '| filter(args)' pipeline step uses (see
+      # $script:ExpressionFilters), just without a piped left-hand value
+      # ('Left' stays $null; Get-ExpressionValue's 'Filter' case skips
+      # evaluating a $null Left rather than passing it to the filter as
+      # $Value). Lets a filter that's really a function - e.g. 'lookup' -
+      # read as 'lookup(\"url\", ...)' instead of forcing a dummy
+      # "'' | lookup(...)" piped form.
+      if ((Get-ExpressionCurrentToken $Parser).Type -eq 'lparen') {
+        $callArgs = Parse-ExpressionCallArguments -Parser $Parser
+        return @{ Type = 'Filter'; Name = $name; Args = $callArgs; Left = $null }
+      }
+
+      # Otherwise, a dotted/bracketed path string (e.g.
       # 'example_task.results[0].rc'), not an array of segments - that's
       # what Resolve-TemplateContext/Get-TemplatePathSegments above already
       # know how to walk.
       $path = [System.Text.StringBuilder]::new()
-      [void] $path.Append($tok.Value)
-      Move-ExpressionNext $Parser
+      [void] $path.Append($name)
       while ($true) {
         $cur = Get-ExpressionCurrentToken $Parser
         if ($cur.Type -eq 'dot') {
@@ -446,7 +544,15 @@ function Get-ExpressionValue {
   param($Node, [Parameter(Mandatory)] $Context)
 
   switch ($Node.Type) {
-    'Literal' { return $Node.Value }
+    'Literal' {
+      # A string literal may itself embed '${{ ... }}' spans (e.g. a
+      # 'lookup(\"url\", \"https://.../${{ user }}.keys\")' argument) -
+      # expanded here, against this same $Context, rather than at tokenize
+      # time (which has no $Context to evaluate against). Non-string
+      # literals (number/bool/null) pass through untouched.
+      if ($Node.Value -is [string]) { return Expand-ExpressionLiteralText -Text $Node.Value -Context $Context }
+      return $Node.Value
+    }
     'Var'     { return Resolve-TemplateContext -Context $Context -Path $Node.Path }
     'List'    {
       # Built via .Add(), not '@(... | ForEach-Object ...)' - a 0- or
@@ -465,8 +571,11 @@ function Get-ExpressionValue {
       # otherwise be unrolled by the pipe operator, silently vanishing from
       # $argValues instead of surviving as one (empty-array-valued)
       # argument - same enumeration hazard called out in Tasks.psm1's
-      # 'with'/'items' handling.
-      $value = Get-ExpressionValue -Node $Node.Left -Context $Context
+      # 'with'/'items' handling. 'Left' is $null for a bare 'name(args)'
+      # call (see Parse-ExpressionPrimary's 'ident' case) - no piped value
+      # to evaluate, so the filter sees $Value = $null (same as any other
+      # filter invoked without piping anything meaningful in).
+      $value = if ($null -ne $Node.Left) { Get-ExpressionValue -Node $Node.Left -Context $Context } else { $null }
       $argValues = [System.Collections.Generic.List[object]]::new()
       foreach ($argNode in $Node.Args) { $argValues.Add((Get-ExpressionValue -Node $argNode -Context $Context)) }
       return Invoke-ExpressionFilter -Name $Node.Name -Value $value -ArgValues $argValues.ToArray()
@@ -507,6 +616,39 @@ function Get-ExpressionValue {
   }
 }
 
+function Expand-ExpressionLiteralText {
+  # Expands '${{ ... }}' span(s) nested inside a string literal used within
+  # an expression - e.g. a filter argument like
+  # 'lookup("url", "https://github.com/${{ ssh.authorized_keys.github_user }}.keys")'.
+  # Called from Get-ExpressionValue's 'Literal' case, against that same
+  # evaluation's $Context, so a nested reference sees facts/vars/id-registry
+  # exactly like the rest of the enclosing expression does. Always textual
+  # (a string literal token can only ever hold a string) - unlike
+  # Templates.psm1's field-level Expand-TemplateValue, there's no
+  # whole-value-native-type case here to preserve. '-Text' is deliberately
+  # not '[Parameter(Mandatory)]': a mandatory *string* parameter rejects an
+  # empty string as if it were unset (throws "Cannot bind argument...
+  # because it is an empty string"), and an empty literal (e.g. the '""' in
+  # 'default(\"\")') is a completely ordinary value here, not a missing one.
+  param([string] $Text, [Parameter(Mandatory)] $Context)
+
+  if (-not $Text -or $Text -notmatch '\$\{\{') { return $Text }
+  $spans = Get-TemplateExpressionSpans -Text $Text
+  if ($spans.Count -eq 0) { return $Text }
+
+  $sb = [System.Text.StringBuilder]::new()
+  $cursor = 0
+  foreach ($span in $spans) {
+    [void] $sb.Append($Text.Substring($cursor, $span.Start - $cursor))
+    $innerAst = Read-Expression -Expression $span.Expression
+    $value = Get-ExpressionValue -Node $innerAst -Context $Context
+    [void] $sb.Append((ConvertTo-TemplateDisplayString -Value $value))
+    $cursor = $span.End
+  }
+  [void] $sb.Append($Text.Substring($cursor))
+  return $sb.ToString()
+}
+
 function Add-ExpressionVarPaths {
   # Internal recursion helper for Get-ExpressionVarPaths - appends into
   # $Paths rather than returning arrays, to sidestep PowerShell pipeline
@@ -541,4 +683,4 @@ function Get-ExpressionVarPaths {
   return ,$paths.ToArray()
 }
 
-Export-ModuleMember -Function Resolve-TemplateContext, Get-TemplatePathSegments, ConvertTo-ExpressionTokens, Read-Expression, Get-ExpressionValue, Get-ExpressionVarPaths
+Export-ModuleMember -Function Resolve-TemplateContext, Get-TemplatePathSegments, Get-TemplateExpressionSpans, ConvertTo-TemplateDisplayString, ConvertTo-ExpressionTokens, Read-Expression, Get-ExpressionValue, Get-ExpressionVarPaths, Expand-ExpressionLiteralText
