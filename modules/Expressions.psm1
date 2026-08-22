@@ -213,7 +213,16 @@ function ConvertTo-ExpressionTokens {
       $j = $i + 1
       $sb = [System.Text.StringBuilder]::new()
       while ($j -lt $len -and $Expression[$j] -ne $quote) {
-        if ($Expression[$j] -eq '\' -and ($j + 1) -lt $len) { [void] $sb.Append($Expression[$j + 1]); $j += 2 }
+        if ($Expression[$j] -eq '\' -and ($j + 1) -lt $len) {
+          $escaped = switch ($Expression[$j + 1]) {
+            'n' { "`n" }
+            'r' { "`r" }
+            't' { "`t" }
+            default { $Expression[$j + 1] }
+          }
+          [void] $sb.Append($escaped)
+          $j += 2
+        }
         else { [void] $sb.Append($Expression[$j]); $j++ }
       }
       if ($j -ge $len) { throw "Unterminated string literal in expression: $Expression" }

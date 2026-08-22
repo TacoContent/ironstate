@@ -1,0 +1,19 @@
+---
+
+vars:
+  development:
+    editors: false
+      # vscode: true
+      # nano: true # a shim to wsl via powershell function
+
+tasks:
+
+  - name: Include VSCode Editor Role
+    tags:
+      - development
+      - development.editors
+      - vscode
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.vscode | default(false))
+    include:
+      name: roles/development/editors/vscode
+      state: present

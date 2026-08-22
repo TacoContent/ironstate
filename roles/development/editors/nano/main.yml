@@ -1,0 +1,27 @@
+---
+
+tasks:
+
+  # not entirely sure how i want to handle this yet.
+  # it will need to look at the `facts.wsl_installed` and then create a function shim
+  # in powershell custom scripts to wrap the `wsl nano $@` command.
+  
+  # - name: Create Nano WSL Shim
+  #   tags:
+  #     - development
+  #     - development.editors
+  #     - nano
+  #   when: (development.editors is mapping or (development.editors | bool)) and (development.editors.nano | default(false))
+  #   block:
+  #     - name: Create Nano WSL Shim
+  #       file:
+
+  # - name: Include Nano Editor Role
+  #   tags:
+  #     - development
+  #     - development.editors
+  #     - nano
+  #   when: (development.editors is mapping or (development.editors | bool)) and (development.editors.nano | default(false))
+  #   include:
+  #     name: roles/development/editors/nano
+  #     state: present

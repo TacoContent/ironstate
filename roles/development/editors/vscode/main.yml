@@ -1,0 +1,20 @@
+---
+tasks:
+  - name: Is VSCode Already Installed?
+    id: vscode_installed
+    tags:
+      - development
+      - development.editors
+      - vscode
+    shell:
+      command: Get-Command code | Out-Null 
+
+  - name: Install Visual Studio Code
+    tags:
+      - development
+      - development.editors
+      - vscode
+    when: (development.editors is mapping or (development.editors | bool)) and ((development.editors.vscode | default(false)) and vscode_installed.rc != 0)
+    winget:
+      name: Microsoft.VisualStudioCode
+      state: present

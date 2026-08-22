@@ -24,3 +24,9 @@ tasks:
       - ssh
     include:
       name: roles/ssh/config
+
+  - name: Ensure known_hosts are set up
+    tags:
+      - ssh
+    include:
+      name: roles/ssh/known_hosts

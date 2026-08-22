@@ -42,3 +42,38 @@ tasks:
           block: "${{ lookup('file', item.file) }}"
           create: true
           state: present
+
+  - name: Add public keys to administrators_authorized_keys
+    tags:
+      - ssh
+    when: ssh.administrators_authorized_keys is defined
+    items: "${{ vars.ssh.administrators_authorized_keys }}"
+    actions:
+      - name: Add GitHub user's public key(s) to administrators_authorized_keys
+        when: "${{ item.github_user is defined }}"
+        blockinfile:
+          dest: ~/.ssh/administrators_authorized_keys
+          marker_name: "github-${{ item.github_user }}"
+          block: "${{ lookup('url', 'https://github.com/', item.github_user, '.keys') }}"
+          create: true
+          state: present
+
+      - name: Add raw public key to administrators_authorized_keys
+        when: 
+          - "${{ item.public_key is defined }}"
+          - "${{ item.public_key | length > 0 }}"
+        blockinfile:
+          dest: ~/.ssh/administrators_authorized_keys
+          marker_name: "${{ item.public_key | sha1 }}"
+          block: "${{ item.public_key }}"
+          create: true
+          state: present
+
+      - name: Add public key from file to administrators_authorized_keys
+        when: "${{ item.file is defined }}"
+        blockinfile:
+          dest: ~/.ssh/administrators_authorized_keys
+          marker_name: "file-${{ item.file | basename }}"
+          block: "${{ lookup('file', item.file) }}"
+          create: true
+          state: present

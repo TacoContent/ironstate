@@ -39,6 +39,14 @@ tasks:
       name: roles/development/agents
       state: present
 
+  - name: Set up Development Editors
+    tags:
+      - development
+    when: development.editors is mapping or (development.editors)
+    include:
+      name: roles/development/editors
+      state: present
+
   - name: Set up development alias
     blockinfile:
       create: true

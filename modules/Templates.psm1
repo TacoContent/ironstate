@@ -139,15 +139,36 @@ function Expand-TemplateValue {
 function Expand-TemplateNode {
   # Recurses through hashtables/arrays produced by ConvertFrom-Yaml,
   # expanding every string leaf in place.
-  param($Node, [Parameter(Mandatory)] $Context, [Parameter(Mandatory)][string] $PackageName, [switch] $Soft)
+  #
+  # '-BoundaryKeys': lets a caller stop this walk from crossing into a
+  # *nested* scope that will get its own separate expansion pass later -
+  # e.g. Tasks.psm1 materializing a loop iteration, where a descendant task
+  # further down the same subtree has its own 'items'/'with' and will
+  # rebind 'item' all over again once its own turn comes. Without this, a
+  # blind walk resolves a descendant's fields (e.g. its own 'block: ...
+  # ${{ item }}') using *this* pass's 'item' binding, before the descendant
+  # loop ever gets a chance to rebind it - always wrong, and impossible to
+  # detect after the fact since the '${{ }}' text is already gone. Any dict
+  # containing one of these keys has every *other* key left completely
+  # untouched (not even soft-deferred - just skipped) so the descendant's
+  # own pass sees the original template text; the boundary key itself
+  # (e.g. 'items') still expands normally here, since that's exactly what
+  # determines the descendant's loop values and must be evaluated in this
+  # (enclosing) scope. Empty by default - every other caller (the
+  # document-level pass, package resolution, the 'template' handler, the
+  # per-leaf dispatch pass) has no such nested-scope concept and keeps
+  # today's fully-generic walk.
+  param($Node, [Parameter(Mandatory)] $Context, [Parameter(Mandatory)][string] $PackageName, [switch] $Soft, [string[]] $BoundaryKeys = @())
 
   if ($Node -is [string]) {
     return Expand-TemplateValue -Value $Node -Context $Context -PackageName $PackageName -Soft:$Soft
   }
 
   if ($Node -is [System.Collections.IDictionary]) {
+    $isBoundary = ($BoundaryKeys.Count -gt 0) -and (@($Node.Keys) | Where-Object { $BoundaryKeys -contains $_ })
     foreach ($key in @($Node.Keys)) {
-      $resolved = Expand-TemplateNode -Node $Node[$key] -Context $Context -PackageName $PackageName -Soft:$Soft
+      if ($isBoundary -and ($BoundaryKeys -notcontains $key)) { continue }
+      $resolved = Expand-TemplateNode -Node $Node[$key] -Context $Context -PackageName $PackageName -Soft:$Soft -BoundaryKeys $BoundaryKeys
       if (Test-TemplateOmitMarker -Value $resolved) { $Node.Remove($key) } else { $Node[$key] = $resolved }
     }
     return $Node
@@ -155,7 +176,7 @@ function Expand-TemplateNode {
 
   if ($Node -is [System.Collections.IList]) {
     for ($i = 0; $i -lt $Node.Count; $i++) {
-      $resolved = Expand-TemplateNode -Node $Node[$i] -Context $Context -PackageName $PackageName -Soft:$Soft
+      $resolved = Expand-TemplateNode -Node $Node[$i] -Context $Context -PackageName $PackageName -Soft:$Soft -BoundaryKeys $BoundaryKeys
       # No clean way to remove a list *element* mid-walk without
       # reindexing; an omitted array entry becomes $null rather than
       # vanishing (this marker is really about whole-field dict values -
@@ -181,16 +202,17 @@ function Resolve-TemplatesInPlace {
   # - use this for passes that only know *some* of the possible namespaces
   # (e.g. facts/vars/package/inputs, but not yet a growing id/fact
   # registry), so references to the others are left untouched for a later
-  # strict pass.
+  # strict pass. '-BoundaryKeys': see Expand-TemplateNode.
   param(
     [Parameter(Mandatory)] $Data,
     [Parameter(Mandatory)] $Context,
     [Parameter(Mandatory)][string] $PackageName,
-    [switch] $Soft
+    [switch] $Soft,
+    [string[]] $BoundaryKeys = @()
   )
 
   foreach ($groupName in @($Data.Keys)) {
-    $resolved = Expand-TemplateNode -Node $Data[$groupName] -Context $Context -PackageName $PackageName -Soft:$Soft
+    $resolved = Expand-TemplateNode -Node $Data[$groupName] -Context $Context -PackageName $PackageName -Soft:$Soft -BoundaryKeys $BoundaryKeys
     if (Test-TemplateOmitMarker -Value $resolved) { $Data.Remove($groupName) } else { $Data[$groupName] = $resolved }
   }
 }

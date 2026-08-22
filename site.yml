@@ -7,6 +7,9 @@ vars:
   tweaks: false
   terminal: false
   security: false
+  development:
+    editors: false
+      # vscode: true
   languages: false
     # rust: false
     # python: false
@@ -66,3 +69,12 @@ tasks:
         - facts.local_bin_path | exists
       fail_msg: "Local bin path fact is not defined or empty. Please define 'vars.local.bin_path' in your inventory or host vars."
       success_msg: "Local bin path fact is defined and valid. Path: ${{ facts.local_bin_path }}"
+
+  - name: Is WSL Installed?
+    id: wsl_installed
+    shell:
+      command: Get-Command wsl | Out-Null
+  - name: Is WSL Installed Fact
+    fact:
+      name: wsl_installed
+      value: ${{ wsl_installed.rc == 0 }}

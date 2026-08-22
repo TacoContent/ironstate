@@ -119,13 +119,25 @@ install/windows/
         └── ScheduledTask.psm1
     └── Filters/
         ├── default.ps1
-        ├── null.ps1
+        ├── toggle.ps1
+        ├── ternary.ps1
         ├── upper.ps1
         ├── lower.ps1
         ├── trim.ps1
         ├── quote.ps1
-        ├── ternary.ps1
-        └── toggle.ps1
+        ├── length.ps1
+        ├── concat.ps1
+        ├── join.ps1
+        ├── split.ps1
+        ├── prefix.ps1
+        ├── dirname.ps1
+        ├── basename.ps1
+        ├── resolve.ps1
+        ├── exists.ps1
+        ├── sha1.ps1
+        ├── lookup.ps1
+        ├── from_json.ps1
+        └── json_query.ps1
 ```
 
 Each `Handlers/*.psm1` file exports a single `Get-<Module>Handler` function returning a `Test`/`Describe`/`Install`/`Uninstall` set of script blocks - unchanged in shape from before. To add a new module, drop a new module in `Handlers/`, register it in `Get-PackageManagerHandlers` in `ironstate.ps1`, and add it to `$script:NoCommandCheckModules` if it isn't backed by an external CLI.
@@ -227,6 +239,25 @@ Note that `with` never iterates, even if the value you give it happens to be a l
 
 If a looped task also has an `id`, every iteration shares that same name - see [`id` on a looped task](#id-on-a-looped-task).
 
+### Nested loops (`parent`)
+
+An `actions:` entry inside a loop can itself carry `with`/`items`, looping again per outer iteration. Doing so rebinds `item` to the inner value - the outer value would otherwise become unreachable - so it's exposed instead as `${{ parent.item }}` / `${{ parent.item.<key> }}`. A third level of nesting chains one more `parent`: `${{ parent.parent.item }}`, and so on for however many loops deep you go.
+
+```yaml
+tasks:
+  - name: for each user
+    items: "${{ vars.users }}"       # e.g. [{ name: alice, repos: [a, b] }, { name: bob, repos: [c] }]
+    actions:
+      - name: for each of this user's repos
+        items: "${{ item.repos }}"
+        log:
+          message: "${{ parent.item.name }} owns ${{ item }}"
+```
+
+This prints `alice owns a`, `alice owns b`, `bob owns c`.
+
+**Gotcha:** a loop task's own `items`/`with` expression is resolved *before* that loop exists - in the enclosing scope, where `item` still refers to the outer value (there's no `parent` to reach yet at that point, since the inner loop hasn't started). So the inner loop's own `items: ${{ item.repos }}` above is correct; writing `items: ${{ parent.item.repos }}` there would be wrong (and, with no third loop enclosing it, `parent` wouldn't even be defined). Everything *else* on that same task - `when`, `tags`, its module fields, or a further-nested `actions`/`include` - resolves afterward, inside the loop's own per-iteration pass, where `item` has already rebound and `parent` is available. In other words: a loop task's `items`/`with` line looks "outward" (current scope), everything else about that task looks "inward" (its own new scope, one level past `parent`).
+
 ## `when` conditions
 
 `when` accepts a single condition string, or a list of strings (list = implicit AND, matching Ansible). Conditions are bare expressions - no `${{ }}` wrapper - evaluated against a flat context of gathered **facts**, user-defined **vars** (see below; vars win on name collision), and any **`id`-registered results**/**`fact`** values from earlier tasks (see [Registering results](#registering-results-id)).
@@ -253,7 +284,28 @@ This grammar lives in `modules/Expressions.psm1` and is shared with `${{ }}` tem
 - `in`/`not in`: right-hand side a list → membership check; a string → substring containment.
 - A bare variable with no operator is truthy-checked directly (Ansible-style `when: some_var`).
 - `is`/`is not` type-tests: `mapping` (alias `map`), `boolean` (alias `bool`), `string`, `number`, `list`, `defined`, `none` (alias `null`). Use these instead of `==`/truthy checks when you need to know a value's actual type rather than whether it casts to `true` - notably, `some_map == true` is **also true for any non-empty mapping**, since both go through the same truthy cast, so `is mapping`/`is boolean` are the only reliable way to tell "a boolean `true`" apart from "a map" (see `packages/languages/main.yml`, where a var can be either a blanket `true` or a per-key map).
-- `value | filter(args)` pipes a value through a named filter, Jinja-style, and chains left-to-right (`value | trim | upper`). Built-in filters: `default(fallback)` (the piped value if it's non-null, else `fallback`), `toggle(fallback)` (the piped value if it's a **string**, else `fallback` - for a var that's normally an on/off boolean flag but may instead be set to a string to name a specific override, e.g. `jdk: true` vs. `jdk: 'Eclipse.Temurin.21'` - see the `packages/languages/java` example below), `upper`/`lower`/`trim` (string case/whitespace; pass `null` through unchanged rather than erroring). Filter binds tighter than comparisons, so `java_version | default("25") == "25"` filters first, then compares. Each filter is a standalone script in `modules/Filters/`, named for the filter itself (e.g. `upper.ps1` is the `upper` filter) and loaded automatically at import - add a new filter by adding a file there, nothing else to register.
+- `value | filter(args)` pipes a value through a named filter, Jinja-style, and chains left-to-right (`value | trim | upper`). Filters bind tighter than comparisons, so `java_version | default("25") == "25"` filters first, then compares. Each filter is a standalone script in `modules/Filters/`, named for the filter itself (e.g. `upper.ps1` is the `upper` filter) and loaded automatically at import - add a new filter by adding a file there, nothing else to register. Unless noted otherwise, every filter is **null-in/null-out**: a `null` piped value passes straight through rather than erroring.
+
+  | Filter | Arguments | Result |
+  | --- | --- | --- |
+  | `default` | `fallback` | The piped value if it's non-null, else `fallback`. |
+  | `toggle` | `fallback` | The piped value if it's a **string**, else `fallback` - for a var that's normally an on/off boolean flag but may instead be set to a string to name a specific override, e.g. `jdk: true` vs. `jdk: 'Eclipse.Temurin.21'` (a bare `true`/`false` both fall back, same as `null` - see the `packages/languages/java` example below). |
+  | `ternary` | `whenTrue, whenFalse` | `whenTrue` if the piped value is truthy, else `whenFalse` (does **not** pass `null` through - always returns one of its two arguments). |
+  | `upper` / `lower` | none | Uppercase/lowercase the string, invariant culture. |
+  | `trim` | none | Trims leading/trailing whitespace. |
+  | `quote` | `quoteChar` (optional, default `"`) | Wraps the value in `quoteChar` on both sides. A blank/whitespace-only value becomes `null` instead of quoting an empty string. |
+  | `length` | none | `.Length` of a string, or element count of an array; `0` if the value is `null`. |
+  | `concat` | `delimiter, ...extraItems` | Joins the piped value with `delimiter`: an array value has its elements joined; a scalar value is treated as one element. Any `extraItems` after `delimiter` are appended before joining - e.g. `"hello" \| concat(" ", "world")` → `"hello world"`. Use this for joining a list into one delimited string - see `join` below for building a filesystem path instead. |
+  | `join` | `...parts` | Combines the piped value and every argument as **filesystem path segments** via `[System.IO.Path]::Combine` (like Python's `os.path.join`), e.g. `"~/base" \| join("sub", "file.txt")`. Not a delimiter-join - use `concat` for joining a list into a string. |
+  | `split` | `delimiter` | Splits a string into an array on a literal delimiter - the inverse of `concat`. Drops one trailing empty element, so a value `concat` produced round-trips. |
+  | `prefix` | `text` | Prepends `"text "` (one space) to the value, or to every element if the value is an array - e.g. `item.key \| split("\n") \| prefix(item.hostnames \| concat(" "))` builds `"hostname key-line"` pairs from a multi-line key blob. |
+  | `dirname` / `basename` | none | Parent directory / file name of a path string (`[System.IO.Path]::GetDirectoryName`/`GetFileName`). |
+  | `resolve` | none | Expands the value through `Resolve-UserPath` (e.g. `~` expansion). |
+  | `exists` | `expected` (optional bool, default `true`) | Tests whether the value - a path string, `FileInfo`, or `DirectoryInfo` - exists on disk. Returns `expected` when it does, `not expected` otherwise (including for `null`/blank). |
+  | `sha1` | none | Lowercase hex SHA-1 hash of a string value; throws on a non-string, non-null value. Handy for a deterministic `blockinfile` `marker_name` derived from content that varies, e.g. `${{ item.public_key \| sha1 }}`. |
+  | `lookup` | `action, ...pieces` | Fetches external content: `lookup('url', ...)` does a `GET` and returns the body; `lookup('file', ...)` reads a local file (`~` expanded). Every argument after `action` is concatenated together into the URL/path - if *any* piece is `null`/empty, the whole call returns `null` instead of composing a wrong target (e.g. a missing per-item value silently skips the lookup rather than requesting a broken URL). |
+  | `from_json` | none | Parses a JSON string into a PowerShell object (`ConvertFrom-Json`) - typically piped into `json_query` next. |
+  | `json_query` | `query` | Queries a PowerShell object (usually piped from `from_json`) for a nested value. Uses `jq` syntax (e.g. `.ssh_keys`) if `jq` is on `PATH`; otherwise falls back to `Select-Object -ExpandProperty <query>`, which only supports a single bare property name, not full `jq` filter syntax. |
 
 ```yaml
 tasks:
@@ -979,6 +1031,7 @@ tasks:
 | `${{ facts.<key> }}` | A gathered host fact, or an earlier task's `fact` (see [Facts](#facts) and [`fact`](#fact)) |
 | `${{ vars.<key> }}` | A user-defined var (see [Vars](#vars)) |
 | `${{ item }}` / `${{ item.<key> }}` | The current loop value, inside a task with `with`/`items` (see [Looping](#looping-withitems)) |
+| `${{ parent.item }}` / `${{ parent.item.<key> }}` | The *enclosing* loop's value, inside a loop nested within another loop's `actions:` (chain `parent.parent.item` etc. for deeper nesting - see [Nested loops](#nested-loops-parent)) |
 | `${{ <id> }}` / `${{ <id>.<field> }}` | An earlier task's `id`-registered result (see [Registering results](#registering-results-id)) |
 
 Any of these paths can index into a list with `[N]` (0-indexed), interspersed with dotted access - e.g. `${{ example_task.results[0].rc }}` for a looped task's first iteration. `when` supports the same `[N]` indexing in its bare (non-`${{ }}`) grammar.

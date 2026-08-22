@@ -46,6 +46,12 @@
   this to know an 'id' shared across iterations should accumulate into a
   '.results[]' array rather than the last iteration silently overwriting
   the others.
+
+  A loop nested inside another loop's 'actions' rebinds 'item' to its own
+  value, which would otherwise make the outer value unreachable - the
+  enclosing loop's context is exposed instead as '${{ parent.item }}' /
+  '${{ parent.item.<key> }}', chaining '${{ parent.parent.item }}' etc. for
+  further ancestors (see '-ParentItemContext' below).
 #>
 
 Set-StrictMode -Version Latest
@@ -95,7 +101,16 @@ function Expand-TaskTree {
     $PackageVars = @{},
     [string[]] $ParentTags = @(),
     [string[]] $ParentWhen = @(),
-    [bool] $ParentLooped = $false
+    [bool] $ParentLooped = $false,
+    # The immediately-enclosing loop's own '{ item; parent }' template
+    # context (see the module docstring's "Looping" section) - $null outside
+    # any loop. Threaded down so a nested 'with'/'items' can expose its
+    # enclosing loop's value as '${{ parent.item }}' / '${{ parent.item.<key> }}',
+    # chaining '${{ parent.parent.item }}' etc. for further ancestors. Reset
+    # to $null at an 'include:' branch, matching 'PackageVars' isolation
+    # below - an included package doesn't implicitly see whatever loop
+    # variable happens to be in scope wherever it was included from.
+    $ParentItemContext = $null
   )
 
   $results = [System.Collections.Generic.List[object]]::new()
@@ -131,8 +146,10 @@ function Expand-TaskTree {
       foreach ($loopValue in $loopValues) {
         $materialized = Copy-DeepData -Data $template
         $wrapper = @{ task = $materialized }
-        Resolve-TemplatesInPlace -Data $wrapper -Context @{ item = $loopValue } -PackageName $loopLabel -Soft
-        $children = Expand-TaskTree -Tasks @($wrapper.task) -ModuleNames $ModuleNames -PackagesRoot $PackagesRoot -Facts $Facts -Vars $Vars -PackageVars $PackageVars -ParentTags $ParentTags -ParentWhen $ParentWhen -ParentLooped $true
+        $itemContext = @{ item = $loopValue }
+        if ($null -ne $ParentItemContext) { $itemContext['parent'] = $ParentItemContext }
+        Resolve-TemplatesInPlace -Data $wrapper -Context $itemContext -PackageName $loopLabel -Soft -BoundaryKeys @('items', 'with')
+        $children = Expand-TaskTree -Tasks @($wrapper.task) -ModuleNames $ModuleNames -PackagesRoot $PackagesRoot -Facts $Facts -Vars $Vars -PackageVars $PackageVars -ParentTags $ParentTags -ParentWhen $ParentWhen -ParentLooped $true -ParentItemContext $itemContext
         foreach ($child in $children) { $results.Add($child) }
       }
       continue
@@ -144,7 +161,7 @@ function Expand-TaskTree {
 
     if ($item.Contains('actions')) {
       if ($item.Contains('id')) { Write-Warning "Task '$label' has an 'id' but is a grouping task (has 'actions'); 'id' is only supported on leaf actions - ignoring." }
-      $children = Expand-TaskTree -Tasks (Get-Prop $item 'actions' @()) -ModuleNames $ModuleNames -PackagesRoot $PackagesRoot -Facts $Facts -Vars $Vars -PackageVars $PackageVars -ParentTags $effectiveTags -ParentWhen $effectiveWhen -ParentLooped $ParentLooped
+      $children = Expand-TaskTree -Tasks (Get-Prop $item 'actions' @()) -ModuleNames $ModuleNames -PackagesRoot $PackagesRoot -Facts $Facts -Vars $Vars -PackageVars $PackageVars -ParentTags $effectiveTags -ParentWhen $effectiveWhen -ParentLooped $ParentLooped -ParentItemContext $ParentItemContext
       foreach ($child in $children) { $results.Add($child) }
       continue
     }
