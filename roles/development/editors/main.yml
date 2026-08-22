@@ -5,6 +5,20 @@ vars:
     editors: false
       # vscode: true
       # nano: true # a shim to wsl via powershell function
+      # micro: true
+      # goland: true
+      # aqua: true
+      # zettlr: true
+      # rider: true
+      # resharper: true
+      # dataspell: true
+      # pycharm: true
+      # intellij: true
+      # phpstorm: true
+      # rubymine: true
+      # clion: true
+      # datagrip: true
+      # webstorm: true
 
 tasks:
 
@@ -16,4 +30,164 @@ tasks:
     when: (development.editors is mapping or (development.editors | bool)) and (development.editors.vscode | default(false))
     include:
       name: roles/development/editors/vscode
+      state: present
+
+  - name: Include Nano Editor Role
+    tags:
+      - development
+      - development.editors
+      - nano
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.nano | default(false))
+    include:
+      name: roles/development/editors/nano
+      state: present
+
+  - name: Include Micro Editor Role
+    tags:
+      - development
+      - development.editors
+      - micro
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.micro | default(false))
+    include:
+      name: roles/development/editors/micro
+      state: present
+
+  - name: Include JetBrains GoLand Editor Role
+    tags:
+      - development
+      - development.editors
+      - goland
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.goland | default(false))
+    include:
+      name: roles/development/editors/jetbrains/goland
+      state: present
+
+  - name: Include JetBrains Aqua Editor Role
+    tags:
+      - development
+      - development.editors
+      - aqua
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.aqua | default(false))
+    include:
+      name: roles/development/editors/jetbrains/aqua
+      state: present
+
+  - name: Include JetBrains Rider Editor Role
+    tags:
+      - development
+      - development.editors
+      - rider
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.rider | default(false))
+    include:
+      name: roles/development/editors/jetbrains/rider
+      state: present
+
+  - name: Include JetBrains ReSharper Editor Role
+    tags:
+      - development
+      - development.editors
+      - resharper
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.resharper | default(false))
+    include:
+      name: roles/development/editors/jetbrains/resharper
+      state: present
+
+  - name: Include JetBrains DataSpell Editor Role
+    tags:
+      - development
+      - development.editors
+      - dataspell
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.dataspell | default(false))
+    include:
+      name: roles/development/editors/jetbrains/dataspell
+      state: present
+
+  - name: Include JetBrains PyCharm Editor Role
+    tags:
+      - development
+      - development.editors
+      - pycharm
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.pycharm | default(false))
+    include:
+      name: roles/development/editors/jetbrains/pycharm
+      state: present
+
+  - name: Include JetBrains IntelliJ IDEA Editor Role
+    tags:
+      - development
+      - development.editors
+      - intellij
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.intellij | default(false))
+    include:
+      name: roles/development/editors/jetbrains/intellij
+      state: present
+
+  - name: Include JetBrains PhpStorm Editor Role
+    tags:
+      - development
+      - development.editors
+      - phpstorm
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.phpstorm | default(false))
+    include:
+      name: roles/development/editors/jetbrains/phpstorm
+      state: present
+
+  - name: Include JetBrains RubyMine Editor Role
+    tags:
+      - development
+      - development.editors
+      - rubymine
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.rubymine | default(false))
+    include:
+      name: roles/development/editors/jetbrains/rubymine
+      state: present
+
+  - name: Include JetBrains DataGrip Editor Role
+    tags:
+      - development
+      - development.editors
+      - datagrip
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.datagrip | default(false))
+    include:
+      name: roles/development/editors/jetbrains/datagrip
+      state: present
+
+  - name: Include JetBrains WebStorm Editor Role
+    tags:
+      - development
+      - development.editors
+      - webstorm
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.webstorm | default(false))
+    include:
+      name: roles/development/editors/jetbrains/webstorm
+      state: present
+
+  - name: Include JetBrains DataGrip Editor Role
+    tags:
+      - development
+      - development.editors
+      - datagrip
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.datagrip | default(false))
+    include:
+      name: roles/development/editors/jetbrains/datagrip
+      state: present
+
+  - name: Include JetBrains CLion Editor Role
+    tags:
+      - development
+      - development.editors
+      - clion
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.clion | default(false))
+    include:
+      name: roles/development/editors/jetbrains/clion
+      state: present
+
+  - name: Include Zettlr Editor Role
+    tags:
+      - development
+      - development.editors
+      - zettlr
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.zettlr | default(false))
+    include:
+      name: roles/development/editors/zettlr
       state: present

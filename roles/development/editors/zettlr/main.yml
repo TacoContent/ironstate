@@ -1,0 +1,9 @@
+---
+
+tasks:
+  - name: Install Zettlr Editor
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.zettlr | default(false))
+    winget:
+      package: Zettlr.Zettlr
+      state: "${{ package.state | default('present')}}"
+      source: winget

@@ -99,6 +99,18 @@ function Expand-TaskTree {
     # each 'include:' branch below, so a leaf only ever sees its *own*
     # package's local vars, never an ancestor package's.
     $PackageVars = @{},
+    # The immediately-enclosing package's 'inputs' ('with:' on the include
+    # spec) and 'package' (name/state/tags) template context, stamped onto
+    # every leaf so ironstate.ps1's dispatch loop can layer it into that
+    # leaf's flat context (Common.psm1's Merge-FlatContext) - same
+    # reset-not-merged treatment as 'PackageVars' above, and for the same
+    # reason: an expression Import-IncludedPackage's own Soft pass couldn't
+    # fully commit yet (e.g. 'inputs.*' mixed with an optional fact behind
+    # 'default(...)') must still be able to see 'inputs'/'package' once it's
+    # finally resolved at that later strict pass - otherwise both
+    # namespaces vanish the moment a reference to them is deferred.
+    $PackageInputs = @{},
+    $PackagePackage = @{},
     [string[]] $ParentTags = @(),
     [string[]] $ParentWhen = @(),
     [bool] $ParentLooped = $false,
@@ -149,7 +161,7 @@ function Expand-TaskTree {
         $itemContext = @{ item = $loopValue }
         if ($null -ne $ParentItemContext) { $itemContext['parent'] = $ParentItemContext }
         Resolve-TemplatesInPlace -Data $wrapper -Context $itemContext -PackageName $loopLabel -Soft -BoundaryKeys @('items', 'with')
-        $children = Expand-TaskTree -Tasks @($wrapper.task) -ModuleNames $ModuleNames -PackagesRoot $PackagesRoot -Facts $Facts -Vars $Vars -PackageVars $PackageVars -ParentTags $ParentTags -ParentWhen $ParentWhen -ParentLooped $true -ParentItemContext $itemContext
+        $children = Expand-TaskTree -Tasks @($wrapper.task) -ModuleNames $ModuleNames -PackagesRoot $PackagesRoot -Facts $Facts -Vars $Vars -PackageVars $PackageVars -PackageInputs $PackageInputs -PackagePackage $PackagePackage -ParentTags $ParentTags -ParentWhen $ParentWhen -ParentLooped $true -ParentItemContext $itemContext
         foreach ($child in $children) { $results.Add($child) }
       }
       continue
@@ -161,7 +173,7 @@ function Expand-TaskTree {
 
     if ($item.Contains('actions')) {
       if ($item.Contains('id')) { Write-Warning "Task '$label' has an 'id' but is a grouping task (has 'actions'); 'id' is only supported on leaf actions - ignoring." }
-      $children = Expand-TaskTree -Tasks (Get-Prop $item 'actions' @()) -ModuleNames $ModuleNames -PackagesRoot $PackagesRoot -Facts $Facts -Vars $Vars -PackageVars $PackageVars -ParentTags $effectiveTags -ParentWhen $effectiveWhen -ParentLooped $ParentLooped -ParentItemContext $ParentItemContext
+      $children = Expand-TaskTree -Tasks (Get-Prop $item 'actions' @()) -ModuleNames $ModuleNames -PackagesRoot $PackagesRoot -Facts $Facts -Vars $Vars -PackageVars $PackageVars -PackageInputs $PackageInputs -PackagePackage $PackagePackage -ParentTags $effectiveTags -ParentWhen $effectiveWhen -ParentLooped $ParentLooped -ParentItemContext $ParentItemContext
       foreach ($child in $children) { $results.Add($child) }
       continue
     }
@@ -173,14 +185,16 @@ function Expand-TaskTree {
         continue
       }
 
-      $pkgData = Import-IncludedPackage -IncludeSpec $item['include'] -PackagesRoot $PackagesRoot -Facts $Facts -Vars $Vars
-      if ($null -eq $pkgData) { continue }
+      $included = Import-IncludedPackage -IncludeSpec $item['include'] -PackagesRoot $PackagesRoot -Facts $Facts -Vars $Vars
+      if ($null -eq $included) { continue }
+      $pkgData = $included.Data
 
-      # Fresh per include - a package's own local vars don't inherit from
-      # (or merge with) whichever package, if any, is including it.
+      # Fresh per include - a package's own local vars (and its 'inputs'/
+      # 'package' context) don't inherit from (or merge with) whichever
+      # package, if any, is including it.
       $childPackageVars = Get-Prop $pkgData 'vars' @{}
       $includedTasks = Get-TaskList -Data $pkgData
-      $children = Expand-TaskTree -Tasks $includedTasks -ModuleNames $ModuleNames -PackagesRoot $PackagesRoot -Facts $Facts -Vars $Vars -PackageVars $childPackageVars -ParentTags $effectiveTags -ParentWhen $effectiveWhen -ParentLooped $ParentLooped
+      $children = Expand-TaskTree -Tasks $includedTasks -ModuleNames $ModuleNames -PackagesRoot $PackagesRoot -Facts $Facts -Vars $Vars -PackageVars $childPackageVars -PackageInputs $included.Inputs -PackagePackage $included.Package -ParentTags $effectiveTags -ParentWhen $effectiveWhen -ParentLooped $ParentLooped
       foreach ($child in $children) { $results.Add($child) }
       continue
     }
@@ -205,6 +219,8 @@ function Expand-TaskTree {
       ContinueOnError = Get-Prop $item 'continue_on_error' $null
       Looped          = $ParentLooped
       PackageVars     = $PackageVars
+      PackageInputs   = $PackageInputs
+      PackagePackage  = $PackagePackage
       Module          = $moduleName
       Item            = $item[$moduleName]
     })

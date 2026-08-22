@@ -16,5 +16,6 @@ tasks:
       - vscode
     when: (development.editors is mapping or (development.editors | bool)) and ((development.editors.vscode | default(false)) and vscode_installed.rc != 0)
     winget:
-      name: Microsoft.VisualStudioCode
-      state: present
+      package: Microsoft.VisualStudioCode
+      state: "${{ package.state | default('present')}}"
+      source: winget

@@ -14,5 +14,10 @@
     "**/.gitea/workflows/*.yaml",
     "**/.forgejo/workflows/*.yml",
     "**/.forgejo/workflows/*.yaml"
+  ],
+  "cSpell.words": [
+    "blockinfile",
+    "IRONSTATE",
+    "winget"
   ]
 }

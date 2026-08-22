@@ -143,9 +143,10 @@ function Import-IncludedPackage {
   # '${{ package.state }}'/'${{ package.tags }}'/'${{ inputs.<key> }}'
   # template expressions (see Templates.psm1); a package author opts in by
   # writing the expression on whichever field(s) should receive it. Returns
-  # the raw parsed document ($null on failure) - its root shape (explicit
-  # 'tasks:' or bare list) is resolved by the caller via Tasks.psm1's
-  # Get-TaskList, same as any other loaded document.
+  # '@{ Data; Inputs; Package }' ($null on failure) - 'Data' is the raw
+  # parsed document, whose root shape (explicit 'tasks:' or bare list) is
+  # resolved by the caller via Tasks.psm1's Get-TaskList, same as any other
+  # loaded document.
   #
   # A package's own top-level 'vars:' block (if any) declares package-local
   # defaults - bare top-level names distinct from site-level '${{ vars.* }}'
@@ -156,6 +157,16 @@ function Import-IncludedPackage {
   # 'languages.java.jdk' above still resolve at ironstate.ps1's later strict
   # pass, via Tasks.psm1's per-leaf 'PackageVars') - a field referencing
   # only its own local var can resolve here already, though.
+  #
+  # Returns '$context.inputs'/'$context.package' back to the caller (see
+  # the return value below) alongside '$pkgData' - not just the resolved
+  # document - so Tasks.psm1 can thread them onto every leaf the same way it
+  # already threads 'PackageVars', for ironstate.ps1's later strict pass
+  # (Common.psm1's Merge-FlatContext). Without that, an expression this
+  # pass can't fully commit yet - e.g. 'inputs.command' mixed with an
+  # optional 'facts.*' reference behind 'default(...)' that isn't a real
+  # fact - would lose access to 'inputs'/'package' entirely once deferred,
+  # since neither namespace exists anywhere past this function otherwise.
   param(
     [Parameter(Mandatory)] $IncludeSpec,
     [Parameter(Mandatory)][string] $PackagesRoot,
@@ -200,7 +211,7 @@ function Import-IncludedPackage {
   # exists.
   Resolve-TemplatesInPlace -Data $pkgData -Context $context -PackageName $name -Soft
 
-  return $pkgData
+  return [PSCustomObject]@{ Data = $pkgData; Inputs = $context.inputs; Package = $context.package }
 }
 
 Export-ModuleMember -Function Import-EnvFile, Initialize-YamlModule, Import-PackagesFile, Merge-PackagesData, Import-PackagesHierarchy, Import-IncludedPackage

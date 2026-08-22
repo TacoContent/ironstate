@@ -1,0 +1,10 @@
+---
+
+tasks:
+
+  - name: Install JetBrains PyCharm Editor
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.pycharm | default(false))
+    winget:
+      package: JetBrains.PyCharm.Community
+      state: "${{ package.state | default('present')}}"
+      source: winget

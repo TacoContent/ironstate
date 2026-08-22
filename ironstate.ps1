@@ -233,7 +233,7 @@ function Invoke-Tasks {
       }
     }
 
-    $flatContext = Merge-FlatContext -Facts $Facts -UserFacts $userFacts -PackageVars $leaf.PackageVars -Vars $Vars -Registry $registry
+    $flatContext = Merge-FlatContext -Facts $Facts -UserFacts $userFacts -PackageVars $leaf.PackageVars -PackageInputs $leaf.PackageInputs -PackagePackage $leaf.PackagePackage -Vars $Vars -Registry $registry
 
     # A 'fact' with an embedded 'shell' computes its value from that
     # command's own result, which doesn't exist yet at this point - defer

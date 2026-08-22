@@ -205,7 +205,16 @@ function Merge-FlatContext {
   # growing id-registry (override) - stays flattened to bare top-level names:
   # last write wins, so a site-level var can shadow a package's own local
   # default of the same name (Ansible role-defaults-style precedence).
-  param($Facts = @{}, $UserFacts = @{}, $PackageVars = @{}, $Vars = @{}, $Registry = @{})
+  #
+  # 'PackageInputs'/'PackagePackage' carry the leaf's owning 'include:'s
+  # 'with'/'state'/'tags' forward as 'inputs'/'package', same as
+  # 'PackageVars' - needed because Packages.psm1's earlier Soft pass only
+  # commits an expression that mixes 'inputs.*' with a not-yet-resolvable
+  # reference (e.g. an optional fact behind 'default(...)') once *every*
+  # 'Var' it touches is resolvable; until then it's deferred whole, and
+  # without these here that later strict pass would resolve 'inputs.*'/
+  # 'package.*' to $null instead of finally filling them in.
+  param($Facts = @{}, $UserFacts = @{}, $PackageVars = @{}, $PackageInputs = @{}, $PackagePackage = @{}, $Vars = @{}, $Registry = @{})
 
   $mergedFacts = @{}
   foreach ($key in $Facts.Keys) { $mergedFacts[$key] = $Facts[$key] }
@@ -213,6 +222,8 @@ function Merge-FlatContext {
 
   $flat = @{}
   $flat['facts'] = $mergedFacts
+  $flat['inputs'] = $PackageInputs
+  $flat['package'] = $PackagePackage
   foreach ($key in $PackageVars.Keys) { $flat[$key] = $PackageVars[$key] }
   foreach ($key in $Vars.Keys) { $flat[$key] = $Vars[$key] }
   foreach ($key in $Registry.Keys) { $flat[$key] = $Registry[$key] }

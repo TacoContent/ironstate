@@ -1,0 +1,9 @@
+---
+
+tasks:
+  - name: Install JetBrains DataGrip Editor
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.datagrip | default(false))
+    winget:
+      package: JetBrains.DataGrip
+      state: "${{ package.state | default('present')}}"
+      source: winget

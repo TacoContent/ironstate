@@ -1,0 +1,33 @@
+@echo off
+setlocal enabledelayedexpansion
+
+set "parsed_args="
+
+:: Loop through all provided arguments
+for %%A in (%*) do (
+    set "arg=%%~A"
+    
+    :: Check if it is a Windows path with a drive letter (e.g., C:\)
+    if "!arg:~1,2!"==":\" (
+        set "drive=!arg:~0,1!"
+        for %%d in (a b c d e f g h i j k l m n o p q r s t u v w x y z) do (
+            if /i "!drive!"=="%%d" set "drive=%%d"
+        )
+        set "remain=!arg:~2!"
+        set "remain=!remain:\=/!"
+        set "arg=/mnt/!drive!!remain!"
+    )
+    
+    :: Append the (potentially modified) argument to the list
+    if defined parsed_args (
+        set "parsed_args=!parsed_args! !arg!"
+    ) else (
+        set "parsed_args=!arg!"
+    )
+)
+
+:: Run WSL with the newly constructed argument list
+wsl {{ command }} {{ args | default('') }} !parsed_args!
+
+if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
+endlocal

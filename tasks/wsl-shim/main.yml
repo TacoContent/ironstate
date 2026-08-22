@@ -1,0 +1,17 @@
+---
+
+tasks:
+  - name: "Create WSL Shim: ${{ inputs.command }}"
+    when: inputs.command is defined and facts.wsl_installed
+    actions:
+      - name: Create WSL Shim -> ${{ inputs.command }}
+        template:
+          # create: true
+          # marker: ':: {mark} IRONSTATE MANAGED - {name}'
+          # marker_name: "${{ 'Create WSL Shim -> ${{ inputs.command }}' | sha1 }}"
+          dest: "${{ facts.local_bin_path | default('~/.local/bin') | join(inputs.command) }}.cmd"
+          src: templates/shim.cmd.j2
+          engine: jinja
+          vars:
+            command: "${{ inputs.command }}"
+            args: "${{ inputs.args | default('') }}"

@@ -1,5 +1,10 @@
 ---
 
+vars:
+  development:
+    tools:
+      jetbrains_toolbox: false
+
 tasks:
 
   - name: Install GitHub CLI
@@ -79,7 +84,8 @@ tasks:
         - --upgrade-only
         - --asset=".zip"
 
-  - tags: 
+  - name: Install koalaman/shellcheck
+    tags: 
       - shell
       - development
     eget:
@@ -89,3 +95,10 @@ tasks:
         - --to=~/.local/bin/shellcheck.exe
         - --upgrade-only
         - --asset=".zip"
+
+  - name: Install JetBrains Toolbox
+    when: development.tools.jetbrains_toolbox | default(false)
+    winget:
+      package: JetBrains.Toolbox
+      state: "${{ package.state | default('present')}}"
+      source: winget
