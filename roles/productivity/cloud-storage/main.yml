@@ -4,7 +4,7 @@ tasks:
 
   - name: Box for Office
     winget:
-      name: Box.BoxForOffice
+      package: Box.BoxForOffice
       state: ${{ productivity.cloud_storage | enabled('box') | ternary('present', 'absent') }}
     tags:
       - productivity
@@ -13,7 +13,7 @@ tasks:
 
   - name: Google Drive
     winget:
-      name: Google.Drive
+      package: Google.Drive
       state: ${{ productivity.cloud_storage | enabled('google_drive') | ternary('present', 'absent') }}
     tags:
       - productivity
@@ -22,7 +22,7 @@ tasks:
 
   - name: OneDrive
     winget:
-      name: Microsoft.OneDrive
+      package: Microsoft.OneDrive
       state: ${{ productivity.cloud_storage | enabled('onedrive') | ternary('present', 'absent') }}
     tags:
       - productivity
@@ -31,7 +31,7 @@ tasks:
 
   - name: Dropbox
     winget:
-      name: Dropbox.Dropbox
+      package: Dropbox.Dropbox
       state: ${{ productivity.cloud_storage | enabled('dropbox') | ternary('present', 'absent') }}
     tags:
       - productivity

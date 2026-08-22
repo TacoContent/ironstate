@@ -1,25 +1,15 @@
 ---
 tasks:
-  - name: Is VSCode Already Installed?
-    id: vscode_installed
-    tags:
-      - development
-      - development.editors
-      - development.editors.vscode
-      - vscode
-    shell:
-      command: Get-Command code | Out-Null 
 
   - name: Install Visual Studio Code
     tags:
       - development
       - development.editors
       - development.editors.vscode
-      - vscode
-    when: (development.editors | enabled('vscode') and vscode_installed.rc != 0)
+    when: development.editors.vscode is defined
     winget:
       package: Microsoft.VisualStudioCode
-      state: "${{ package.state | default('present')}}"
+      state: "${{ development.editors | enabled('vscode') | ternary('present', 'absent') }}"
       source: winget
 
   - name: Install Visual Studio Code Insiders
@@ -27,9 +17,8 @@ tasks:
       - development
       - development.editors
       - development.editors.vscode.insiders
-      - vscode.insiders
-    when: development.editors.vscode_insiders | default(false)
+    when: development.editors.vscode_insiders is defined
     winget:
       package: Microsoft.VisualStudioCode.Insiders
-      state: "${{ package.state | default('present')}}"
+      state: "${{ development.editors | enabled('vscode_insiders') | ternary('present', 'absent') }}"
       source: winget

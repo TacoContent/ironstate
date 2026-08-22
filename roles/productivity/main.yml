@@ -1,20 +1,25 @@
 ---
 vars:
   productivity:
-    browsers:
-      chrome: true
-      chrome_beta: false
-      chrome_canary: false
-      chrome_dev: false
-      firefox: true
-      edge: true
-      edge_beta: false
-      edge_canary: false
-      edge_dev: false
-      opera: false
-      opera_beta: false
-      opera_dev: false
-      operagx: false
+    browsers: false
+      # chrome: true
+      # chrome_beta: false
+      # chrome_canary: false
+      # chrome_dev: false
+      # firefox: true
+      # edge: true
+      # edge_beta: false
+      # edge_canary: false
+      # edge_dev: false
+      # opera: false
+      # opera_beta: false
+      # opera_dev: false
+      # operagx: false
+    cloud_storage: false
+      # box: true
+      # google_drive: true
+      # onedrive: true
+      # dropbox: true
 
 tasks:
   - name: Include Browsers Role
@@ -24,4 +29,11 @@ tasks:
     when: productivity | enabled('browsers')
     include:
       name: roles/productivity/browsers
-      state: ${{ package.state }}
+
+  - name: Include Cloud Storage Role
+    tags:
+      - productivity
+      - productivity.cloud_storage
+    when: productivity | enabled('cloud_storage')
+    include:
+      name: roles/productivity/cloud-storage

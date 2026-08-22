@@ -2,8 +2,8 @@
 
 tasks:
   - name: Install JetBrains Aqua Editor
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.aqua | default(false))
+    when: development.editors | enabled('aqua')
     winget:
       package: JetBrains.Aqua
-      state: "${{ package.state | default('present')}}"
+      state: "${{ development.editors | enabled('aqua') | ternary('present', 'absent') }}"
       source: winget

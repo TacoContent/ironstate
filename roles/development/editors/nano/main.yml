@@ -2,14 +2,13 @@
 
 tasks:
 
-  # not entirely sure how i want to handle this yet.
-  # it will need to look at the `facts.wsl_installed` and then create a function shim
-  # in powershell custom scripts to wrap the `wsl nano $@` command.
-
   - name: Install Nano Shim
     tags:
-      - nano
+      - development
+      - development.editors
+      - development.editors.nano
     include:
       name: tasks/wsl-shim
+      state: ${{ development.editors | enabled('nano') | ternary('present', 'absent') }}
       with:
         command: nano

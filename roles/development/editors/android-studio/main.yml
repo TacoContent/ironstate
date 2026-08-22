@@ -1,0 +1,12 @@
+---
+
+tasks:
+
+  - name: Google Android Studio
+    winget:
+      name: Google.AndroidStudio
+      state: ${{ development.editors.android_studio | enabled() | ternary('present', 'absent') }}
+    tags:
+      - development
+      - development.editors
+      - development.editors.android_studio

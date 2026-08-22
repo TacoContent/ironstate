@@ -22,6 +22,7 @@ vars:
       # webstorm: true
       # rustover: true
       # notepadplusplus: true
+      # android_studio: true
 
 tasks:
 
@@ -34,7 +35,16 @@ tasks:
     when: development.editors | enabled('vscode')
     include:
       name: roles/development/editors/vscode
-      state: ${{ package.state }}
+
+  - name: Include GitHub Atom Editor Role
+    tags:
+      - development
+      - development.editors
+      - development.editors.atom
+      - atom
+    when: development.editors | enabled('atom')
+    include:
+      name: roles/development/editors/atom
 
   - name: Include Nano Editor Role
     tags:
@@ -42,10 +52,8 @@ tasks:
       - development.editors
       - development.editors.nano
       - nano
-    when: development.editors | enabled('nano')
     include:
       name: roles/development/editors/nano
-      state: ${{ package.state }}
 
   - name: Include Micro Editor Role
     tags:
@@ -56,17 +64,15 @@ tasks:
     when: development.editors | enabled('micro')
     include:
       name: roles/development/editors/micro
-      state: ${{ package.state }}
 
   - name: Include JetBrains Role
     tags:
       - development
       - development.editors
-      - jetbrains
+      - development.editors.jetbrains
     when: development.editors | enabled()
     include:
       name: roles/development/editors/jetbrains
-      state: ${{ package.state }}
 
   - name: Install Notepad++ Editor
     tags:
@@ -76,7 +82,6 @@ tasks:
     when: development.editors | enabled('notepadplusplus')
     winget:
       package: Notepad++.Notepad++
-      state: ${{ package.state }}
 
   - name: Include Zettlr Editor Role
     tags:
@@ -86,4 +91,11 @@ tasks:
     when: development.editors | enabled('zettlr')
     include:
       name: roles/development/editors/zettlr
-      state: ${{ package.state }}
+
+  - name: Include Android Studio Editor Role
+    tags:
+      - development
+      - development.editors
+    when: development.editors | enabled('android_studio')
+    include:
+      name: roles/development/editors/android-studio

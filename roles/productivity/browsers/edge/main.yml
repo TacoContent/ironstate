@@ -5,34 +5,30 @@ tasks:
     tags:
       - productivity.browsers
       - productivity.browsers.edge
-    when: productivity | enabled('browsers', 'edge')
     winget:
       package: Microsoft.Edge
-      state: ${{ package.state }}
+      state: ${{ productivity.browsers | enabled('edge') | ternary('present', 'absent') }}
 
   - name: Install Microsoft Edge Beta
     tags:
       - productivity.browsers
       - productivity.browsers.edge_beta
-    when: productivity | enabled('browsers', 'edge_beta')
     winget:
       package: Microsoft.Edge.Beta
-      state: ${{ package.state }}
+      state: ${{ productivity.browsers | enabled('edge_beta') | ternary('present', 'absent') }}
 
   - name: Install Microsoft Edge Canary
     tags:
       - productivity.browsers
       - productivity.browsers.edge_canary
-    when: productivity | enabled('browsers', 'edge_canary')
     winget:
       package: Microsoft.Edge.Canary
-      state: ${{ package.state }}
+      state: ${{ productivity.browsers | enabled('edge_canary') | ternary('present', 'absent') }}
 
   - name: Install Microsoft Edge Dev
     tags:
       - productivity.browsers
       - productivity.browsers.edge_dev
-    when: productivity | enabled('browsers', 'edge_dev')
     winget:
       package: Microsoft.Edge.Dev
-      state: ${{ package.state }}
+      state: ${{ productivity.browsers | enabled('edge_dev') | ternary('present', 'absent') }}

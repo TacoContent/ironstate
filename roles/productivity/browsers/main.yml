@@ -1,25 +1,17 @@
 ---
 tasks:
   - name: Include Microsoft Edge Installation
-    when: (productivity | enabled('browsers', 'edge')) or (productivity | enabled('browsers', 'edge_beta')) or (productivity | enabled('browsers', 'edge_canary')) or (productivity | enabled('browsers', 'edge_dev'))
     include:
       name: roles/productivity/browsers/edge
-      state: ${{ package.state }}
 
   - name: Include Mozilla Firefox Installation
-    when: (productivity | enabled('browsers', 'firefox')) or (productivity | enabled('browsers', 'firefox_beta')) or (productivity | enabled('browsers', 'firefox_dev'))
     include:
       name: roles/productivity/browsers/firefox
-      state: ${{ package.state }}
 
   - name: Include Opera Installation
-    when: (productivity | enabled('browsers', 'opera')) or (productivity | enabled('browsers', 'opera_beta')) or (productivity | enabled('browsers', 'opera_dev')) or (productivity | enabled('browsers', 'operagx'))
     include:
       name: roles/productivity/browsers/opera
-      state: ${{ package.state }}
 
   - name: Include Google Chrome Installation
-    when: (productivity | enabled('browsers', 'chrome')) or (productivity | enabled('browsers', 'chrome_beta')) or (productivity | enabled('browsers', 'chrome_canary')) or (productivity | enabled('browsers', 'chrome_dev'))
     include:
       name: roles/productivity/browsers/chrome
-      state: ${{ package.state }}

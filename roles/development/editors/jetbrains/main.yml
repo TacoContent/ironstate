@@ -11,7 +11,7 @@ tasks:
     when: development.editors | enabled('goland')
     include:
       name: roles/development/editors/jetbrains/goland
-      state: ${{ package.state }}
+      state: ${{ development.editors | enabled('goland') | ternary('present', 'absent') }}
 
   - name: Include JetBrains Aqua Editor Role
     tags:
@@ -22,7 +22,7 @@ tasks:
     when: development.editors | enabled('aqua')
     include:
       name: roles/development/editors/jetbrains/aqua
-      state: ${{ package.state }}
+      state: ${{ development.editors | enabled('aqua') | ternary('present', 'absent') }}
 
   - name: Include JetBrains Rider Editor Role
     tags:
@@ -33,7 +33,7 @@ tasks:
     when: development.editors | enabled('rider')
     include:
       name: roles/development/editors/jetbrains/rider
-      state: ${{ package.state }}
+      state: ${{ development.editors | enabled('rider') | ternary('present', 'absent') }}
 
   - name: Include JetBrains ReSharper Editor Role
     tags:
@@ -44,7 +44,7 @@ tasks:
     when: development.editors | enabled('resharper')
     include:
       name: roles/development/editors/jetbrains/resharper
-      state: ${{ package.state }}
+      state: ${{ development.editors | enabled('resharper') | ternary('present', 'absent') }}
 
   - name: Include JetBrains DataSpell Editor Role
     tags:
@@ -55,7 +55,7 @@ tasks:
     when: development.editors | enabled('dataspell')
     include:
       name: roles/development/editors/jetbrains/dataspell
-      state: ${{ package.state }}
+      state: ${{ development.editors | enabled('dataspell') | ternary('present', 'absent') }}
 
   - name: Include JetBrains PyCharm Editor Role
     tags:
@@ -66,7 +66,7 @@ tasks:
     when: development.editors | enabled('pycharm')
     include:
       name: roles/development/editors/jetbrains/pycharm
-      state: ${{ package.state }}
+      state: ${{ development.editors | enabled('pycharm') | ternary('present', 'absent') }}
 
   - name: Include JetBrains IntelliJ IDEA Editor Role
     tags:
@@ -77,7 +77,7 @@ tasks:
     when: development.editors | enabled('intellij')
     include:
       name: roles/development/editors/jetbrains/intellij
-      state: ${{ package.state }}
+      state: ${{ development.editors | enabled('intellij') | ternary('present', 'absent') }}
 
   - name: Include JetBrains PhpStorm Editor Role
     tags:
@@ -88,7 +88,7 @@ tasks:
     when: development.editors | enabled('phpstorm')
     include:
       name: roles/development/editors/jetbrains/phpstorm
-      state: ${{ package.state }}
+      state: ${{ development.editors | enabled('phpstorm') | ternary('present', 'absent') }}
 
   - name: Include JetBrains RubyMine Editor Role
     tags:
@@ -99,7 +99,7 @@ tasks:
     when: development.editors | enabled('rubymine')
     include:
       name: roles/development/editors/jetbrains/rubymine
-      state: ${{ package.state }}
+      state: ${{ development.editors | enabled('rubymine') | ternary('present', 'absent') }}
 
   - name: Include JetBrains CLion Editor Role
     tags:
@@ -110,7 +110,7 @@ tasks:
     when: development.editors | enabled('clion')
     include:
       name: roles/development/editors/jetbrains/clion
-      state: ${{ package.state }}
+      state: ${{ development.editors | enabled('clion') | ternary('present', 'absent') }}
 
   - name: Include JetBrains DataGrip Editor Role
     tags:
@@ -121,7 +121,7 @@ tasks:
     when: development.editors | enabled('datagrip')
     include:
       name: roles/development/editors/jetbrains/datagrip
-      state: ${{ package.state }}
+      state: ${{ development.editors | enabled('datagrip') | ternary('present', 'absent') }}
 
   - name: Include JetBrains WebStorm Editor Role
     tags:
@@ -132,7 +132,7 @@ tasks:
     when: development.editors | enabled('webstorm')
     include:
       name: roles/development/editors/jetbrains/webstorm
-      state: ${{ package.state }}
+      state: ${{ development.editors | enabled('webstorm') | ternary('present', 'absent') }}
 
   - name: Include JetBrains RustOver Editor Role
     tags:
@@ -143,4 +143,4 @@ tasks:
     when: development.editors | enabled('rustover')
     include:
       name: roles/development/editors/jetbrains/rustover
-      state: ${{ package.state }}
+      state: ${{ development.editors | enabled('rustover') | ternary('present', 'absent') }}

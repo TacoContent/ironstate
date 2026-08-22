@@ -1,8 +1,7 @@
 ---
 tasks:
   - name: Install Micro
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.micro | default(false))
     winget:
       package: zyedidia.micro
-      state: "${{ package.state | default('present')}}"
+      state: "${{ development.editors | enabled('micro') | ternary('present', 'absent') }}"
       source: winget
