@@ -19,6 +19,7 @@ vars:
       # clion: true
       # datagrip: true
       # webstorm: true
+      # rustover: true
 
 tasks:
 
@@ -142,6 +143,16 @@ tasks:
       name: roles/development/editors/jetbrains/rubymine
       state: present
 
+  - name: Include JetBrains CLion Editor Role
+    tags:
+      - development
+      - development.editors
+      - clion
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.clion | default(false))
+    include:
+      name: roles/development/editors/jetbrains/clion
+      state: present
+
   - name: Include JetBrains DataGrip Editor Role
     tags:
       - development
@@ -162,24 +173,14 @@ tasks:
       name: roles/development/editors/jetbrains/webstorm
       state: present
 
-  - name: Include JetBrains DataGrip Editor Role
+  - name: Include JetBrains RustOver Editor Role
     tags:
       - development
       - development.editors
-      - datagrip
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.datagrip | default(false))
+      - rustover
+    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.rustover | default(false))
     include:
-      name: roles/development/editors/jetbrains/datagrip
-      state: present
-
-  - name: Include JetBrains CLion Editor Role
-    tags:
-      - development
-      - development.editors
-      - clion
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.clion | default(false))
-    include:
-      name: roles/development/editors/jetbrains/clion
+      name: roles/development/editors/jetbrains/rustover
       state: present
 
   - name: Include Zettlr Editor Role
