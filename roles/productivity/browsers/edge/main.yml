@@ -1,0 +1,38 @@
+---
+tasks:
+
+  - name: Install Microsoft Edge
+    tags:
+      - productivity.browsers
+      - productivity.browsers.edge
+    when: productivity | enabled('browsers', 'edge')
+    winget:
+      package: Microsoft.Edge
+      state: ${{ package.state }}
+
+  - name: Install Microsoft Edge Beta
+    tags:
+      - productivity.browsers
+      - productivity.browsers.edge_beta
+    when: productivity | enabled('browsers', 'edge_beta')
+    winget:
+      package: Microsoft.Edge.Beta
+      state: ${{ package.state }}
+
+  - name: Install Microsoft Edge Canary
+    tags:
+      - productivity.browsers
+      - productivity.browsers.edge_canary
+    when: productivity | enabled('browsers', 'edge_canary')
+    winget:
+      package: Microsoft.Edge.Canary
+      state: ${{ package.state }}
+
+  - name: Install Microsoft Edge Dev
+    tags:
+      - productivity.browsers
+      - productivity.browsers.edge_dev
+    when: productivity | enabled('browsers', 'edge_dev')
+    winget:
+      package: Microsoft.Edge.Dev
+      state: ${{ package.state }}

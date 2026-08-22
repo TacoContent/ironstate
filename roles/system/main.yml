@@ -1,0 +1,23 @@
+---
+
+tasks:
+
+  
+  - name: System Tweak Tools
+    when: system.tweaks | enabled()
+    include:
+      name: roles/system/tweaks
+      state: present
+    tags:
+      - system
+      - system.tweaks
+
+
+  - name: System Tools
+    when: system.tools | enabled()
+    tags: 
+      - system
+      - system.tools
+    include:
+      name: roles/system/tools
+      state: ${{ system.tools | enabled() | ternary('present', 'absent') }}

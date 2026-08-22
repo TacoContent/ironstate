@@ -1,0 +1,26 @@
+---
+
+vars:
+  gaming:
+    launchers:
+      steam: false
+      epic_games: false
+      gog: false
+      ubisoft: false
+      ea: false
+      atlauncher: false
+      gdlauncher: false
+      bethesda: false
+      multimc: false
+      xbox: false
+
+tasks: 
+
+  - name: Include Gaming Launchers Role
+    tags:
+      - gaming
+      - gaming.launchers
+    when: gaming | enabled('launchers')
+    include:
+      name: roles/gaming/launchers
+      state: ${{ package.state }}

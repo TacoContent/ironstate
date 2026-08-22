@@ -291,6 +291,7 @@ This grammar lives in `modules/Expressions.psm1` and is shared with `${{ }}` tem
   | `default` | `fallback` | The piped value if it's non-null, else `fallback`. |
   | `toggle` | `fallback` | The piped value if it's a **string**, else `fallback` - for a var that's normally an on/off boolean flag but may instead be set to a string to name a specific override, e.g. `jdk: true` vs. `jdk: 'Eclipse.Temurin.21'` (a bare `true`/`false` both fall back, same as `null` - see the `packages/languages/java` example below). |
   | `ternary` | `whenTrue, whenFalse` | `whenTrue` if the piped value is truthy, else `whenFalse` (does **not** pass `null` through - always returns one of its two arguments). |
+  | `enabled` | `...keys` (each a plain string, optional) | Collapses the repeated `(X is mapping and X.Y) or (X is boolean and X)` on/off-toggle pattern into one call, at any depth: `productivity \| enabled('browsers', 'chrome')` walks `productivity.browsers.chrome` key by key. At each step, a **boolean** stops the walk immediately and *is* the answer - `true` enables everything below it, `false` disables everything below it regardless of a deeper key's own value (an explicit disable always wins); a **mapping** keeps descending. Once every key is consumed (or none were given - a bare `productivity \| enabled` checks `productivity` itself), the value reached counts as "on" if it's `true` **or still a mapping** - present/configured in some structured way, even with no specific leaf checked yet. That last part matters for a wrapping/gating task deciding whether to even look at a section at all, e.g. `productivity \| enabled('browsers')` is `true` as soon as `productivity.browsers` exists as a mapping of individual toggles, without needing one specific browser's key. Anything else (a missing key, a non-mapping in the way, or a plain string/number at the end) is `false`. Can't be written as `productivity.browsers.chrome \| enabled()` with no arguments - a filter never sees the surrounding variable context, only the value piped into it, so by the time that whole path resolves to one value, a boolean ancestor has already collapsed everything below it to `null`, losing whether it was `true` or `false`. |
   | `upper` / `lower` | none | Uppercase/lowercase the string, invariant culture. |
   | `trim` | none | Trims leading/trailing whitespace. |
   | `quote` | `quoteChar` (optional, default `"`) | Wraps the value in `quoteChar` on both sides. A blank/whitespace-only value becomes `null` instead of quoting an empty string. |
@@ -976,6 +977,8 @@ tasks:
 ```
 
 There's no more `<group>.<tag>` scheme - `-Tags` no longer knows about module names at all, only tags.
+
+A leaf with **no effective tags at all** (neither its own nor any ancestor task's) always runs, regardless of `-Tags` - it can't be deliberately targeted or excluded by a tag it doesn't have, so `-Tags` simply doesn't apply to it; `when` remains the only gate. This matters for untagged prerequisite tasks a `when` elsewhere depends on - e.g. a `fact` that gathers `facts.wsl_installed` with no `tags:` of its own must still run under `-Tags editors` for a later, differently-tagged task's `when: facts.wsl_installed` to see it set at all. Tag an always-relevant task explicitly if you want that documented in the YAML, but it isn't required for it to keep running.
 
 ## Includes
 

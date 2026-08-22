@@ -38,40 +38,45 @@ tasks:
     tags:
       - ssh
 
-  - name: System Tweak Tools
-    when: (tweaks is mapping) or (tweaks is boolean and tweaks)
+  - name: Include Productivity Role
+    when: productivity | enabled()
     include:
-      name: packages/tweaks
+      name: roles/productivity
       state: present
     tags:
-      - tweaks
-      - configuration
-      - utility
+      - productivity
+
+  - name: Include Gaming Role
+    when: gaming | enabled()
+    include:
+      name: roles/gaming
+      state: present
+    tags:
+      - gaming
+
+  - name: System Tools
+    when: system | enabled()
+    include:
+      name: roles/system
+      state: present
+    tags:
+      - system
 
   - name: Install Windows Terminal
-    when: (terminal is mapping) or (terminal is boolean and terminal)
+    when: terminal | default(true)
     include:
-      name: packages/terminal
+      name: roles/terminal
       state: present
     tags:
       - terminal
 
   - name: Install Security Tools
-    when: (security is mapping) or (security is boolean and security)
+    when: security | enabled()
     include:
       name: roles/security
       state: present
     tags:
       - security
-
-  - name: Install smartmontools
-    include:
-      name: packages/smartctl
-      state: present
-    when: (monitoring is mapping) or (monitoring is boolean and monitoring) 
-    tags:
-      - smartctl
-      - monitor
 
   - name: Install CLI Tools
     include:
@@ -100,11 +105,3 @@ tasks:
     include:
       name: packages/lolcat
       state: present
-
-  - name: install sysinternals
-    tags: 
-      - sysinternals
-      - cli
-    include:
-      name: packages/sysinternals
-      state: latest

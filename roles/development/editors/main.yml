@@ -4,6 +4,7 @@ vars:
   development:
     editors: false
       # vscode: true
+      # vscode_insiders: false
       # nano: true # a shim to wsl via powershell function
       # micro: true
       # goland: true
@@ -20,6 +21,7 @@ vars:
       # datagrip: true
       # webstorm: true
       # rustover: true
+      # notepadplusplus: true
 
 tasks:
 
@@ -27,168 +29,61 @@ tasks:
     tags:
       - development
       - development.editors
+      - development.editors.vscode
       - vscode
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.vscode | default(false))
+    when: development.editors | enabled('vscode')
     include:
       name: roles/development/editors/vscode
-      state: present
+      state: ${{ package.state }}
 
   - name: Include Nano Editor Role
     tags:
       - development
       - development.editors
+      - development.editors.nano
       - nano
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.nano | default(false))
+    when: development.editors | enabled('nano')
     include:
       name: roles/development/editors/nano
-      state: present
+      state: ${{ package.state }}
 
   - name: Include Micro Editor Role
     tags:
       - development
       - development.editors
+      - development.editors.micro
       - micro
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.micro | default(false))
+    when: development.editors | enabled('micro')
     include:
       name: roles/development/editors/micro
-      state: present
+      state: ${{ package.state }}
 
-  - name: Include JetBrains GoLand Editor Role
+  - name: Include JetBrains Role
     tags:
       - development
       - development.editors
-      - goland
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.goland | default(false))
+      - jetbrains
+    when: development.editors | enabled()
     include:
-      name: roles/development/editors/jetbrains/goland
-      state: present
+      name: roles/development/editors/jetbrains
+      state: ${{ package.state }}
 
-  - name: Include JetBrains Aqua Editor Role
+  - name: Install Notepad++ Editor
     tags:
       - development
       - development.editors
-      - aqua
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.aqua | default(false))
-    include:
-      name: roles/development/editors/jetbrains/aqua
-      state: present
-
-  - name: Include JetBrains Rider Editor Role
-    tags:
-      - development
-      - development.editors
-      - rider
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.rider | default(false))
-    include:
-      name: roles/development/editors/jetbrains/rider
-      state: present
-
-  - name: Include JetBrains ReSharper Editor Role
-    tags:
-      - development
-      - development.editors
-      - resharper
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.resharper | default(false))
-    include:
-      name: roles/development/editors/jetbrains/resharper
-      state: present
-
-  - name: Include JetBrains DataSpell Editor Role
-    tags:
-      - development
-      - development.editors
-      - dataspell
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.dataspell | default(false))
-    include:
-      name: roles/development/editors/jetbrains/dataspell
-      state: present
-
-  - name: Include JetBrains PyCharm Editor Role
-    tags:
-      - development
-      - development.editors
-      - pycharm
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.pycharm | default(false))
-    include:
-      name: roles/development/editors/jetbrains/pycharm
-      state: present
-
-  - name: Include JetBrains IntelliJ IDEA Editor Role
-    tags:
-      - development
-      - development.editors
-      - intellij
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.intellij | default(false))
-    include:
-      name: roles/development/editors/jetbrains/intellij
-      state: present
-
-  - name: Include JetBrains PhpStorm Editor Role
-    tags:
-      - development
-      - development.editors
-      - phpstorm
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.phpstorm | default(false))
-    include:
-      name: roles/development/editors/jetbrains/phpstorm
-      state: present
-
-  - name: Include JetBrains RubyMine Editor Role
-    tags:
-      - development
-      - development.editors
-      - rubymine
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.rubymine | default(false))
-    include:
-      name: roles/development/editors/jetbrains/rubymine
-      state: present
-
-  - name: Include JetBrains CLion Editor Role
-    tags:
-      - development
-      - development.editors
-      - clion
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.clion | default(false))
-    include:
-      name: roles/development/editors/jetbrains/clion
-      state: present
-
-  - name: Include JetBrains DataGrip Editor Role
-    tags:
-      - development
-      - development.editors
-      - datagrip
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.datagrip | default(false))
-    include:
-      name: roles/development/editors/jetbrains/datagrip
-      state: present
-
-  - name: Include JetBrains WebStorm Editor Role
-    tags:
-      - development
-      - development.editors
-      - webstorm
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.webstorm | default(false))
-    include:
-      name: roles/development/editors/jetbrains/webstorm
-      state: present
-
-  - name: Include JetBrains RustOver Editor Role
-    tags:
-      - development
-      - development.editors
-      - rustover
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.rustover | default(false))
-    include:
-      name: roles/development/editors/jetbrains/rustover
-      state: present
+      - notepadplusplus
+    when: development.editors | enabled('notepadplusplus')
+    winget:
+      package: Notepad++.Notepad++
+      state: ${{ package.state }}
 
   - name: Include Zettlr Editor Role
     tags:
       - development
       - development.editors
       - zettlr
-    when: (development.editors is mapping or (development.editors | bool)) and (development.editors.zettlr | default(false))
+    when: development.editors | enabled('zettlr')
     include:
       name: roles/development/editors/zettlr
-      state: present
+      state: ${{ package.state }}

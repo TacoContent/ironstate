@@ -1,8 +1,8 @@
 ---
 tasks:
   - name: Install smartmontools
-    chocolatey:
-      package: smartmontools
+    winget:
+      package: smartmontools.smartmontools
       state: ${{ package.state }}
 
   # get install path of ${env:ProgramFiles}\smartmontools\bin

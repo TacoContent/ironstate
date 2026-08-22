@@ -1,0 +1,94 @@
+---
+
+tasks:
+
+  - name: Steam
+    tags:
+      - gaming.launchers
+      - gaming.launchers.steam
+    when: gaming.launchers | enabled('steam')
+    winget:
+      package: Valve.Steam
+      state: ${{ package.state }}
+
+  - name: Epic Games Launcher
+    tags:
+      - gaming.launchers
+      - gaming.launchers.epic_games
+    when: gaming.launchers | enabled('epic_games')
+    winget:
+      package: EpicGames.EpicGamesLauncher
+      state: ${{ package.state }}
+
+  - name: GOG Galaxy
+    tags:
+      - gaming.launchers
+      - gaming.launchers.gog
+    when: gaming.launchers | enabled('gog')
+    winget: 
+      package: GOG.Galaxy
+      state: ${{ package.state }}
+
+  - name: Ubisoft Connect
+    tags:
+      - gaming.launchers
+      - gaming.launchers.ubisoft
+    when: gaming.launchers | enabled('ubisoft')
+    winget:
+      package: Ubisoft.Connect
+      state: ${{ package.state }}
+
+  - name: EA Desktop
+    tags:
+      - gaming.launchers
+      - gaming.launchers.ea
+    when: gaming.launchers | enabled('ea')
+    winget:
+      package: ElectronicArts.EADesktop
+      state: ${{ package.state }}
+
+  - name: ATLauncher
+    tags:
+      - gaming.launchers
+      - gaming.launchers.atlauncher
+    when: gaming.launchers | enabled('atlauncher')
+    winget:
+      package: ATLauncher.ATLauncher
+      state: ${{ package.state }}
+
+  - name: GDLauncher
+    tags:
+      - gaming.launchers
+      - gaming.launchers.gdlauncher
+    when: gaming.launchers | enabled('gdlauncher')
+    winget:
+      package: GorillaDevs.GDLauncher
+      state: ${{ package.state }}
+
+  - name: MultiMC
+    tags:
+      - gaming.launchers
+      - gaming.launchers.multimc
+    when: gaming.launchers | enabled('multimc')
+    winget:
+      package: MultiMC.MultiMC
+      state: ${{ package.state }}
+
+  - name: Bethesda Launcher
+    tags:
+      - gaming.launchers
+      - gaming.launchers.bethesda
+    when: gaming.launchers | enabled('bethesda')
+    winget:
+      package: Bethesda.Launcher
+      state: ${{ package.state }}
+
+  - name: Xbox App
+    tags:
+      - gaming.launchers
+      - gaming.launchers.xbox
+    when: gaming.launchers | enabled('xbox')
+    winget:
+      package: 9MV0B5HZVK9Z
+      state: ${{ package.state }}
+      source: msstore

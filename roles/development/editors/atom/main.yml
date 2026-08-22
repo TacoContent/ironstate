@@ -1,0 +1,23 @@
+---
+
+tasks:
+
+  - name: GitHub Atom Editor
+    tags:
+      - development
+      - development.editors
+      - development.editors.atom
+    when: development.editors | enabled('atom')
+    winget:
+      package: GitHub.Atom
+      state: ${{ package.state }}
+
+  - name: GitHub Atom Editor (Beta)
+    tags:
+      - development
+      - development.editors
+      - development.editors.atom
+    when: development.editors | enabled('atom_beta')
+    winget:
+      package: GitHub.Atom.Beta
+      state: ${{ package.state }}

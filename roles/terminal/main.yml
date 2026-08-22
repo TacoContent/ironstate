@@ -7,4 +7,4 @@ tasks:
     winget:
       package: 9N0DX20HK701  # Windows Terminal
       source: msstore
-      state: ${{ package.state }}
+      state: ${{ terminal | ternary('present', 'absent') }}

@@ -5,77 +5,74 @@ tasks:
   - name: Install Pass CLI
     tags: 
       - security
-      - cli
-      - password-store
+      - security.pass-cli
     eget:
       package: reyamira/pass-cli
-      state: present
+      state: ${{ security | enabled('pass_cli') | ternary('present', 'absent') }}
       args:
-        - --to=~/.local/bin/pass-cli.exe
+        - --to=${{ facts.local_bin_path | join('pass-cli.exe') }}
         - --upgrade-only
         - --asset=".tar.gz"
 
   - name: Install COTP
     tags:
       - security
-      - cli
-      - totp
+      - security.cotp
     eget:
       package: replydev/cotp
-      state: ${{ package.state }}
+      state: ${{ security | enabled('cotp') | ternary('present', 'absent') }}
       args:
-        - --to=~/.local/bin/cotp.exe
+        - --to=${{ facts.local_bin_path | join('cotp.exe') }}
         - --upgrade-only
 
   - name: Install GAuth
     tags: 
       - security
-      - cli
-      - totp
+      - security.gauth
     eget:
       package: pcarrier/gauth
-      state: present
+      state: ${{ security | enabled('gauth') | ternary('present', 'absent') }}
       args:
-        - --to=~/.local/bin/gauth.exe
+        - --to=${{ facts.local_bin_path | join('gauth.exe') }}
         - --upgrade-only
 
   - name: Install pwdgen
     tags: 
       - security
-      - cli
+      - security.pwdgen
     pipx:
       package: pwdgen
-      state: present
+      state: ${{ security | enabled('pwdgen') | ternary('present', 'absent') }}
 
   - name: Install Age
     tags: 
       - security
-      - cli
+      - security.age
     winget:
       package: FiloSottile.age
       source: winget
-      state: ${{ package.state }}
+      state: ${{ security | enabled('age') | ternary('present', 'absent') }}
 
   - name: Install Syft
     tags: 
       - security
-      - sbom
+      - security.syft
     eget:
       package: anchore/syft
-      state: absent
+      state: ${{ security | enabled('syft') | ternary('present', 'absent') }}
       args:
-        - --to=~/.local/bin/syft.exe
+        - --to=${{ facts.local_bin_path | join('syft.exe') }}
         - --upgrade-only
         - --asset=".zip"
 
   - name: Install Grype
     tags: 
       - security
-      - vulnerability-scanning
+      - security.grype
     eget:
       package: anchore/grype
-      state: absent
+      state: ${{ security | enabled('grype') | ternary('present', 'absent') }}
       args:
-        - --to=~/.local/bin/grype.exe
+        - --to=${{ facts.local_bin_path | join('grype.exe') }}
         - --upgrade-only
         - --asset=".zip"

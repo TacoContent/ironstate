@@ -2,16 +2,22 @@
 
 tasks:
   - name: Install Microsoft.PowerShell
+    tags:
+      - shell
+      - shell.pwsh
     winget:
       package: Microsoft.PowerShell
       source: winget
-      state: present
+      state: ${{ shell.pwsh | enabled() | ternary('present', 'absent') }}
 
   - name: Install Microsoft.Coreutils
+    tags:
+      - shell
+      - shell.pwsh
     winget:
       package: Microsoft.Coreutils
       source: winget
-      state: present
+      state: ${{ shell.pwsh | enabled() | ternary('present', 'absent') }}
 
   - name: PowerShell System Profile Path Fact
     fact:
@@ -38,9 +44,12 @@ tasks:
       value: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}"
 
   - name: Register User Profile
+    tags:
+      - shell
+      - shell.pwsh
     blockinfile:
       create: false
-      state: present
+      state: ${{ shell.pwsh | enabled() | ternary('present', 'absent') }}
       insertafter: EOF
       dest: "${{ facts.pwsh_system_profile }}"
       block: |
@@ -52,7 +61,7 @@ tasks:
   - name: Import PowerShell Modules
     blockinfile:
       create: true
-      state: present
+      state: ${{ shell.pwsh | enabled() | ternary('present', 'absent') }}
       insertbefore: BOF
       dest: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}"
       block: |
@@ -73,7 +82,7 @@ tasks:
   - name: Configure PowerShell Host Colors
     blockinfile:
       create: true
-      state: present
+      state: ${{ shell.pwsh | enabled() | ternary('present', 'absent') }}
       dest: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}"
       block: |
 
@@ -91,7 +100,7 @@ tasks:
   - name: Import Chocolatey Profile
     blockinfile:
       create: true
-      state: present
+      state: ${{ shell.pwsh | enabled() | ternary('present', 'absent') }}
       dest: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}"
       block: |
         # Import the Chocolatey Profile that contains the necessary code to enable
@@ -107,7 +116,7 @@ tasks:
   - name: Load Custom PowerShell Source Files
     blockinfile:
       create: false
-      state: present
+      state: ${{ shell.pwsh | enabled() | ternary('present', 'absent') }}
       dest: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}"
       block: |
         # Load custom shell extensions from ${{ facts.pwsh_user_profile_path }}/custom/<category>/*.ps1
@@ -124,31 +133,31 @@ tasks:
     winget:
       package: JanDeDobbeleer.OhMyPosh
       source: winget
-      state: present
+      state: ${{ shell.pwsh | enabled('omp') | ternary('present', 'absent') }}
 
   - name: Set up Oh-My-Posh Bin Path
     path:
       paths:
         - ~\AppData\Local\Programs\oh-my-posh\bin
-      state: present
+      state: ${{ shell.pwsh | enabled('omp') | ternary('present', 'absent') }}
 
   - name: Copy Oh-My-Posh Configuration
     copy:
       src: "files/home/.config/powershell/default.omp.json"
       dest: "${{ shell.pwsh.omp.profile | default(defaults.shell.pwsh.omp.profile) }}"
-      state: present
+      state: ${{ shell.pwsh | enabled('omp') | ternary('present', 'absent') }}
 
   - name: Copy Custom PowerShell Files
     copy:
       src: "files/home/.config/powershell/custom/"
       dest: "${{ facts.pwsh_user_profile_path }}/custom/"
-      state: present
+      state: ${{ shell.pwsh | enabled() | ternary('present', 'absent') }}
 
   - name: Oh-My-Posh Profile
     blockinfile:
       # Do not create the profile file if it does not exist. Fail the task instead.
       create: false
-      state: present
+      state: ${{ shell.pwsh | enabled('omp') | ternary('present', 'absent') }}
       dest: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}"
       block: |
         if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {

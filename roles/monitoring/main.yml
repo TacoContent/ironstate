@@ -1,0 +1,12 @@
+---
+
+tasks:
+
+  - name: Install smartmontools
+    include:
+      name: packages/smartctl
+      state: present
+    when: (monitoring is mapping) or (monitoring is boolean and monitoring) 
+    tags:
+      - monitoring
+      - monitoring.smartctl

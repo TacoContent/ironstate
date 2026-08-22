@@ -1,6 +1,61 @@
 ---
 
 tasks:
+  - name: GitHub Copilot App
+    tags:
+      - github
+      - development
+      - development.github
+      - development.github.copilot
+    when: development.github | enabled('copilot')
+    winget:
+      package: GitHub.CopilotApp
+      state: ${{ package.state }}
+
+  - name: GitHub Copilot CLI
+    tags:
+      - github
+      - development
+      - development.github
+      - development.github.copilot
+    when: development.github | enabled('copilot')
+    winget:
+      package: GitHub.Copilot
+      state: ${{ package.state }}
+
+  - name: GitHub CLI (gh)
+    tags:
+      - github
+      - development
+      - development.github
+      - development.github.gh
+    when: development.github | enabled('gh')
+    winget:
+      package: GitHub.cli
+      state: ${{ package.state }}
+
+  - name: GitHub Desktop
+    tags:
+      - github
+      - development
+      - development.github
+      - development.github.desktop
+    when: development.github | enabled('desktop')
+    winget:
+      package: GitHub.GitHubDesktop
+      state: ${{ package.state }}
+
+  - name: GitHub hub CLI
+    tags:
+      - github
+      - development
+      - development.github
+      - development.github.hub
+    when: development.github | enabled('hub')
+    winget:
+      package: GitHub.hub
+      state: ${{ package.state }}
+
   - name: Render commercial GitHub SSH host
     tags:
       - github

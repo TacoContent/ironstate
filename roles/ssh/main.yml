@@ -5,28 +5,36 @@ tasks:
   - name: Install ssh-list
     tags:
       - ssh
+      - ssh.ssh-list
     eget:
       package: akinoiro/ssh-list
-      state: present
+      state: ${{ ssh.ssh_list | default(true) | ternary('present', 'absent') }}
       args:
-        - --to=~/.local/bin/ssh-list.exe
+        - --to=${{ facts.local_bin_path | join('ssh-list.exe') }}
         - --upgrade-only
         - --asset=".zip"
 
   - name: Ensure authorized_keys are set up
     tags:
       - ssh
+      - ssh.authorized_keys
+      - ssh.administrators_authorized_keys
+    when: ssh.authorized_keys is defined or ssh.administrators_authorized_keys is defined
     include:
       name: roles/ssh/authorized_keys
 
   - name: Ensure SSH host config is set up
     tags:
       - ssh
+      - ssh.config
+    when: ssh.hosts is defined
     include:
       name: roles/ssh/config
 
   - name: Ensure known_hosts are set up
     tags:
       - ssh
+      - ssh.known_hosts
+    when: ssh.known_hosts is defined
     include:
       name: roles/ssh/known_hosts

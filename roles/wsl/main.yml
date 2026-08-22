@@ -1,0 +1,16 @@
+---
+
+tasks:
+  - name: Install Windows Subsystem for Linux (WSL)
+    winget:
+      package: Microsoft.WSL
+      state: present
+
+  - name: Is WSL Installed?
+    id: wsl_installed
+    shell:
+      command: Get-Command wsl | Out-Null
+  - name: Is WSL Installed Fact
+    fact:
+      name: wsl_installed
+      value: ${{ wsl_installed.rc == 0 }}

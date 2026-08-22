@@ -1,0 +1,31 @@
+---
+
+tasks:
+
+
+  - name: Install Mozilla Firefox
+    tags:
+      - productivity.browsers
+      - productivity.browsers.firefox
+    when: productivity | enabled('browsers', 'firefox')
+    winget:
+      package: Mozilla.Firefox
+      state: ${{ package.state }}
+
+  - name: Install Mozilla Firefox Beta
+    tags:
+      - productivity.browsers
+      - productivity.browsers.firefox_beta
+    when: productivity | enabled('browsers', 'firefox_beta')
+    winget:
+      package: Mozilla.Firefox.Beta.MSIX
+      state: ${{ package.state }}
+
+  - name: Install Mozilla Firefox Developer Edition
+    tags:
+      - productivity.browsers
+      - productivity.browsers.firefox_dev
+    when: productivity | enabled('browsers', 'firefox_dev')
+    winget:
+      package: Mozilla.Firefox.DeveloperEdition.MSIX
+      state: ${{ package.state }}

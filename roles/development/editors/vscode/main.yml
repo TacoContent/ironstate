@@ -5,6 +5,7 @@ tasks:
     tags:
       - development
       - development.editors
+      - development.editors.vscode
       - vscode
     shell:
       command: Get-Command code | Out-Null 
@@ -13,9 +14,22 @@ tasks:
     tags:
       - development
       - development.editors
+      - development.editors.vscode
       - vscode
-    when: (development.editors is mapping or (development.editors | bool)) and ((development.editors.vscode | default(false)) and vscode_installed.rc != 0)
+    when: (development.editors | enabled('vscode') and vscode_installed.rc != 0)
     winget:
       package: Microsoft.VisualStudioCode
+      state: "${{ package.state | default('present')}}"
+      source: winget
+
+  - name: Install Visual Studio Code Insiders
+    tags:
+      - development
+      - development.editors
+      - development.editors.vscode.insiders
+      - vscode.insiders
+    when: development.editors.vscode_insiders | default(false)
+    winget:
+      package: Microsoft.VisualStudioCode.Insiders
       state: "${{ package.state | default('present')}}"
       source: winget

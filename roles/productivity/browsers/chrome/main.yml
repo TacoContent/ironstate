@@ -1,0 +1,39 @@
+---
+
+tasks:
+
+  - name: Install Google Chrome
+    tags:
+      - productivity.browsers
+      - productivity.browsers.chrome
+    when: productivity | enabled('browsers', 'chrome')
+    winget:
+      package: Google.Chrome
+      state: ${{ package.state }}
+
+  - name: Install Google Chrome Beta
+    tags:
+      - productivity.browsers
+      - productivity.browsers.chrome_beta
+    when: productivity | enabled('browsers', 'chrome_beta')
+    winget:
+      package: Google.Chrome.Beta
+      state: ${{ package.state }}
+
+  - name: Install Google Chrome Canary
+    tags:
+      - productivity.browsers
+      - productivity.browsers.chrome_canary
+    when: productivity | enabled('browsers', 'chrome_canary')
+    winget:
+      package: Google.Chrome.Canary
+      state: ${{ package.state }}
+
+  - name: Install Google Chrome Dev
+    tags:
+      - productivity.browsers
+      - productivity.browsers.chrome_dev
+    when: productivity | enabled('browsers', 'chrome_dev')
+    winget:
+      package: Google.Chrome.Dev
+      state: ${{ package.state }}

@@ -1,0 +1,27 @@
+---
+vars:
+  productivity:
+    browsers:
+      chrome: true
+      chrome_beta: false
+      chrome_canary: false
+      chrome_dev: false
+      firefox: true
+      edge: true
+      edge_beta: false
+      edge_canary: false
+      edge_dev: false
+      opera: false
+      opera_beta: false
+      opera_dev: false
+      operagx: false
+
+tasks:
+  - name: Include Browsers Role
+    tags:
+      - productivity
+      - productivity.browsers
+    when: productivity | enabled('browsers')
+    include:
+      name: roles/productivity/browsers
+      state: ${{ package.state }}

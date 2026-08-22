@@ -1,0 +1,45 @@
+---
+
+tasks:
+  - name: System Tweak Tools
+    actions: 
+      - name: Twinkle Tray
+        tags:
+          - system
+          - system.tweaks
+          - system.tweaks.twinkle_tray
+        winget:
+          package: 9PLJWWSV01LK  # Twinkle Tray
+          state: ${{ system.tweaks | enabled('twinkle_tray') | ternary('present', 'absent') }}
+          source: msstore
+      - name: Wintoys
+        tags:
+          - system
+          - system.tweaks
+          - system.tweaks.wintoys
+        winget:
+          package: 9P8LTPGCBZXD  # Wintoys
+          source: msstore
+          state: ${{ system.tweaks | enabled('wintoys') | ternary('present', 'absent') }}
+      - name: EarTrumpet
+        tags:
+          - system
+          - system.tweaks
+          - system.tweaks.eartrumpet
+        winget:
+          package: 9NBLGGH516XP  # EarTrumpet
+          source: msstore
+          state: ${{ system.tweaks | enabled('eartrumpet') | ternary('present', 'absent') }}
+    tags:
+      - system
+      - system.tweaks
+
+  - name: PowerToys
+    tags:
+      - system
+      - system.tweaks
+      - system.tweaks.powertoys
+    winget:
+      package: Microsoft.PowerToys
+      source: winget
+      state: ${{ system.tweaks | enabled('powertoys') | ternary('present', 'absent') }}

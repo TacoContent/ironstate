@@ -4,12 +4,85 @@ tasks:
 
   - name: Install OpenCode
     tags: 
-      - ai
       - development
+      - development.agents
+      - development.agents.opencode
+    when: development.agents | enabled('opencode')
     eget:
       package: anomalyco/opencode
-      state: present
+      state: ${{ development.agents.opencode | ternary('present', 'absent') }}
       args:
-        - --to=~/.local/bin/opencode.exe
+        - --to=${{ facts.local_bin_path }}/opencode.exe
         - --upgrade-only
         - --asset=".zip"
+
+  - name: Install Claude Desktop
+    tags: 
+      - development
+      - development.agents
+      - development.agents.claude
+    when: development.agents | enabled('claude')
+    winget:
+      package: Anthropic.Claude
+      state: ${{ development.agents.claude | ternary('present', 'absent') }}
+
+  - name: Install Claude Code
+    tags: 
+      - development
+      - development.agents
+      - development.agents.claude_code
+    when: development.agents | enabled('claude_code')
+    winget:
+      package: Anthropic.ClaudeCode
+      state: ${{ development.agents.claude_code | ternary('present', 'absent') }}
+
+  - name: Install OpenAI Codex
+    tags: 
+      - development
+      - development.agents
+      - development.agents.codex
+    when: development.agents | enabled('codex')
+    winget:
+      package: OpenAI.Codex
+      state: ${{ development.agents.codex | ternary('present', 'absent') }}
+
+  - name: Install Gemini
+    tags: 
+      - development
+      - development.agents
+      - development.agents.gemini
+    when: development.agents | enabled('gemini')
+    npm:
+      package: '@google/gemini-cli'
+      state: ${{ development.agents.gemini | ternary('present', 'absent') }}
+
+  - name: Install Ollama
+    tags: 
+      - development
+      - development.agents
+      - development.agents.ollama
+    when: development.agents | enabled('ollama')
+    winget:
+      package: Ollama.Ollama
+      state: ${{ development.agents.ollama | ternary('present', 'absent') }}
+
+  - name: Install Ollama Models
+    tags: 
+      - development
+      - development.agents
+      - development.agents.ollama
+    when: development.agents | enabled('ollama') and development.agents.ollama_models | length > 0
+    shell:
+      command: |
+        & ollama pull ${{ item }}
+    items: ${{ development.agents.ollama_models | default([]) }}
+
+  - name: Install Open Agent Platform Dive
+    tags: 
+      - development
+      - development.agents
+      - development.agents.oap_dive
+    when: development.agents | enabled('oap_dive')
+    winget:
+      package: OpenAgentPlatform.Dive
+      state: ${{ development.agents.oap_dive | ternary('present', 'absent') }}

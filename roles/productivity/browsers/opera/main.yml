@@ -1,0 +1,40 @@
+---
+
+tasks:
+
+  - name: Install Opera
+    tags:
+      - productivity.browsers
+      - productivity.browsers.opera
+    when: productivity | enabled('browsers', 'opera')
+    winget:
+      package: Opera.Opera
+      state: ${{ package.state }}
+
+  - name: Install Opera Beta
+    tags:
+      - productivity.browsers
+      - productivity.browsers.opera_beta
+    when: productivity | enabled('browsers', 'opera_beta')
+    winget:
+      package: Opera.Opera.Beta
+      state: ${{ package.state }}
+
+  - name: Install Opera Developer
+    tags:
+      - productivity.browsers
+      - productivity.browsers.opera_dev
+    when: productivity | enabled('browsers', 'opera_dev')
+    winget:
+      package: Opera.Opera.Dev
+      state: ${{ package.state }}
+
+  - name: Install Opera GX
+    tags:
+      - productivity.browsers
+      - productivity.browsers.operagx
+      - productivity.browsers.opera_gx # support both tags
+    when: productivity | enabled('browsers', 'operagx')
+    winget:
+      package: Opera.OperaGX
+      state: ${{ package.state }}

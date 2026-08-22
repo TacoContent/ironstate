@@ -1,0 +1,32 @@
+winget:
+  Google.ChromeRemoteDesktopHost
+  Microsoft.Teams
+  SlackTechnologies.Slack
+  Discord.Discord
+  Zoom.Zoom
+  Spotify.Spotify
+  ShareX.ShareX
+  Balena.Etcher
+  Rufus.Rufus
+  OBSProject.OBSStudio
+  SoftFever.OrcaSlicer
+  Prusa3D.PrusaSlicer
+  Mango3D.LycheeSlicer
+  WinSCP.WinSCP
+  flos-freeware.Notepad2
+  Notepad2mod.Notepad2mod
+  Rizonesoft.Notepad3
+  zufuliu.notepad4
+  Docker.DockerDesktop
+  KeePassXCTeam.KeePassXC
+  Plex.Plex
+  Ytmdesktop.Ytmdesktop
+  AutoHotkey.AutoHotkey
+  streamerbot.streamerbot
+  Elgato.StreamDeck
+  Elgato.WaveLink
+  Corsair.iCUE.5
+  Logitech.GHUB
+
+
+https://cdn.anycubic-cloud.anycubic.com/file/2025/07/22/exe/687f4f3da84a1663614b0e4a5be96a44/AnycubicSlicerNext_20250722144031.exe

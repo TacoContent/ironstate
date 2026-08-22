@@ -259,11 +259,18 @@ function Copy-DeepData {
 }
 
 function Test-TagsMatch {
-  # Flat tag matching for '-Tags': no filter means "include everything";
-  # otherwise a leaf's effective tags (its own + every ancestor task's,
-  # accumulated by Tasks.psm1) must intersect the requested tags.
+  # Flat tag matching for '-Tags': no filter means "include everything".
+  # A leaf with no effective tags at all (neither its own nor any
+  # ancestor's, accumulated by Tasks.psm1) can never be deliberately
+  # targeted OR excluded by any '-Tags' value - so unlike a tagged leaf that
+  # simply doesn't match, it's treated as always-included rather than
+  # always-excluded. Otherwise this would silently break a prerequisite
+  # task with no tags of its own (e.g. a 'fact' another task's 'when'
+  # depends on) the moment *any* '-Tags' filter is used for anything -
+  # 'when' remains the only gate such a task needs.
   param([string[]] $Tags, [string[]] $Filter)
   if (-not $Filter -or $Filter.Count -eq 0) { return $true }
+  if (-not $Tags -or $Tags.Count -eq 0) { return $true }
   foreach ($tag in $Filter) { if ($Tags -contains $tag) { return $true } }
   return $false
 }

@@ -1,0 +1,146 @@
+---
+
+tasks:
+
+  - name: Include JetBrains GoLand Editor Role
+    tags:
+      - development
+      - development.editors
+      - development.editors.goland
+      - goland
+    when: development.editors | enabled('goland')
+    include:
+      name: roles/development/editors/jetbrains/goland
+      state: ${{ package.state }}
+
+  - name: Include JetBrains Aqua Editor Role
+    tags:
+      - development
+      - development.editors
+      - development.editors.aqua
+      - aqua
+    when: development.editors | enabled('aqua')
+    include:
+      name: roles/development/editors/jetbrains/aqua
+      state: ${{ package.state }}
+
+  - name: Include JetBrains Rider Editor Role
+    tags:
+      - development
+      - development.editors
+      - development.editors.rider
+      - rider
+    when: development.editors | enabled('rider')
+    include:
+      name: roles/development/editors/jetbrains/rider
+      state: ${{ package.state }}
+
+  - name: Include JetBrains ReSharper Editor Role
+    tags:
+      - development
+      - development.editors
+      - development.editors.resharper
+      - resharper
+    when: development.editors | enabled('resharper')
+    include:
+      name: roles/development/editors/jetbrains/resharper
+      state: ${{ package.state }}
+
+  - name: Include JetBrains DataSpell Editor Role
+    tags:
+      - development
+      - development.editors
+      - development.editors.dataspell
+      - dataspell
+    when: development.editors | enabled('dataspell')
+    include:
+      name: roles/development/editors/jetbrains/dataspell
+      state: ${{ package.state }}
+
+  - name: Include JetBrains PyCharm Editor Role
+    tags:
+      - development
+      - development.editors
+      - development.editors.pycharm
+      - pycharm
+    when: development.editors | enabled('pycharm')
+    include:
+      name: roles/development/editors/jetbrains/pycharm
+      state: ${{ package.state }}
+
+  - name: Include JetBrains IntelliJ IDEA Editor Role
+    tags:
+      - development
+      - development.editors
+      - development.editors.intellij
+      - intellij
+    when: development.editors | enabled('intellij')
+    include:
+      name: roles/development/editors/jetbrains/intellij
+      state: ${{ package.state }}
+
+  - name: Include JetBrains PhpStorm Editor Role
+    tags:
+      - development
+      - development.editors
+      - development.editors.phpstorm
+      - phpstorm
+    when: development.editors | enabled('phpstorm')
+    include:
+      name: roles/development/editors/jetbrains/phpstorm
+      state: ${{ package.state }}
+
+  - name: Include JetBrains RubyMine Editor Role
+    tags:
+      - development
+      - development.editors
+      - development.editors.rubymine
+      - rubymine
+    when: development.editors | enabled('rubymine')
+    include:
+      name: roles/development/editors/jetbrains/rubymine
+      state: ${{ package.state }}
+
+  - name: Include JetBrains CLion Editor Role
+    tags:
+      - development
+      - development.editors
+      - development.editors.clion
+      - clion
+    when: development.editors | enabled('clion')
+    include:
+      name: roles/development/editors/jetbrains/clion
+      state: ${{ package.state }}
+
+  - name: Include JetBrains DataGrip Editor Role
+    tags:
+      - development
+      - development.editors
+      - development.editors.datagrip
+      - datagrip
+    when: development.editors | enabled('datagrip')
+    include:
+      name: roles/development/editors/jetbrains/datagrip
+      state: ${{ package.state }}
+
+  - name: Include JetBrains WebStorm Editor Role
+    tags:
+      - development
+      - development.editors
+      - development.editors.webstorm
+      - webstorm
+    when: development.editors | enabled('webstorm')
+    include:
+      name: roles/development/editors/jetbrains/webstorm
+      state: ${{ package.state }}
+
+  - name: Include JetBrains RustOver Editor Role
+    tags:
+      - development
+      - development.editors
+      - development.editors.rustover
+      - rustover
+    when: development.editors | enabled('rustover')
+    include:
+      name: roles/development/editors/jetbrains/rustover
+      state: ${{ package.state }}
