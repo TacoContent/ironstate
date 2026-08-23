@@ -137,6 +137,17 @@ func invokeZipDownloadAndExtract(item map[string]any) error {
 		if len(exclude) > 0 && matchAny(exclude, name) {
 			continue
 		}
+		// Literal, inline 'strings.Contains(name, "..")' guard directly on
+		// the untrusted entry name - CodeQL's go/zipslip query documents
+		// exactly this shape as its recognized "GOOD" pattern
+		// (https://codeql.github.com/codeql-query-help/go/go-zipslip/) and
+		// doesn't reliably treat a custom helper function (isSafeZipEntryName/
+		// safeExtractPath below) as a sanitizer, even though they enforce the
+		// same rule plus more. Kept in addition to those, not instead of them.
+		if strings.Contains(name, "..") {
+			engine.Danger("zip entry %q contains '..'; aborting extraction", name)
+			return fmt.Errorf("zip entry %q contains '..': refusing to extract (possible zip-slip attack)", name)
+		}
 		if !isSafeZipEntryName(name) {
 			engine.Danger("zip entry %q is unsafe; aborting extraction", name)
 			return fmt.Errorf("zip entry %q is unsafe", name)

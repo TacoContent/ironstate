@@ -461,6 +461,37 @@ func TestZipHandlerRejectsZipSlipEntry(t *testing.T) {
 	}
 }
 
+// TestZipHandlerRejectsEntryNameSubstringDotDot documents a deliberate
+// precision trade-off: the loop's literal 'strings.Contains(name, "..")'
+// guard (added to match CodeQL's go/zipslip documented "GOOD" pattern -
+// see zip.go) also rejects a benign filename that merely contains ".." as
+// text, not just an actual '..' path-traversal segment. Accepted as the
+// cost of a static-analysis-recognizable check; isSafeZipEntryName/
+// safeExtractPath alone would have allowed it (see
+// TestIsSafeZipEntryName/TestSafeExtractPathAllowsLegitFilenameContainingDotDot).
+func TestZipHandlerRejectsEntryNameSubstringDotDot(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "benign.zip")
+	writeTestZip(t, zipPath, map[string]string{"video..final.mp4": "payload"})
+
+	origGet := httpGet
+	defer func() { httpGet = origGet }()
+	httpGet = func(url string) (*http.Response, error) {
+		f, err := os.Open(zipPath) //nolint:gosec // zipPath is a t.TempDir()-derived path this same test just wrote, not user input
+		if err != nil {
+			return nil, err
+		}
+		return &http.Response{StatusCode: 200, Body: f}, nil
+	}
+
+	destDir := filepath.Join(dir, "dest")
+	h := zipHandler{}
+	item := map[string]any{"src": "http://example.invalid/benign.zip", "dest": destDir}
+	if _, err := h.Install(item, "", testCtx()); err == nil {
+		t.Fatal("expected the loop's stricter literal '..' substring guard to reject this entry name")
+	}
+}
+
 func TestSafeExtractPathRejectsTraversalAndAbsolutePaths(t *testing.T) {
 	dest := filepath.Join(t.TempDir(), "dest")
 	names := []string{
