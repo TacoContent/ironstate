@@ -490,6 +490,24 @@ func TestSafeJoinAllowsLegitFilenameContainingDotDot(t *testing.T) {
 	}
 }
 
+func TestIsSafeZipEntryName(t *testing.T) {
+	unsafe := []string{"", "../sneaky-file", "a/../../sneaky-file", `..\sneaky-file`, "/etc/passwd"}
+	if runtime.GOOS == "windows" {
+		unsafe = append(unsafe, `C:\Windows\System32\evil.dll`)
+	}
+	for _, name := range unsafe {
+		if isSafeZipEntryName(name) {
+			t.Fatalf("isSafeZipEntryName(%q) = true, want false", name)
+		}
+	}
+
+	for _, name := range []string{"file.txt", "sub/dir/file.txt", "video..final.mp4"} {
+		if !isSafeZipEntryName(name) {
+			t.Fatalf("isSafeZipEntryName(%q) = false, want true", name)
+		}
+	}
+}
+
 func writeTestZip(t *testing.T, path string, files map[string]string) {
 	t.Helper()
 	f, err := os.Create(path) //nolint:gosec // path is a t.TempDir()-derived path supplied by the calling test, not user input
