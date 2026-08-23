@@ -85,7 +85,9 @@ tasks:
 
 ## Architecture
 
-`ironstate.ps1` is just the runner: it loads YAML, merges overlays, flattens the task/action tree (accumulating `tags` and `when` - see below - and loading any `include`d packages inline as it goes), applies `-Tags` filtering, then dispatches each surviving leaf to a handler *sequentially*, in the order the tasks are written (Ansible-style; not grouped by module). "Sequentially" matters: each leaf's `when` and any remaining `${{ }}` references are resolved *immediately before that leaf runs*, against facts/vars plus a registry that grows as earlier leaves' `id`/`fact` results come in - not all evaluated up front - so a task can act on an earlier task's result (see [Registering results](#registering-results-id)). The actual per-module logic (how to test/install/uninstall/describe a leaf) lives in its own PowerShell module:
+`ironstate.ps1` is just the runner: it loads YAML, merges overlays, flattens the task/action tree (accumulating `tags` and `when` - see below - and loading any `include`d packages inline as it goes), applies `-Tags` filtering, then dispatches the surviving leaves to their handlers *sequentially*, in the order the tasks are written (Ansible-style; not grouped by module). "Sequentially" matters: each leaf's `when` and any remaining `${{ }}` references are resolved *immediately before that leaf runs*, against facts/vars plus a registry that grows as earlier leaves' `id`/`fact` results come in - not all evaluated up front - so a task can act on an earlier task's result (see [Registering results](#registering-results-id)). The actual per-module logic (how to test/install/uninstall/describe a leaf) lives in its own PowerShell module.
+
+**Fact gathering runs first**: before any of that, every `fact` leaf in the whole tag-filtered tree runs as its own pass, in document order, ahead of every other leaf - matching Ansible's "gather facts" phase. This means a `fact`'s own `value`/`when` can only see gathered facts, vars, and facts registered earlier in this same pass; it can **never** reference another task's `id`-registered result, since no non-fact task has run yet at that point - see [`fact`](#fact) for how to compute a fact's value from a live command instead.
 
 ``` tree
 install/windows/
@@ -425,13 +427,24 @@ tasks:
     shell:
       command: (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion")
 
-  - name: set program files directory fact
-    fact:
-      name: program_files_dir
-      value: ${{ pf.ProgramFilesDir }}   # -> referenced later as ${{ facts.program_files_dir }}
+  - name: log it
+    log:
+      message: ${{ pf.ProgramFilesDir }}
 ```
 
 This only applies to `host: pwsh` (the only host with a real "object" concept - an external process like `cmd`/`node`/`npx tsx` only ever produces text) and only when exactly one such object comes out; a command producing plain text, zero objects, or more than one object just gets the usual `rc`/`stdout`/`stdout_lines`/`stderr`/`stderr_lines` shape.
+
+**A `fact` can't read this off another task's `id`** (see [`fact`](#fact) - facts run in their own gather-facts pass, before any `id`'d task). To turn a native result like this into a fact, give the fact its own embedded `shell` instead - `value` then self-references this same merged result, the same convention `failed_when` uses:
+
+```yaml
+tasks:
+  - name: program files directory fact
+    fact:
+      name: program_files_dir
+      shell:
+        command: (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion")
+      value: ${{ ProgramFilesDir }}   # -> referenced later as ${{ facts.program_files_dir }}
+```
 
 ## Failing a task (`failed_when`, `continue_on_error`)
 
@@ -762,11 +775,13 @@ tasks:
 
 Sets an arbitrary named value - the write-your-own-data counterpart to gathered facts, registered under the same `facts.<name>` namespace (see [Facts](#facts)/[Vars](#vars)), distinct from `id`-registered results (see [Registering results](#registering-results-id)). Reuses the present/absent state machine like `log`: `state: present` (default) or `latest` (re)sets the fact every time it's reached; `state: absent` unsets it. No real idempotency - a fact always fires when reached, and always actually applies (dry-run included, since it's pure bookkeeping with no real system side effect).
 
+**Every `fact` leaf runs before every other task** (see [Architecture](#architecture)) - so a `fact`'s `value`/`when` can only reference gathered facts, vars, and facts registered earlier in this same gather-facts pass. It **cannot** reference another task's `id`-registered result (no non-fact task has run yet); a fact needing a live command's output must compute it itself via its own embedded `shell` instead (see below).
+
 | Field | Required | Description |
 | --- | --- | --- |
 | `name` | yes | Name this fact is registered under, as `facts.<name>` (not to be confused with the `registry` module below - this is the in-memory fact namespace, not the Windows registry) |
 | `shell` | no | Runs this command (same shape as [`shell`](#shell)) to compute the fact's value, instead of a literal `value`. See below |
-| `value` | yes, unless `state: absent` or `shell` is given | Any YAML value - scalar, list, or nested mapping. May reference `${{ <id> }}`/`${{ facts.* }}`/`${{ vars.* }}`, resolved before being stored |
+| `value` | yes, unless `state: absent` or `shell` is given | Any YAML value - scalar, list, or nested mapping. May reference `${{ facts.* }}`/`${{ vars.* }}` (or, with an embedded `shell`, this same task's own `rc`/`stdout`/... - see below), resolved before being stored |
 
 ```yaml
 tasks:
@@ -782,21 +797,11 @@ tasks:
         items: [a, b]
         another-property:
           sub-item: foo
-
-  - name: check for a file
-    id: bar
-    shell:
-      command: Get-Item -Path "C:\foo\file.txt"
-
-  - name: copy that result into a fact
-    fact:
-      name: bar
-      value: "${{ bar }}"   # the whole { changed, rc, stdout, ... } object from the 'id: bar' task above
 ```
 
 #### `fact` with an embedded `shell`
 
-A fact can compute its own value by running a command directly, instead of referencing a separately-`id`'d `shell` task's result. This command **always actually runs, even without `-Apply`** - the same dry-run exception the fact registration itself already gets, since a fact has no real system side effect and a dry-run preview of a later `when`/`${{ }}` reference needs a real value to check, not a zero-result stand-in:
+A fact can compute its own value by running a command directly - the only way to derive a fact from a live command's output, since a fact can't reference a separately-`id`'d task's result (see above). This command **always actually runs, even without `-Apply`** - the same dry-run exception the fact registration itself already gets, since a fact has no real system side effect and a dry-run preview of a later `when`/`${{ }}` reference needs a real value to check, not a zero-result stand-in:
 
 ```yaml
 tasks:

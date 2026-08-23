@@ -7,57 +7,7 @@ vars:
 
 tasks:
 
-  - name: Install GitHub CLI
-    tags: 
-      - git
-      - cli
-    winget:
-      package: GitHub.cli
-      source: winget
-      state: ${{ package.state }}
-
-  - name: Install nektos/act
-    tags:
-      - development
-      - cli
-    eget:
-      package: nektos/act
-      state: present
-      args:
-        - --to=~/.local/bin/act.exe
-        - --upgrade-only
-
-  - name: Install dhth/act3
-    tags: 
-      - development
-      - git
-    go:
-      package: github.com/dhth/act3
-      version: latest
-      state: present
-
-  - name: Install byawitz/ggh
-    tags:
-      - development
-      - git
-    eget:
-      package: byawitz/ggh
-      state: present
-      args:
-        - --to=~/.local/bin/ggh.exe
-        - --upgrade-only
-
-  - name: Install akunzai/gistui
-    tags:
-      - development
-      - gist
-      - git
-    eget:
-      package: akunzai/gistui
-      state: present
-      args:
-        - --to=~/.local/bin/gistui.exe
-        - --upgrade-only
+  
 
   - name: Install orhun/git-cliff
     tags:
@@ -86,8 +36,8 @@ tasks:
 
   - name: Install koalaman/shellcheck
     tags: 
-      - shell
       - development
+      - development.tools.shellcheck
     eget:
       package: koalaman/shellcheck
       state: present

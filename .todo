@@ -5,15 +5,16 @@ winget:
   Balena.Etcher
   Rufus.Rufus
   OBSProject.OBSStudio
+
   SoftFever.OrcaSlicer
   Prusa3D.PrusaSlicer
   Mango3D.LycheeSlicer
-  WinSCP.WinSCP
+
   flos-freeware.Notepad2
   Notepad2mod.Notepad2mod
   Rizonesoft.Notepad3
   zufuliu.notepad4
-  Docker.DockerDesktop
+
   KeePassXCTeam.KeePassXC
   AgileBits.1Password
   LastPass.LastPass

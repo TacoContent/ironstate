@@ -1,0 +1,10 @@
+---
+
+tasks:
+  - name: Docker Desktop
+    tags:
+      - development
+      - development.docker
+    winget:
+      package: Docker.DockerDesktop
+      state: ${{ development.docker | enabled() | ternary('present', 'absent') }}

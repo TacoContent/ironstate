@@ -14,6 +14,14 @@
   another document's tasks from packages/<name>/main.yml (see the 'packages'
   folder and README.md) as if they were written inline.
 
+  Ansible-style fact gathering: every 'fact' leaf in the whole (tag-filtered)
+  tree runs first, in document order, before any other leaf - regardless of
+  where in the file it's declared relative to whatever reads it. Because of
+  this, a fact's own 'value'/'when' can only reference gathered facts, vars,
+  and other facts gathered earlier in this same phase - never another task's
+  'id', since no non-fact task has run yet. A fact needing a live command
+  result computes it itself via its own embedded 'shell' instead.
+
   Each module's Test/Describe/Install/Uninstall behavior lives in its own
   PowerShell module under modules/Handlers/; the task tree itself is
   normalized/flattened by modules/Tasks.psm1. This script loads data, then
@@ -146,9 +154,14 @@ function Invoke-PackageItem {
 
   # A handler's Install/Uninstall may return a { rc, stdout, stdout_lines,
   # stderr, stderr_lines } result hashtable (every CLI-backed handler and
-  # 'shell' do); anything else it returns (or a thrown exception) is
-  # normalized below rather than trusted, so pure-PowerShell handlers that
-  # return nothing meaningful still produce a well-shaped result.
+  # 'shell' do) - 'shell' under the default 'pwsh' host can also merge extra
+  # native-object properties alongside those (e.g. 'ProgramFilesDir' - see
+  # Shell.psm1's Merge-ShellNativeResult), which must survive into '$exec'
+  # below the same as the fixed fields, for '${{ <id>.ProgramFilesDir }}' /
+  # a fact's embedded-shell 'value' to see them. Anything else Install/
+  # Uninstall returns (or a thrown exception) is normalized below rather
+  # than trusted, so pure-PowerShell handlers that return nothing
+  # meaningful still produce a well-shaped result.
   $execResult = $null
   if ($action -eq 'Skip') {
     Write-Verbose "[$Module] $label - state=$state, installed=$installed -> skip"
@@ -170,9 +183,10 @@ function Invoke-PackageItem {
 
   $exec = Get-ZeroExecResult
   if ($execResult -is [System.Collections.IDictionary] -and $execResult.Contains('rc')) {
-    foreach ($key in @('rc', 'stdout', 'stdout_lines', 'stderr', 'stderr_lines')) {
-      if ($execResult.Contains($key)) { $exec[$key] = $execResult[$key] }
-    }
+    # Every key, not just the fixed rc/stdout/.../stderr_lines set - carries
+    # through any extra native-object properties a 'pwsh'-host 'shell'
+    # merged in (see comment above).
+    foreach ($key in $execResult.Keys) { $exec[$key] = $execResult[$key] }
   }
 
   [PSCustomObject]@{
@@ -194,17 +208,26 @@ function Invoke-Tasks {
   # facts+vars+registry-so-far *immediately before* that leaf runs, so a
   # later leaf can see an earlier leaf's 'id'/'fact' - the whole reason
   # 'when' isn't evaluated any earlier, in Tasks.psm1's Expand-TaskTree.
+  #
+  # 'Registry'/'UserFacts'/'CommandAvailability' can be seeded by the
+  # caller and are handed back on the returned object - this is what lets
+  # the main flow below run this twice (a facts-gathering pass, then
+  # everything else) as one continuous, threaded run instead of two
+  # unrelated ones.
   param(
     [Parameter(Mandatory)] $Leaves,
     [Parameter(Mandatory)][hashtable] $Handlers,
     [Parameter(Mandatory)] $Facts,
     [Parameter(Mandatory)] $Vars,
+    [hashtable] $Registry = @{},
+    [hashtable] $UserFacts = @{},
+    [hashtable] $CommandAvailability = @{},
     [switch] $Apply
   )
 
-  $commandAvailability = @{}
-  $registry = @{}
-  $userFacts = @{}
+  $commandAvailability = $CommandAvailability
+  $registry = $Registry
+  $userFacts = $UserFacts
   $results = [System.Collections.Generic.List[object]]::new()
   $stoppedOnFailure = $false
 
@@ -329,6 +352,12 @@ function Invoke-Tasks {
         stderr       = $result.Exec.stderr
         stderr_lines = $result.Exec.stderr_lines
       }
+      # Any extra native-object properties a 'pwsh'-host 'shell' merged in
+      # (e.g. 'ProgramFilesDir') ride along too, never overwriting the
+      # reserved fields above - see Shell.psm1's Merge-ShellNativeResult.
+      foreach ($key in $result.Exec.Keys) {
+        if (-not $registered.Contains($key)) { $registered[$key] = $result.Exec[$key] }
+      }
 
       if ($leaf.Looped) {
         # A looped task's 'id' is the same string on every iteration - naively
@@ -355,8 +384,11 @@ function Invoke-Tasks {
   }
 
   return [PSCustomObject]@{
-    Results          = $results.ToArray()
-    StoppedOnFailure = $stoppedOnFailure
+    Results             = $results.ToArray()
+    StoppedOnFailure    = $stoppedOnFailure
+    Registry            = $registry
+    UserFacts           = $userFacts
+    CommandAvailability = $commandAvailability
   }
 }
 
@@ -388,8 +420,31 @@ $taskList = Get-TaskList -Data $data
 $leaves = Expand-TaskTree -Tasks $taskList -ModuleNames $moduleNames -PackagesRoot $PSScriptRoot -Facts $facts -Vars $vars
 $filteredLeaves = @($leaves | Where-Object { Test-TagsMatch -Tags $_.Tags -Filter $Tags })
 
-$run = Invoke-Tasks -Leaves $filteredLeaves -Handlers $handlers -Facts $facts -Vars $vars -Apply:$Apply
+# Ansible-style "gather facts" phase: every 'fact' leaf across the whole
+# (tag-filtered) tree runs first, in its own document order, before any
+# other leaf - so a 'when'/'${{ }}' reference to a user-defined fact never
+# depends on where in the file that fact happens to be declared relative
+# to whatever reads it. This also means a fact's own 'value'/'when' can
+# only see facts/vars (gathered facts and this same phase's own
+# user-defined facts so far) - never another task's 'id', since no
+# non-fact task has run yet at this point. A fact needing a live command
+# result has to compute it itself via its own embedded 'shell' (see
+# Handlers/Fact.psm1) rather than reading a separately-'id'd task.
+$factLeaves = @($filteredLeaves | Where-Object { $_.Module -eq 'fact' })
+$otherLeaves = @($filteredLeaves | Where-Object { $_.Module -ne 'fact' })
 
-$run.Results | Format-Table -Property Module, Package, State, Action, Failed -AutoSize
+$factRun = Invoke-Tasks -Leaves $factLeaves -Handlers $handlers -Facts $facts -Vars $vars -Apply:$Apply
 
-if ($run.StoppedOnFailure) { exit 1 }
+$allResults = [System.Collections.Generic.List[object]]::new()
+foreach ($r in $factRun.Results) { $allResults.Add($r) }
+
+$stoppedOnFailure = $factRun.StoppedOnFailure
+if (-not $stoppedOnFailure) {
+  $run = Invoke-Tasks -Leaves $otherLeaves -Handlers $handlers -Facts $facts -Vars $vars -Apply:$Apply -Registry $factRun.Registry -UserFacts $factRun.UserFacts -CommandAvailability $factRun.CommandAvailability
+  foreach ($r in $run.Results) { $allResults.Add($r) }
+  $stoppedOnFailure = $run.StoppedOnFailure
+}
+
+$allResults | Format-Table -Property Module, Package, State, Action, Failed -AutoSize
+
+if ($stoppedOnFailure) { exit 1 }

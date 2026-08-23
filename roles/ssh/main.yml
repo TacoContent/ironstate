@@ -2,7 +2,7 @@
 
 tasks: 
 
-  - name: Install ssh-list
+  - name: akinoiro/ssh-list
     tags:
       - ssh
       - ssh.ssh-list
@@ -13,6 +13,25 @@ tasks:
         - --to=${{ facts.local_bin_path | join('ssh-list.exe') }}
         - --upgrade-only
         - --asset=".zip"
+
+  - name: byawitz/ggh
+    tags:
+      - development
+      - git
+    eget:
+      package: byawitz/ggh
+      state: ${{ ssh.ggh | default(true) | ternary('present', 'absent') }}
+      args:
+        - --to=${{ facts.local_bin_path | join('ggh.exe') }}
+        - --upgrade-only
+
+  - name: WinSCP
+    tags:
+      - ssh
+      - ssh.winscp
+    winget:
+      package: WinSCP.WinSCP
+      state: ${{ ssh.winscp | default(true) | ternary('present', 'absent') }}
 
   - name: Ensure authorized_keys are set up
     tags:

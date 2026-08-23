@@ -4,48 +4,52 @@ tasks:
 
   - name: Set up Git
     tags:
-      - git
       - development
+      - development.git
     include:
       name: roles/development/git
-      state: present
+
+  - name: Set up Docker
+    tags:
+      - development
+      - development.docker
+    include:
+      name: roles/development/docker
 
   - name: Set up GitHub SSH hosts
     tags:
-      - github
       - development
+      - development.github
     include:
       name: roles/development/github
-      state: present
 
   - name: Set up Development Folders
     tags:
       - development
     include:
       name: roles/development/folder
-      state: present
 
   - name: Set up Development Tools
     tags:
       - development
+      - development.tools
     include:
       name: roles/development/tools
-      state: present
 
   - name: Set up Development Agents
     tags:
       - development
+      - development.agents
     include:
       name: roles/development/agents
-      state: present
 
   - name: Set up Development Editors
     tags:
       - development
+      - development.editors
     when: development.editors is mapping or (development.editors)
     include:
       name: roles/development/editors
-      state: present
 
   - name: Set up development alias
     blockinfile:

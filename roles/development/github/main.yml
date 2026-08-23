@@ -10,7 +10,7 @@ tasks:
     when: development.github | enabled('copilot')
     winget:
       package: GitHub.CopilotApp
-      state: ${{ package.state }}
+      state: "${{ development.github | enabled('copilot') | ternary('present', 'absent') }}"
 
   - name: GitHub Copilot CLI
     tags:
@@ -21,7 +21,7 @@ tasks:
     when: development.github | enabled('copilot')
     winget:
       package: GitHub.Copilot
-      state: ${{ package.state }}
+      state: "${{ development.github | enabled('copilot') | ternary('present', 'absent') }}"
 
   - name: GitHub CLI (gh)
     tags:
@@ -32,7 +32,7 @@ tasks:
     when: development.github | enabled('gh')
     winget:
       package: GitHub.cli
-      state: ${{ package.state }}
+      state: "${{ development.github | enabled('gh') | ternary('present', 'absent') }}"
 
   - name: GitHub Desktop
     tags:
@@ -43,7 +43,7 @@ tasks:
     when: development.github | enabled('desktop')
     winget:
       package: GitHub.GitHubDesktop
-      state: ${{ package.state }}
+      state: "${{ development.github | enabled('desktop') | ternary('present', 'absent') }}"
 
   - name: GitHub hub CLI
     tags:
@@ -54,12 +54,48 @@ tasks:
     when: development.github | enabled('hub')
     winget:
       package: GitHub.hub
-      state: ${{ package.state }}
+      state: "${{ development.github | enabled('hub') | ternary('present', 'absent') }}"
+
+  - name: Install nektos/act
+    tags:
+      - development
+      - development.github
+      - development.github.act
+    eget:
+      package: nektos/act
+      state: "${{ development.github | enabled('act') | ternary('present', 'absent') }}"
+
+      args:
+        - --to=~/.local/bin/act.exe
+        - --upgrade-only
+
+  - name: Install dhth/act3
+    tags: 
+      - development
+      - development.github
+      - development.github.act3
+    go:
+      package: github.com/dhth/act3
+      version: latest
+      state: "${{ development.github | enabled('act3') | ternary('present', 'absent') }}"
+
+  - name: Install akunzai/gistui
+    tags:
+      - development
+      - development.github
+      - development.github.gistui
+    eget:
+      package: akunzai/gistui
+      state: "${{ development.github | enabled('gistui') | ternary('present', 'absent') }}"
+      args:
+        - --to=~/.local/bin/gistui.exe
+        - --upgrade-only
 
   - name: Render commercial GitHub SSH host
     tags:
-      - github
       - development
+      - development.github
+      - development.github.ssh
     when: github.commercial is defined
     ssh_host_block:
       create: true
@@ -74,8 +110,8 @@ tasks:
 
   - name: Render enterprise GitHub SSH hosts
     tags:
-      - github
-      - development
+      - development.github
+      - development.github.ssh
     when: github.enterprise is defined
     ssh_host_block:
       create: true
