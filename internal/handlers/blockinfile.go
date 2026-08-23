@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,13 +14,9 @@ import (
 
 // blockInFileHandler ports Handlers/BlockInFile.psm1: inserts/updates/
 // removes a marker-delimited block of text in a file. Only the text
-// between an exact pair of marker lines is ever touched.
-//
-// Deviation from Handlers/BlockInFile.psm1 (documented gap): 'template'
-// (render the block from a jinja/gotemplate 'template' module instead of
-// a literal 'block' string) isn't supported yet - that depends on the
-// 'template' module itself, which is Phase 4 scope. A 'blockinfile.template'
-// field is a clear error here rather than being silently ignored.
+// between an exact pair of marker lines is ever touched. A 'template'
+// field (instead of a literal 'block' string) renders through the same
+// jinja/gotemplate engines the 'template' module uses (see template.go).
 type blockInFileHandler struct{}
 
 const defaultBlockMarker = "# {mark} IRONSTATE MANAGED - {name}"
@@ -50,9 +47,16 @@ func resolveBlockIdentifier(item map[string]any, name string) string {
 	return ""
 }
 
-func getBlockInFileContent(item map[string]any) (string, error) {
+func getBlockInFileContent(item map[string]any, ctx engine.Context) (string, error) {
 	if tpl := getMap(item, "template"); tpl != nil {
-		return "", fmt.Errorf("blockinfile 'template' isn't supported yet (Phase 4) - use a literal 'block' string instead")
+		rendered, err := getTemplateRenderedContent(tpl, ctx)
+		if err != nil {
+			if errors.Is(err, errTemplateSourceMissing) {
+				return "", nil
+			}
+			return "", err
+		}
+		return rendered, nil
 	}
 	return getString(item, "block"), nil
 }
@@ -169,7 +173,7 @@ func blockInFileMarkers(item map[string]any, name string) blockMarkers {
 	)
 }
 
-func testBlockInFilePresent(item map[string]any, name string) (bool, error) {
+func testBlockInFilePresent(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	dest := resolvePath(getString(item, "dest"))
 	if !fileExists(dest) {
 		return false, nil
@@ -184,7 +188,7 @@ func testBlockInFilePresent(item map[string]any, name string) (bool, error) {
 	if r.EndIndex > r.BeginIndex+1 {
 		existing = lines[r.BeginIndex+1 : r.EndIndex]
 	}
-	content, err := getBlockInFileContent(item)
+	content, err := getBlockInFileContent(item, ctx)
 	if err != nil {
 		return false, err
 	}
@@ -192,7 +196,7 @@ func testBlockInFilePresent(item map[string]any, name string) (bool, error) {
 	return strings.Join(existing, "\n") == strings.Join(desired, "\n"), nil
 }
 
-func setBlockInFile(item map[string]any, name string) error {
+func setBlockInFile(item map[string]any, name string, ctx engine.Context) error {
 	dest := resolvePath(getString(item, "dest"))
 	create := getBool(item, "create", false)
 	exists := fileExists(dest)
@@ -207,7 +211,7 @@ func setBlockInFile(item map[string]any, name string) error {
 		lines = getFileLines(dest)
 	}
 
-	content, err := getBlockInFileContent(item)
+	content, err := getBlockInFileContent(item, ctx)
 	if err != nil {
 		return err
 	}
@@ -256,7 +260,7 @@ func removeBlockInFile(item map[string]any, name string) error {
 }
 
 func (blockInFileHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
-	return testBlockInFilePresent(item, name)
+	return testBlockInFilePresent(item, name, ctx)
 }
 
 func (blockInFileHandler) Describe(item map[string]any, action engine.Action, ctx engine.Context) (string, error) {
@@ -268,7 +272,7 @@ func (blockInFileHandler) Describe(item map[string]any, action engine.Action, ct
 }
 
 func (blockInFileHandler) Install(item map[string]any, name string, ctx engine.Context) (engine.ExecResult, error) {
-	return engine.ExecResult{}, setBlockInFile(item, name)
+	return engine.ExecResult{}, setBlockInFile(item, name, ctx)
 }
 
 func (blockInFileHandler) Uninstall(item map[string]any, name string, ctx engine.Context) (engine.ExecResult, error) {

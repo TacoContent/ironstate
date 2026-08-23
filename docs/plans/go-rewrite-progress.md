@@ -33,10 +33,21 @@ root layout is unchanged (`site.yml`, `hosts/`, `packages/`, `roles/`, `variable
       `internal/cli/root.go` wired end-to-end (load hierarchy → soft-resolve → flatten →
       tag-filter → `engine.Run` → table/JSON output) and smoke-tested in dry-run against
       the real `site.yml` (see "Phase 3 smoke test" note below).
-- [ ] Phase 4 — package-manager handlers (`winget`/`chocolatey`/`pipx`/`npm`/`cargo`/`go`/
-      `gem`/`eget`) + `registry`/`scheduled_task` (Windows-only, build-tagged) + `shell`
-      (incl. per-state present/absent/latest fallback) + `template` module w/ `jinja`
-      (build-vs-buy spike first) + new `gotemplate` engine (Go stdlib `text/template`)
+- [x] Phase 4 — `internal/exec` (Runner abstraction, mockable via a package-level var);
+      package-manager handlers `winget`/`chocolatey`/`pipx`/`npm`/`cargo`/`go`/`gem`/`eget`
+      (argv-tested against fake runners); `shell` (per-state present/absent/latest
+      field-by-field fallback with `absent` deliberately excluded from the top-level
+      fallback, host presets, `creates`-gated idempotency shared with `zip`); `registry`
+      (Windows-only, `golang.org/x/sys/windows/registry` directly — HKCR/HKU/HKCC need no
+      PSDrive-mounting equivalent in Go, unlike the original); `scheduled_task`
+      (Windows-only, generates a Task Scheduler XML definition and shells out to
+      `schtasks.exe` — see "Phase 4 deviations" below for the resulting idempotency
+      trade-off); `internal/templateengines` (`jinja` natively ported on top of
+      `internal/expr`, `gotemplate` via Go stdlib `text/template`); `template` module
+      wired to both; `fact`'s embedded `shell` and `blockinfile`'s `template` field now
+      delegate to the real `shell`/`template` implementations, closing the two Phase 3
+      stand-in gaps. All new code build-tag-clean on both `windows` and (cross-compiled)
+      `linux`, full test suite green including a real-HKCU registry round-trip test.
 - [ ] Phase 5 — filter plugin system: external-script filter loader + JSON-over-stdio
       shim + persistent worker pool, `filters list`/`doctor` wiring for discovered
       script filters
@@ -155,43 +166,55 @@ commit/push without being asked.
 
 ## Next concrete step
 
-Start Phase 4 (`internal/handlers`'s package-manager modules + `shell` + template
-engines). Key things the next agent should know before starting:
+Start Phase 5 (external-script filter loader + JSON-over-stdio shim + persistent worker
+pool, `filters list`/`doctor` wiring for discovered script filters). Key things the next
+agent should know before starting:
 
-- **Phase 3 smoke test**: `go run ./cmd/ironstate --file site.yml --tags shell` (dry-run,
-  no `--apply`) runs the real repo's `site.yml` end-to-end through the new engine/handlers
-  without crashing: fact pass runs first (embedded-shell facts like `pwsh_system_profile`
-  actually execute their `Write-Output $PROFILE` shell command for real, even under
-  dry-run, exactly as designed), then the assert `Verify Local Binaries Path Fact` fails
-  and stops the run with exit code 1 — that failure is a genuine pre-existing environment
-  gap (`vars.local.bin_path` isn't set in a bare dev checkout), not a port bug. The
-  `Add public keys to ...` loop tasks print a wall of `unresolved template reference ...
-  - field omitted` warnings during flattening — also expected/pre-existing: each `with`/
-  `items` entry in that list only sets one of `public_key`/`github_user`/`file`, so the
-  other two are legitimately absent per entry (same noise the original PowerShell prints
-  for the same site.yml).
-- **`internal/handlers`'s `fact` handler's embedded-`shell` support is a deliberate,
-  documented Phase 3 stand-in**, not the real thing: it only supports a bare
-  `{ command: <string> }` shape, always run via `pwsh -NoLogo -NoProfile -Command
-  <command>` as a subprocess (see `runPwshCommand` in `internal/handlers/fact.go`,
-  overridable for tests) — no host presets (`cmd`/`bash`/`node`/...), no `script` file
-  support, no per-state (`present`/`absent`/`latest`) fallback, no native-object merge.
-  This is enough to correctly run the two real embedded-shell facts in this repo today
-  (`roles/shell/main.yml`). When Phase 4's real `shell` handler lands (with
-  `Resolve-ShellStateConfig`'s field-by-field fallback, host presets, `creates`), make
-  `fact`'s embedded-shell path delegate to it instead of `runPwshCommand`, and delete the
-  stand-in.
-- **`blockinfile`'s `template:` field is a hard, clear error today** ("not supported yet
-  (Phase 4)") — only a literal `block:` string is implemented. Once Phase 4's `template`
-  module (jinja/gotemplate) lands, wire `getBlockInFileContent` in
-  `internal/handlers/blockinfile.go` to render it instead of erroring.
-- **`path` is Windows-only** (`internal/handlers/path_windows.go`, using
-  `golang.org/x/sys/windows/registry` to read/write `HKCU\Environment\PATH` directly —
-  no admin required, matching the original's User-scope-only behavior); every other OS
-  gets a stub (`path_other.go`) that errors clearly. This mirrors the master plan's
-  Windows-only-handler policy even though `path` itself isn't in the plan's explicit
-  Windows-only list — the underlying mechanism (`[Environment]::SetEnvironmentVariable`
-  User scope) has no real non-Windows equivalent.
+- **Phase 4 smoke test**: `go run ./cmd/ironstate --file site.yml --tags git,development`
+  (dry-run) runs end-to-end without crashing: fact pass runs first (the `shell`-backed
+  `wsl_installed`/`pwsh_system_profile*` facts now describe as `via 'pwsh'`, confirming
+  `fact`'s embedded shell delegates to the real `shell` handler, not the old Phase 3
+  `runPwshCommand` stand-in — that stand-in and its `splitLines` helper were deleted),
+  then the same pre-existing `Verify Local Binaries Path Fact` assert stops the run with
+  exit code 1 (`vars.local.bin_path` unset in a bare dev checkout) before ever reaching
+  the git-role's `winget`/`eget`/`template`/`blockinfile` tasks later in document order —
+  expected, not a port bug (same as the Phase 3 smoke test note). Real dispatch of
+  `template`/`blockinfile.template`/package-manager argv is instead covered by unit tests
+  (`internal/handlers/template_test.go`, `internal/handlers/packagemanagers_test.go`,
+  `internal/templateengines/jinja_test.go` — the latter exercises the exact nested
+  `{% for %}` construct used by `roles/development/git/templates/gitconfig.enterprise.urls.j2`).
+- **Phase 4 deviations (documented, not silent)**:
+  1. **`shell`'s `pwsh` host is always a subprocess in Go** (`pwsh -NoLogo -NoProfile
+     -File <tempfile> args...`), never the original's in-process execution — Go has no
+     way to run PowerShell script content in-process. This means `Merge-ShellNativeResult`
+     (merging a captured native .NET object's properties into a shell task's registered
+     result, e.g. `${{ pf.ProgramFilesDir }}`) is **not ported** — already audited in the
+     master plan (§4.8/§8/§11) as unused in this repo's real YAML today, so this is an
+     accepted v1 gap, not a regression to chase.
+  2. **`scheduled_task` uses `schtasks.exe` + generated Task Scheduler XML**, not the
+     `ScheduledTasks` PowerShell module/CIM — a deliberate choice to keep `shell.host:
+     pwsh` the *only* remaining pwsh dependency (per the master plan's §11 framing). The
+     real consequence: **idempotency is reduced to existence + enabled-state checking
+     only** (`internal/handlers/scheduledtask_windows.go`'s `scheduledTaskHandler` doc
+     comment) — unlike the original, a registered task whose actions/triggers/principal/
+     settings have drifted from the declared YAML is NOT auto-detected/corrected under
+     `state: present`. Use `state: latest` to force re-registration when a task's shape
+     may have changed. Only `packages/smartctl/main.yml` uses this module in this repo
+     today (verified by grep), so this reduction is low real-world impact.
+  3. **`registry` needed no PSDrive-mounting equivalent** — `golang.org/x/sys/windows/
+     registry`'s `HKCR`/`HKU`/`HKCC` root-key constants work directly, unlike the original
+     PowerShell's `New-PSDrive` requirement for those three hives.
+  4. **`jinja` is a complete native port** of `modules/TemplateEngines/Jinja.psm1`'s
+     subset (`{{ }}`, `{% if/elif/else/endif %}`, `{% for x in y %}` with nesting,
+     `{% set %}`), reusing `internal/expr.Parse`/`Eval`/`Truthy`/`DisplayString` directly
+     — no third-party library needed (the "build" side of the plan's §4.7 build-vs-buy
+     spike won outright; buying was never attempted). `gotemplate` (Go stdlib
+     `text/template`) is additive, per the plan.
+  5. `internal/handlers/util.go`'s `runner ironexec.Runner` package var backs every
+     package-manager handler's and `shell`'s CLI invocations (`runExternalCommand`
+     wraps it, echoing captured stdout/stderr the same way `Invoke-ExternalCommand`
+     did) — override this one var in tests (see `recordingRunner` in
+     `internal/handlers/packagemanagers_test.go`), not `os/exec` directly.
 - **`file`'s hard-link detection is a documented, deliberate gap**: Go's stdlib has no
   portable "is this path a hard link (vs. a ordinary file)" check the way PowerShell's
   `Get-Item .LinkType -eq 'HardLink'` does, so `filePathKind` never actually returns
@@ -201,22 +224,29 @@ engines). Key things the next agent should know before starting:
   (unused) `"hard"` classification itself is a stub.
 - **`engine.Context` carries a `Filters expr.Filters` field** (added while porting
   `assert`, whose `that` conditions can themselves use `| filter(...)`, e.g. the real
-  `facts.local_bin_path | length > 0` in `site.yml`) — this is a deviation from the
-  master plan's §4.8 `Handler` interface sketch (which didn't show `Context` needing a
-  filter registry at all). Keep this in mind if the plan's interface sketch is ever used
-  as a literal checklist — the *implemented* `Context` shape is `{ Flat, Filters, Apply }`.
-- Every Phase 3 handler lives in one flat `internal/handlers` package (not one
-  subpackage per module as the master plan's §3 layout shows) — documented as a
+  `facts.local_bin_path | length > 0` in `site.yml`; also needed by `template`'s jinja
+  rendering) — this is a deviation from the master plan's §4.8 `Handler` interface sketch
+  (which didn't show `Context` needing a filter registry at all). Keep this in mind if
+  the plan's interface sketch is ever used as a literal checklist — the *implemented*
+  `Context` shape is `{ Flat, Filters, Apply }`.
+- Every handler (Phase 3 *and* Phase 4) lives in one flat `internal/handlers` package
+  (not one subpackage per module as the master plan's §3 layout shows) — documented as a
   deliberate deviation in `internal/handlers/handlers.go`'s package doc comment, since
   most of them share small helpers (file-kind checks, blockinfile markers, the
-  `creates`-glob primitive) that aren't worth exporting across a dozen subpackages.
-  Reconsider only if Phase 4's package-manager handler count makes the single package
-  unwieldy.
-- A recurring tool quirk hit repeatedly this session: creating a **new** file whose
-  content starts with a `// Package foo ...` doc comment immediately followed by
-  `package foo` sometimes gets the tool to emit a duplicated leading `package foo` line
-  before the comment, breaking the build (`syntax error: non-declaration statement
-  outside function body`). Workaround used throughout: write `package foo` as the literal
-  first line, then the doc comment, then imports (comment doesn't attach to the package
-  clause as idiomatic godoc, but it compiles reliably) — or immediately `read_file` the
-  first ~5 lines after creating and fix if duplicated.
+  `creates`-glob primitive, the `runner`/`runExternalCommand` pair). This held up fine
+  through the full package-manager handler count added in Phase 4; reconsider only if a
+  later phase makes the single package unwieldy.
+- A recurring tool quirk hit repeatedly this session (again, in Phase 4): creating a
+  **new** file sometimes gets the tool to emit a duplicated leading `package foo` line
+  — sometimes right before a `// Package foo ...` doc comment, but at least once (
+  `internal/exec/exec.go`, `internal/templateengines/jinja.go`, a test file) with no
+  comment involved at all, so it isn't strictly tied to the doc-comment pattern
+  previously assumed. Breaks the build with `syntax error: non-declaration statement
+  outside function body`. There is no reliable workaround other than: immediately
+  `read_file` the first ~5-10 lines of every file right after `create_file` and fix a
+  duplicated `package` line if present, every single time, regardless of what the
+  content looks like.
+- All Phase 4 code is build-tag-clean on both `windows` (native build) and `linux`
+  (cross-compiled via `$env:GOOS="linux"; go build ./...`) — verified before considering
+  the phase done, per the working-locally checklist below.
+

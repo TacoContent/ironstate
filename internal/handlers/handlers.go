@@ -1,10 +1,10 @@
 package handlers
 
-// Package handlers implements the Handler interface for every Phase 3
-// module (docs/plans/go-rewrite.md §10): log, path, fact, assert, file,
-// copy, symlinks, blockinfile, ssh_host_block, zip. Package-manager
-// handlers (winget, chocolatey, ...), 'shell', 'template', 'registry', and
-// 'scheduled_task' land in Phase 4.
+// Package handlers implements the Handler interface for every module
+// implemented so far (docs/plans/go-rewrite.md §10): log, path, fact,
+// assert, file, copy, symlinks, blockinfile, ssh_host_block, zip (Phase 3);
+// winget, chocolatey, pipx, npm, cargo, go, gem, eget, shell, registry,
+// scheduled_task, template (Phase 4).
 //
 // Deviation from the master plan's §3 layout (one Go package per module
 // under internal/handlers/<module>/): these Phase 3 handlers share a lot
@@ -29,12 +29,12 @@ var AllModuleNames = []string{
 	"assert",
 }
 
-// All returns every module implemented so far, ready to hand to
-// engine.Options.Handlers. A leaf whose module isn't in this map yet
-// (Phase 4's package managers, 'shell', 'template', 'registry',
-// 'scheduled_task') is skipped with a warning by internal/engine's
-// dispatch loop - not an error - matching ironstate.ps1's own "no handler
-// registered" behavior for an unrecognized module.
+// All returns every implemented module, ready to hand to
+// engine.Options.Handlers. A leaf whose module isn't in this map (there
+// are none left unimplemented as of Phase 4) is skipped with a warning by
+// internal/engine's dispatch loop - not an error - matching
+// ironstate.ps1's own "no handler registered" behavior for an
+// unrecognized module.
 func All() map[string]engine.Handler {
 	return map[string]engine.Handler{
 		"log":            logHandler{},
@@ -47,5 +47,17 @@ func All() map[string]engine.Handler {
 		"blockinfile":    blockInFileHandler{},
 		"ssh_host_block": sshHostBlockHandler{},
 		"zip":            zipHandler{},
+		"winget":         wingetHandler{},
+		"chocolatey":     chocolateyHandler{},
+		"pipx":           pipxHandler{},
+		"npm":            npmHandler{},
+		"cargo":          cargoHandler{},
+		"go":             goHandler{},
+		"gem":            rubyGemHandler{},
+		"eget":           egetHandler{},
+		"shell":          shellHandler{},
+		"registry":       registryHandler{},
+		"scheduled_task": scheduledTaskHandler{},
+		"template":       templateHandler{},
 	}
 }

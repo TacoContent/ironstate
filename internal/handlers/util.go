@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/TacoContent/ironstate/internal/engine"
+	ironexec "github.com/TacoContent/ironstate/internal/exec"
 	"github.com/TacoContent/ironstate/internal/pathutil"
 )
 
@@ -126,4 +128,32 @@ func runCaptured(cmd *exec.Cmd) (stdout, stderr string, err error) {
 	cmd.Stderr = &errBuf
 	err = cmd.Run()
 	return outBuf.String(), errBuf.String(), err
+}
+
+// runner backs every package-manager handler's CLI invocations -
+// overridable for tests, matching runPwshCommand's pattern.
+var runner ironexec.Runner = ironexec.Default
+
+// runExternalCommand ports Common.psm1's Invoke-ExternalCommand: runs exe,
+// echoing captured stdout (Info)/stderr (Warn) after the command finishes,
+// then returns the normalized engine.ExecResult.
+func runExternalCommand(exe string, args []string) engine.ExecResult {
+	result, err := runner.Run(exe, args)
+	if err != nil {
+		engine.Warn("%s: %v", exe, err)
+		return engine.ExecResult{RC: 1, Stderr: err.Error(), StderrLines: []string{err.Error()}}
+	}
+	for _, line := range result.StdoutLines {
+		engine.Info("%s", line)
+	}
+	for _, line := range result.StderrLines {
+		engine.Warn("%s", line)
+	}
+	return engine.ExecResult{
+		RC:          result.RC,
+		Stdout:      result.Stdout,
+		StdoutLines: result.StdoutLines,
+		Stderr:      result.Stderr,
+		StderrLines: result.StderrLines,
+	}
 }

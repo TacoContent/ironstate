@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	ironexec "github.com/TacoContent/ironstate/internal/exec"
+
 	"github.com/TacoContent/ironstate/internal/engine"
 )
 
@@ -310,13 +312,21 @@ func TestFactHandlerPlainValue(t *testing.T) {
 }
 
 func TestFactHandlerEmbeddedShellRunsViaOverridableRunner(t *testing.T) {
-	orig := runPwshCommand
-	defer func() { runPwshCommand = orig }()
-	var capturedCommand string
-	runPwshCommand = func(command string) (engine.ExecResult, error) {
-		capturedCommand = command
-		return engine.ExecResult{RC: 0, Stdout: "computed-value\n", StdoutLines: []string{"computed-value"}}, nil
-	}
+	origRunner := runner
+	defer func() { runner = origRunner }()
+	var capturedExe string
+	var capturedArgs []string
+	var capturedScriptContent string
+	runner = fakeRunnerFunc(func(exe string, args []string) (ironexec.Result, error) {
+		capturedExe = exe
+		capturedArgs = args
+		if len(args) > 0 {
+			if data, err := os.ReadFile(args[len(args)-1]); err == nil {
+				capturedScriptContent = string(data)
+			}
+		}
+		return ironexec.Result{RC: 0, Stdout: "computed-value\n", StdoutLines: []string{"computed-value"}}, nil
+	})
 
 	h := factHandler{}
 	item := map[string]any{"name": "computed", "shell": map[string]any{"command": "Write-Output computed-value"}}
@@ -324,13 +334,20 @@ func TestFactHandlerEmbeddedShellRunsViaOverridableRunner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if capturedCommand != "Write-Output computed-value" {
-		t.Fatalf("captured command = %q", capturedCommand)
+	if capturedExe != "pwsh" {
+		t.Fatalf("expected the default host to shell out to pwsh, got %q (args=%v)", capturedExe, capturedArgs)
+	}
+	if capturedScriptContent != "Write-Output computed-value" {
+		t.Fatalf("expected the embedded command written to the temp script, got %q", capturedScriptContent)
 	}
 	if exec.Stdout != "computed-value\n" {
 		t.Fatalf("exec.Stdout = %q", exec.Stdout)
 	}
 }
+
+type fakeRunnerFunc func(exe string, args []string) (ironexec.Result, error)
+
+func (f fakeRunnerFunc) Run(exe string, args []string) (ironexec.Result, error) { return f(exe, args) }
 
 func TestZipHandlerCreatesGatesInstall(t *testing.T) {
 	h := zipHandler{}
