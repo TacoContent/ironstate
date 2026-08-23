@@ -5,14 +5,18 @@ on:
     branches: [main]
   pull_request:
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   lint:
+    permissions:
+      contents: read
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # needed for golangci-lint's changelog generation
+          persist-credentials: false # avoid exposing GITHUB_TOKEN to submodules
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -21,9 +25,14 @@ jobs:
           version: latest
 
   vet-and-vuln:
+    permissions:
+      contents: read
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # needed for govulncheck's changelog generation
+          persist-credentials: false # avoid exposing GITHUB_TOKEN to submodules
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -36,12 +45,17 @@ jobs:
   # OS-agnostic packages — not a symmetric full-suite run, see
   # docs/plans/go-rewrite.md §6/§9.
   test:
+    permissions:
+      contents: read
     strategy:
       matrix:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # needed for coverage's changelog generation
+          persist-credentials: false # avoid exposing GITHUB_TOKEN to submodules
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -57,7 +71,10 @@ jobs:
   race:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # needed for coverage's changelog generation
+          persist-credentials: false # avoid exposing GITHUB_TOKEN to submodules
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -66,7 +83,10 @@ jobs:
   fuzz-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # needed for coverage's changelog generation
+          persist-credentials: false # avoid exposing GITHUB_TOKEN to submodules
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -76,7 +96,10 @@ jobs:
   build-snapshot:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # needed for goreleaser's changelog generation
+          persist-credentials: false # avoid exposing GITHUB_TOKEN to submodules
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
