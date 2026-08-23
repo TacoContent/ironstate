@@ -1,32 +1,68 @@
-# Windows Package Management
+# ironstate
 
-`ironstate.ps1` is a declarative, Ansible-style task runner driven by YAML. It reconciles each leaf action's desired `state` against what is currently installed, printing what it would do by default (dry-run) and only making changes when `-Apply` is passed.
+`ironstate` is a declarative, Ansible-style task runner driven by YAML: it reconciles each leaf action's desired `state` against what's currently installed, printing what it would do by default (dry-run) and only making changes when `--apply` is passed. It ships as a single cross-platform binary (Windows/Linux/macOS - see `.goreleaser.yaml`); `cmd/ironstate` is the entrypoint, with the engine/handlers/filters/template code living under `internal/` (see [Architecture](#architecture)).
 
-## Usage
+## Getting started
 
-```powershell
-# Dry-run — show what would change
-.\ironstate.ps1
+```shell
+# Build
+go build -o bin/ironstate ./cmd/ironstate     # bin/ironstate.exe on Windows
 
-# Apply changes
-.\ironstate.ps1 -Apply
+# Scaffold a new playbook (see Playbooks below)
+./bin/ironstate init my-playbook
 
-# Restrict to tasks/actions carrying a tag
-.\ironstate.ps1 -Tags cli
-.\ironstate.ps1 -Tags cli,security -Apply
+# Dry-run / apply / tags, against a playbook's site.yml
+./bin/ironstate --file path/to/your/site.yml
+./bin/ironstate --file path/to/your/site.yml --apply
+./bin/ironstate --file path/to/your/site.yml --tags cli,security --apply
 
-# Verbose output (shows skipped items, gathered facts, and which overlay files are merged)
-.\ironstate.ps1 -Verbose -Apply
+# Verbose (also prints a line for every already-satisfied/skipped leaf)
+./bin/ironstate --file path/to/your/site.yml --verbose
+
+# Introspection
+./bin/ironstate filters list
+./bin/ironstate doctor
+./bin/ironstate version
 ```
 
-`ironstate.ps1` prefers PowerShell 7+ (`pwsh`): if it's launched under Windows PowerShell 5.1, it relaunches itself under `pwsh` (passing through all parameters) as long as `pwsh` is found on `PATH`, and only continues under 5.1 - with a warning - if `pwsh` isn't installed. This also means the `shell` module's default `host: pwsh` (see below) runs on 7+ whenever it's available, since the whole runner process is `pwsh` by that point.
+**Exit codes**: `0` on a clean run; `1` when the run stopped on a task's `failed_when`/an unhandled dispatch error; `2` when the site file failed to load or parse (see `internal/cli/errors.go`).
+
+**Cross-platform**: `ironstate` itself builds and runs on Windows/Linux/macOS. Windows-only modules (`winget`, `chocolatey`, `registry`, `scheduled_task`, `path`) error clearly when dispatched on a non-Windows host; a `shell.host: pwsh` task still needs `pwsh` on `PATH` wherever it's actually dispatched, same as any other `shell` host preset needing its own interpreter present. See [Facts](#facts) for the `platform`/`arch`/`os_family` facts a `site.yml` can branch on.
+
+**Output**: on a real terminal, results print as a colored table with a per-module emoji, a host-facts panel up front, and a final summary block with elapsed time - a "changed" leaf (installed/removed) reads brighter than an already-satisfied skip, and a failure reads in a danger red. `--output json` switches to a plain JSON array on stdout instead (informational/progress lines go to stderr, so this stream stays clean and pipeable, e.g. `... --output json | jq`); colors auto-disable when not attached to a terminal, honor `NO_COLOR`/`IRONSTATE_NO_COLOR`, or can be forced off with `--no-color`.
+
+## Playbooks
+
+`ironstate` doesn't hard-code a single site file location - like an Ansible playbook, you create your own directory with a `site.yml` plus whatever `hosts/`, `variables/`, `packages/`/`roles/` overlays it needs, then point `--file` at that directory's `site.yml`. [`playbooks/camalot/`](playbooks/camalot) in this repo is one such playbook, kept here as a real-world worked example (the repo owner's own machine setup) - copy its shape for your own playbook, or start from an empty `site.yml`. Nothing about the `playbooks/` directory name, or `camalot` itself, is special or required by `ironstate` - it's just a sample.
+
+### `ironstate init`
+
+`ironstate init [playbook-name]` scaffolds that starter shape for you - creates `<playbook-name>/` (or initializes the current directory if no name is given) with:
+
+```
+<playbook-name>/
+├── site.yml
+├── roles/
+├── tasks/
+├── packages/
+├── hosts/<machine-name>.yml
+└── variables/<user-name>.yml
+```
+
+Every generated YAML file is intentionally minimal (`vars: {}` / `tasks: []`) - just enough to be a valid document to start editing; `roles/`, `tasks/`, `packages/` are created empty (with a `.gitkeep` placeholder so they survive a fresh `git clone`). `<machine-name>`/`<user-name>` come from this machine's own `computer_name`/`user_name` facts (see [Facts](#facts)), lowercased. Re-running `init` is safe - an already-existing file or directory is left untouched, never overwritten.
+
+```shell
+./bin/ironstate init my-playbook
+cd my-playbook
+../bin/ironstate --file site.yml
+```
 
 ## File hierarchy
 
 Files are loaded and merged in this order. Each subsequent file's `tasks` list is **appended** to the base file's list; `vars` **deep-merges** key-by-key (a host/user overlay can add or override individual vars without wiping out the base set).
 
 ``` tree
-install/windows/
+<playbook>/
 ├── site.yml              ← base (always loaded)
 ├── hosts/<COMPUTERNAME>.yml  ← merged if the file exists
 └── variables/<USERNAME>.yml  ← merged if the file exists
@@ -36,11 +72,11 @@ install/windows/
 
 ### Machine-specific overrides — `hosts/`
 
-Create a file named after the machine's hostname to add or change tasks for that machine only.
+Create a file named after the machine's hostname to add or change tasks for that machine only (the same `computer_name` fact - see [Facts](#facts) - falls back to the OS hostname on Linux/macOS).
 
 ```powershell
 # Find your hostname
-$env:COMPUTERNAME   # e.g. KRAYT
+$env:COMPUTERNAME   # e.g. KRAYT - or `hostname` on Linux/macOS
 ```
 
 ```yaml
@@ -64,11 +100,11 @@ tasks:
 
 ### User-specific overrides — `variables/`
 
-Create a file named after the Windows username to add tasks or vars for a specific user account on any machine.
+Create a file named after the username to add tasks or vars for a specific user account on any machine.
 
 ```powershell
 # Find your username
-$env:USERNAME   # e.g. ryan
+$env:USERNAME   # e.g. ryan - or `$USER`/`whoami` on Linux/macOS
 ```
 
 ```yaml
@@ -85,66 +121,93 @@ tasks:
 
 ## Architecture
 
-`ironstate.ps1` is just the runner: it loads YAML, merges overlays, flattens the task/action tree (accumulating `tags` and `when` - see below - and loading any `include`d packages inline as it goes), applies `-Tags` filtering, then dispatches the surviving leaves to their handlers *sequentially*, in the order the tasks are written (Ansible-style; not grouped by module). "Sequentially" matters: each leaf's `when` and any remaining `${{ }}` references are resolved *immediately before that leaf runs*, against facts/vars plus a registry that grows as earlier leaves' `id`/`fact` results come in - not all evaluated up front - so a task can act on an earlier task's result (see [Registering results](#registering-results-id)). The actual per-module logic (how to test/install/uninstall/describe a leaf) lives in its own PowerShell module.
+`ironstate` loads YAML, merges overlays, flattens the task/action tree (accumulating `tags` and `when` - see below - and loading any `include`d packages inline as it goes), applies `--tags` filtering, then dispatches the surviving leaves to their handlers *sequentially*, in the order the tasks are written (Ansible-style; not grouped by module). "Sequentially" matters: each leaf's `when` and any remaining `${{ }}` references are resolved *immediately before that leaf runs*, against facts/vars plus a registry that grows as earlier leaves' `id`/`fact` results come in - not all evaluated up front - so a task can act on an earlier task's result (see [Registering results](#registering-results-id)). The actual per-module logic (how to test/install/uninstall/describe a leaf) lives in its own handler under `internal/handlers`.
 
 **Fact gathering runs first**: before any of that, every `fact` leaf in the whole tag-filtered tree runs as its own pass, in document order, ahead of every other leaf - matching Ansible's "gather facts" phase. This means a `fact`'s own `value`/`when` can only see gathered facts, vars, and facts registered earlier in this same pass; it can **never** reference another task's `id`-registered result, since no non-fact task has run yet at that point - see [`fact`](#fact) for how to compute a fact's value from a live command instead.
 
 ``` tree
-install/windows/
-├── ironstate.ps1              ← runner (loads modules, no module-specific logic)
-└── modules/
-    ├── Common.psm1            ← shared helpers (state machine, flat tag matching, path resolution, 'creates' globbing, flat context merging)
-    ├── Facts.psm1              ← gathered host facts (Get-InstallFacts)
-    ├── Expressions.psm1        ← shared expression tokenizer/parser/evaluator (variable paths, comparisons, `is` tests, `|` filter pipeline) - used by both Conditions.psm1 and Templates.psm1
-    ├── Conditions.psm1         ← 'when' expression evaluation (thin consumer of Expressions.psm1)
-    ├── Tasks.psm1              ← task/action tree normalization + flattening (also expands 'include' and 'with'/'items' loops; 'when' is accumulated, not evaluated)
-    ├── Templates.psm1          ← '${{ inputs.* }}' / '${{ package.* }}' / '${{ facts.* }}' / '${{ vars.* }}' / bare id/fact expression expansion (thin consumer of Expressions.psm1)
-    ├── Packages.psm1           ← YAML loading, hierarchy merge, 'include' package loading
-    └── Handlers/
-        ├── Winget.psm1
-        ├── Chocolatey.psm1
-        ├── Pipx.psm1
-        ├── Npm.psm1
-        ├── Cargo.psm1
-        ├── Go.psm1
-        ├── Eget.psm1
-        ├── Zip.psm1
-        ├── Symlinks.psm1          ← thin wrapper over File.psm1's 'link' type
-        ├── File.psm1
-        ├── Copy.psm1
-        ├── Shell.psm1
-        ├── BlockInFile.psm1
-        ├── Log.psm1
-        ├── Path.psm1
-        ├── Fact.psm1
-        ├── Registry.psm1
-        └── ScheduledTask.psm1
-    └── Filters/
-        ├── default.ps1
-        ├── toggle.ps1
-        ├── ternary.ps1
-        ├── upper.ps1
-        ├── lower.ps1
-        ├── trim.ps1
-        ├── quote.ps1
-        ├── length.ps1
-        ├── concat.ps1
-        ├── join.ps1
-        ├── split.ps1
-        ├── prefix.ps1
-        ├── dirname.ps1
-        ├── basename.ps1
-        ├── resolve.ps1
-        ├── exists.ps1
-        ├── sha1.ps1
-        ├── lookup.ps1
-        ├── from_json.ps1
-        └── json_query.ps1
+cmd/ironstate/            ← main package (thin - flag parsing lives in internal/cli)
+internal/
+├── cli/                  ← cobra command tree (root/apply, 'filters', 'doctor', 'version')
+├── config/                ← flags/env/config-file loading (viper)
+├── packages/              ← YAML loading, hierarchy merge, 'include' package loading
+├── model/                 ← generic YAML shape + helpers shared across packages
+├── tasks/                 ← task/action tree flattening (loops, tags/when cascade, 'include')
+├── facts/                 ← gathered host facts (Windows-real / other-OS build split)
+├── expr/                  ← shared expression tokenizer/parser/evaluator (variable paths,
+│                            comparisons, 'is' tests, '|' filter pipeline) - used by both
+│                            conditions/ and template/
+├── conditions/            ← 'when'/'failed_when' expression evaluation
+├── template/               ← '${{ }}' resolution passes (soft/strict/self-referential)
+├── templateengines/        ← 'jinja' (native) and 'gotemplate' (Go stdlib) render engines
+├── filters/                ← built-in '|' filters, plus the external script-filter adapter
+│   └── embed/               ← the generic PowerShell shim script filters run through
+├── engine/                 ← dispatch loop (fact-first two-phase run, registry/facts/
+│                            command-availability threading, table/JSON/summary output)
+├── handlers/               ← one file per module: winget, chocolatey, pipx, npm, cargo, go,
+│                            gem, eget, zip, symlinks, file, copy, shell, blockinfile,
+│                            ssh_host_block, log, path, fact, assert, registry,
+│                            scheduled_task, template
+├── ui/                     ← terminal color/emoji output styling
+└── exec/                   ← external-process Runner abstraction handlers shell out through
 ```
 
-Each `Handlers/*.psm1` file exports a single `Get-<Module>Handler` function returning a `Test`/`Describe`/`Install`/`Uninstall` set of script blocks - unchanged in shape from before. To add a new module, drop a new module in `Handlers/`, register it in `Get-PackageManagerHandlers` in `ironstate.ps1`, and add it to `$script:NoCommandCheckModules` if it isn't backed by an external CLI.
+Each `internal/handlers/*.go` file implements the shared `Handler` interface (`Test`/`Describe`/`Install`/`Uninstall` - see `internal/engine/engine.go`). To add a new module, add a handler and register it in `internal/handlers/handlers.go`'s `All()`, and add it to `engine.DefaultNoCommandCheckModules` if it isn't backed by an external CLI.
 
-Each `Filters/*.ps1` file is a standalone script - just its own `param($Value, [object[]] $ArgValues)` block plus logic - named for the filter it implements (`upper.ps1` → the `upper` filter). `Expressions.psm1` loads every file in `Filters/` at import time, so adding a new `|` filter is just adding a file there - no registration step.
+### Custom filters
+
+Two ways to add a `|` filter (see [`when` conditions](#when-conditions) for the pipeline syntax):
+
+- **Built-in** (compiled in): add a function to `internal/filters/builtins.go` and register it there - requires rebuilding the binary, but has no external process to spawn per call.
+- **Script filter** (no rebuild): drop a script implementing the same `param($Value, [object[]] $ArgValues)` contract every PowerShell filter script already has (e.g. `filters/upper.ps1`) into the directory `ironstate` scans for filters - `filters/` by default, resolved relative to the site file's own directory, configurable via a `filters.dir` config value (`ironstate doctor --filters-dir <dir>` / `ironstate filters list --dir <dir>` to inspect what's discovered). It's registered automatically at startup under its file's base name (`upper.ps1` → the `upper` filter) - **only if no built-in already claims that name** (a built-in always wins). Only `.ps1` ships a runner today: a generic, embedded PowerShell shim speaking a small JSON-over-stdio protocol (`internal/filters/embed/shim.ps1`) that lets an existing script keep its `param($Value, [object[]] $ArgValues)` shape completely unmodified; a `filters.interpreters` config value maps other extensions to their own interpreter argv for whenever a second script language gets a shim. Each discovered script's interpreter process is started once, lazily, and kept warm for the run's lifetime rather than spawned per call.
+
+Run `ironstate filters list` (or `ironstate doctor`) to see every filter currently available, built-in or script, by name.
+
+### `ironstate filters list`
+
+Lists every filter available to `${{ }}`/`when` right now - every built-in from the table above, plus whatever script filters (see [Custom filters](#custom-filters)) are discovered under a directory - one `<name> <built-in|script>` line per filter, sorted by name:
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dir` | `filters/` | Directory to scan for external script filters |
+
+```shell
+$ ironstate filters list --dir path/to/your/playbook/filters
+basename             built-in
+concat               built-in
+default              built-in
+...
+upper                built-in
+my_custom_filter     script
+```
+
+A name shown as `built-in` is always resolved from `internal/filters/builtins.go`, even if a same-named script also exists under `--dir` - a built-in always wins (see [Custom filters](#custom-filters)).
+
+### `ironstate doctor`
+
+A single at-a-glance health check: confirms every package-manager CLI a `site.yml` might dispatch to is actually on `PATH`, plus reports discovered script filters (the same listing `filters list` gives, folded into one command since both are "is my environment set up correctly" checks).
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--filters-dir` | `filters` | Directory to scan for external script filters |
+
+```shell
+$ ironstate doctor --filters-dir path/to/your/playbook/filters
+[ok]      winget   C:\Users\you\AppData\Local\Microsoft\WindowsApps\winget.exe
+[missing] choco    not found on PATH
+[ok]      pipx     C:\Users\you\.local\bin\pipx.exe
+[missing] npm      not found on PATH
+[ok]      cargo    C:\Users\you\.cargo\bin\cargo.exe
+[ok]      go       C:\Program Files\Go\bin\go.exe
+[missing] gem      not found on PATH
+[ok]      eget     C:\Users\you\.local\bin\eget.exe
+[ok]      pwsh     C:\Program Files\PowerShell\7\pwsh.exe
+
+script filters discovered under path/to/your/playbook/filters:
+  my_custom_filter
+```
+
+A `[missing]` line isn't necessarily a problem - it only matters for the specific package-manager modules (`winget`/`chocolatey`/`pipx`/`npm`/`cargo`/`go`/`gem`/`eget`) or `shell.host: pwsh` tasks your own `site.yml` actually uses; `doctor` checks a fixed list of every module this build knows about; `bin` availability is otherwise re-checked per-module at dispatch time regardless (see [Architecture](#architecture)).
 
 ## Task/action model
 
@@ -280,13 +343,13 @@ primary    := STRING | NUMBER | "true" | "false" | "null"
             | "(" expr ")"
 ```
 
-This grammar lives in `modules/Expressions.psm1` and is shared with `${{ }}` template expressions (see [Template expressions](#template-expressions)) - anything documented here, including filters, also works inside `${{ }}`, and vice versa.
+This grammar lives in `internal/expr` and is shared with `${{ }}` template expressions (see [Template expressions](#template-expressions)) - anything documented here, including filters, also works inside `${{ }}`, and vice versa.
 
 - String comparisons (`==`, `!=`, ordering) are **case-sensitive**, matching Ansible/Jinja.
 - `in`/`not in`: right-hand side a list → membership check; a string → substring containment.
 - A bare variable with no operator is truthy-checked directly (Ansible-style `when: some_var`).
 - `is`/`is not` type-tests: `mapping` (alias `map`), `boolean` (alias `bool`), `string`, `number`, `list`, `defined`, `none` (alias `null`). Use these instead of `==`/truthy checks when you need to know a value's actual type rather than whether it casts to `true` - notably, `some_map == true` is **also true for any non-empty mapping**, since both go through the same truthy cast, so `is mapping`/`is boolean` are the only reliable way to tell "a boolean `true`" apart from "a map" (see `packages/languages/main.yml`, where a var can be either a blanket `true` or a per-key map).
-- `value | filter(args)` pipes a value through a named filter, Jinja-style, and chains left-to-right (`value | trim | upper`). Filters bind tighter than comparisons, so `java_version | default("25") == "25"` filters first, then compares. Each filter is a standalone script in `modules/Filters/`, named for the filter itself (e.g. `upper.ps1` is the `upper` filter) and loaded automatically at import - add a new filter by adding a file there, nothing else to register. Unless noted otherwise, every filter is **null-in/null-out**: a `null` piped value passes straight through rather than erroring.
+- `value | filter(args)` pipes a value through a named filter, Jinja-style, and chains left-to-right (`value | trim | upper`). Filters bind tighter than comparisons, so `java_version | default("25") == "25"` filters first, then compares. Every built-in filter below lives in `internal/filters/builtins.go`; a playbook can also add its own without recompiling via a script filter (see [Custom filters](#custom-filters)). Unless noted otherwise, every filter is **null-in/null-out**: a `null` piped value passes straight through rather than erroring.
 
   | Filter | Arguments | Result |
   | --- | --- | --- |
@@ -334,17 +397,20 @@ tasks:
 
 ### Facts
 
-Gathered fresh every run; a deliberately small, easy-to-extend starter set (see `modules/Facts.psm1`):
+Gathered fresh every run; a deliberately small, easy-to-extend starter set (see `internal/facts/facts.go`):
 
 | Fact | Description |
 | --- | --- |
-| `computer_name` | `$env:COMPUTERNAME` |
-| `user_name` | `$env:USERNAME` |
-| `home` | `$HOME` |
-| `os_version` | `[System.Environment]::OSVersion.Version` |
+| `computer_name` | The machine's hostname (`$env:COMPUTERNAME` on Windows, OS hostname elsewhere) |
+| `user_name` | The current user's name (`$env:USERNAME` on Windows, the OS user record/`$USER` elsewhere) |
+| `home` | The current user's home directory |
+| `os_version` | OS version, as `major.minor.build` |
 | `os_build` | OS build number |
 | `is_admin` | Whether the current process is running elevated |
-| `pwsh_version` | `$PSVersionTable.PSVersion` |
+| `pwsh_version` | Output of `pwsh --version` if `pwsh` is on `PATH`, else empty |
+| `platform` | Go's `GOOS` - `windows`, `linux`, or `darwin` |
+| `arch` | Go's `GOARCH` - `amd64`, `arm64`, ... |
+| `os_family` | A coarser grouping of `platform`: `windows` or `unix` |
 
 ### Vars
 
@@ -412,7 +478,7 @@ tasks:
 
 A task with `id` but no loop never gets a `.results` key - it stays exactly as it was before this existed.
 
-**Ordering matters**: this only works because tasks are dispatched sequentially and each one's `when`/`${{ }}` are resolved *immediately before* it runs (not all up front) - see [Architecture](#architecture). Referencing an `id` that hasn't executed yet (written later in the file, skipped by an earlier `when`/`-Tags`, or never run because it's a `-Apply`-gated real command evaluated during a dry-run) resolves to `$null`/the zero-value defaults, not an error - write comparisons defensively (e.g. `foo_stat != null and foo_stat.rc != 0`) if that distinction matters. In dry-run, `changed` is still accurately predicted for every module (it doesn't require actually running anything), but `rc`/`stdout`/`stderr` stay at their zero-value defaults for every module since nothing actually runs without `-Apply`.
+**Ordering matters**: this only works because tasks are dispatched sequentially and each one's `when`/`${{ }}` are resolved *immediately before* it runs (not all up front) - see [Architecture](#architecture). Referencing an `id` that hasn't executed yet (written later in the file, skipped by an earlier `when`/`--tags`, or never run because it's an `--apply`-gated real command evaluated during a dry-run) resolves to `$null`/the zero-value defaults, not an error - write comparisons defensively (e.g. `foo_stat != null and foo_stat.rc != 0`) if that distinction matters. In dry-run, `changed` is still accurately predicted for every module (it doesn't require actually running anything), but `rc`/`stdout`/`stderr` stay at their zero-value defaults for every module since nothing actually runs without `--apply`.
 
 `fact` (see below) is the write-your-own-value counterpart to `id`: it always actually applies (dry-run included), since it's pure bookkeeping with no real system side effect - useful when you want a value available for later `when`/`${{ }}` previews without gating it behind an `id`'d real action. Unlike `id`, a fact registers under the `facts.<name>` namespace (see [Facts](#facts)/[Vars](#vars)), not bare.
 
@@ -460,7 +526,7 @@ tasks:
 
 What happens next depends on `continue_on_error`:
 
-- **Unset (default)**: a failed task stops the whole run immediately - remaining tasks never dispatch, and `ironstate.ps1` exits with a non-zero code. Matches Ansible's default (no `ignore_errors`).
+- **Unset (default)**: a failed task stops the whole run immediately - remaining tasks never dispatch, and `ironstate` exits with a non-zero code. Matches Ansible's default (no `ignore_errors`).
 - **`continue_on_error: true`**: the failure is logged and the run moves on to the next task - matches Ansible's `ignore_errors: true`. The task's result (and its `id`-registered value, if any) still reports `failed: true`, so a later task can react to it.
 
 ```yaml
@@ -499,7 +565,7 @@ Every leaf shares these envelope fields, which sit *beside* its module key, not 
 | Field | Values | Description |
 | --- | --- | --- |
 | `name` | string | Label used in output |
-| `tags` | list of strings | Used with `-Tags`; cascades down from ancestor tasks |
+| `tags` | list of strings | Used with `--tags`; cascades down from ancestor tasks |
 | `when` | string or list of strings | Gate(s); AND'd with ancestor tasks' `when` |
 | `id` | string | Registers this leaf's result for later tasks to reference - leaf actions only. See [Registering results](#registering-results-id) |
 | `items` / `with` | list / any value | Materializes this task once per entry (`items`) or exactly once (`with`), templating `${{ item.* }}` first. See [Looping](#looping-withitems) |
@@ -560,7 +626,7 @@ tasks:
 
 | Field | Required | Description |
 | --- | --- | --- |
-| `src` | yes | Source file or directory. Resolved relative to the install system directory (`install/windows`, or the owning package's own directory — see [Includes](#includes)) unless it's absolute or `~`-prefixed |
+| `src` | yes | Source file or directory. Resolved relative to the playbook's own root directory (the directory containing its `site.yml`), or the owning package's own directory — see [Includes](#includes) — unless it's absolute or `~`-prefixed |
 | `dest` | yes | Destination path (`~` expansion supported) - a directory when `src` is a directory |
 
 `present`/`latest` copy `src` over `dest` whenever their SHA256 hashes differ; `absent` removes `dest`.
@@ -582,16 +648,15 @@ tasks:
 | --- | --- | --- |
 | `src` | yes | Template source file. Resolved the same way as `copy.src` |
 | `dest` | yes | Destination path for the rendered output (`~` expansion supported) |
-| `engine` | yes | Which template engine renders `src`: `jinja`, `eps`, or `herestring` (see below) |
+| `engine` | yes | Which template engine renders `src`: `jinja` or `gotemplate` (see below) |
 | `vars` | no | Extra key/value pairs layered on top of facts/vars/registry for this render only (last-write-wins, shallow merge) |
 
 `present`/`latest` render `src` and write it to `dest` whenever the freshly-rendered content differs from what's already there (a plain string compare - the template equivalent of `copy`'s SHA256 hash compare); `absent` removes `dest`. The render context is the same facts/vars/id-registry context `when`/`${{ }}` already resolve against, with this task's own `vars` layered on top.
 
-Three engines, in increasing order of power (and decreasing sandboxing):
+Two engines:
 
 - **`jinja`** - a sandboxed, block-capable engine built on the same expression grammar as `when`/`${{ }}` (see [Template expressions](#template-expressions)): `{{ expr }}` output, `{% if %}`/`{% elif %}`/`{% else %}`/`{% endif %}`, `{% for x in iterable %}`/`{% endfor %}` (nesting supported), and `{% set x = expr %}`. No cmdlet/command invocation exists in the grammar at all, so a template can only read/compare/filter context values - never cause a side effect.
-- **`eps`** - the real PowerShell Gallery [`EPS`](https://github.com/straightdave/eps) module: `<%= expr %>` (output), `<%# ... %>` (comment), and `<% ... %>` (scriptlet - arbitrary PowerShell statements, including control flow). Installs the `EPS` module on first use if it isn't already present (`Install-Module -Scope CurrentUser`). Unlike `jinja`/`herestring`, this is **full, unrestricted PowerShell** - there is no sandboxed mode in the upstream module (its `-Safe` switch only isolates variable scope, not what the template's code can do).
-- **`herestring`** - looks like a PowerShell expandable here-string, but isn't one: bare `$Name.Path` and `$(...)` interpolation only, evaluated through the same sandboxed grammar as `jinja` - no block constructs. The simplest tier, for plain variable substitution.
+- **`gotemplate`** - Go's stdlib [`text/template`](https://pkg.go.dev/text/template) directly, unmodified: real Go template syntax (`{{ .facts.computer_name }}`-style leading-dot field/map-key access, `{{ if }}`/`{{ range }}`/`{{ with }}`, pipelines) against the same render context, rather than `${{ }}`'s own expression grammar. A missing key renders as a zero value (`missingkey=zero`) instead of erroring.
 
 ```yaml
 tasks:
@@ -801,7 +866,7 @@ tasks:
 
 #### `fact` with an embedded `shell`
 
-A fact can compute its own value by running a command directly - the only way to derive a fact from a live command's output, since a fact can't reference a separately-`id`'d task's result (see above). This command **always actually runs, even without `-Apply`** - the same dry-run exception the fact registration itself already gets, since a fact has no real system side effect and a dry-run preview of a later `when`/`${{ }}` reference needs a real value to check, not a zero-result stand-in:
+A fact can compute its own value by running a command directly - the only way to derive a fact from a live command's output, since a fact can't reference a separately-`id`'d task's result (see above). This command **always actually runs, even without `--apply`** - the same dry-run exception the fact registration itself already gets, since a fact has no real system side effect and a dry-run preview of a later `when`/`${{ }}` reference needs a real value to check, not a zero-result stand-in:
 
 ```yaml
 tasks:
@@ -827,7 +892,7 @@ If `value` is omitted, the fact is set directly to the command's trimmed stdout.
 
 ### `assert`
 
-Fails this task unless every `that` condition holds. `that` uses the same bare-expression grammar as [`when` conditions](#when-conditions) - dotted/indexed identifiers, `== != < <= > >=`, `and`/`or`/`not`, `in`/`not in`, `is`/`is not`, and `|` filters - evaluated against facts/vars/id-registered results. There's no real idempotent "already applied" state (like `log`/`fact`): the check always fires when reached, and - unlike `log`/`fact` - it's always actually evaluated even without `-Apply`, since the check *is* the point and has no system side effect to skip in a dry run.
+Fails this task unless every `that` condition holds. `that` uses the same bare-expression grammar as [`when` conditions](#when-conditions) - dotted/indexed identifiers, `== != < <= > >=`, `and`/`or`/`not`, `in`/`not in`, `is`/`is not`, and `|` filters - evaluated against facts/vars/id-registered results. There's no real idempotent "already applied" state (like `log`/`fact`): the check always fires when reached, and - unlike `log`/`fact` - it's always actually evaluated even without `--apply`, since the check *is* the point and has no system side effect to skip in a dry run.
 
 A failing `that` becomes this leaf's `rc: 1` (message in `stderr`); a passing one becomes `rc: 0` (message in `stdout`). From there it's an ordinary leaf: default `failed_when`/`continue_on_error` behavior applies exactly as it would to any other module (see [Failing a task](#failing-a-task-failed_when-continue_on_error)) - a failed assert stops the run unless `continue_on_error: true`.
 
@@ -855,7 +920,7 @@ Writes one or more named values under a single registry key.
 
 | Field | Required | Description |
 | --- | --- | --- |
-| `path` | yes | Registry key path. Supports hive shortcuts `HKLM`/`HKCU`/`HKCR`/`HKU`/`HKCC` and their `HKEY_*` full names (e.g. `HKEY_LOCAL_MACHINE\Software\...`), with or without a trailing `:` or forward slashes. `HKCR`/`HKU`/`HKCC` aren't mounted as PSDrives by PowerShell by default - this mounts them (once) on first use |
+| `path` | yes | Registry key path. Supports hive shortcuts `HKLM`/`HKCU`/`HKCR`/`HKU`/`HKCC` and their `HKEY_*` full names (e.g. `HKEY_LOCAL_MACHINE\Software\...`), with or without a trailing `:` or forward slashes |
 | `values` | yes | One or more `{ name, type, value }` entries to write under `path` |
 
 Each entry in `values`:
@@ -888,7 +953,7 @@ tasks:
 
 ### `scheduled_task`
 
-Registers/updates/removes a Windows Task Scheduler task, built entirely on the `ScheduledTasks` module (`Get`/`New`/`Register`/`Set`/`Unregister`/`Enable`/`Disable-ScheduledTask`) - no `schtasks.exe` fallback is used, since no functional gap turned up needing one.
+Registers/updates/removes a Windows Task Scheduler task by generating a Task Scheduler XML definition and shelling out to the built-in `schtasks.exe` (part of Windows itself, not PowerShell). Unlike a rich `Get-ScheduledTask` object model, `schtasks.exe` has no equivalent to diff field-by-field against, so idempotency is intentionally reduced here: `present`/`latest` only check that a task with this `name`/`path` *exists* (plus `enabled`) - a drifted `action`/`trigger`/`principal`/`settings` is **not** detected and re-applied automatically. Use `state: latest` (or delete and let it re-register) to force a fresh registration after changing one of those fields.
 
 | Field | Required | Description |
 | --- | --- | --- |
@@ -952,7 +1017,7 @@ Each entry in `triggers` has a `type`, which selects which other fields apply:
 | `restart_interval` | Delay between retries when `restart_count` is set |
 | `delete_expired_task_after` | Auto-delete the task this long after its last trigger expires |
 
-Test compares the task like `registry` compares values: existence plus every declared field (actions, triggers, declared `principal`/`settings` fields, description, `enabled`) must match for `present`/`latest` to resolve to "already applied" - any drift (including an extra/foreign action or trigger this handler didn't put there) triggers a full re-registration via `Register-ScheduledTask -Force`, replacing the task's action/trigger set wholesale rather than patching around the mismatch.
+Test only checks existence (by `name`/`path`) plus `enabled` - it does **not** diff `actions`/`triggers`/`principal`/`settings` field-by-field the way `registry` compares its `values`, since `schtasks.exe` has no equivalent object model to diff against. `present`/`latest` (re)register the task via `schtasks.exe /Create /XML <generated-definition> /F`; `absent` removes it via `schtasks.exe /Delete /TN <name> /F`.
 
 ```yaml
 tasks:
@@ -971,19 +1036,19 @@ tasks:
 
 ## Tags filtering
 
-`-Tags` is a flat set of tags; a leaf runs if `-Tags` is omitted, or if any of its effective tags (its own plus every ancestor task's) match:
+`--tags` is a flat set of tags; a leaf runs if `--tags` is omitted, or if any of its effective tags (its own plus every ancestor task's) match:
 
-```powershell
+```shell
 # Anything tagged "cli", anywhere in the tree
-.\ironstate.ps1 -Tags cli
+./bin/ironstate --tags cli
 
 # Anything tagged "cli" OR "security"
-.\ironstate.ps1 -Tags cli,security
+./bin/ironstate --tags cli,security
 ```
 
-There's no more `<group>.<tag>` scheme - `-Tags` no longer knows about module names at all, only tags.
+There's no `<group>.<tag>` scheme - `--tags` doesn't know about module names at all, only tags.
 
-A leaf with **no effective tags at all** (neither its own nor any ancestor task's) always runs, regardless of `-Tags` - it can't be deliberately targeted or excluded by a tag it doesn't have, so `-Tags` simply doesn't apply to it; `when` remains the only gate. This matters for untagged prerequisite tasks a `when` elsewhere depends on - e.g. a `fact` that gathers `facts.wsl_installed` with no `tags:` of its own must still run under `-Tags editors` for a later, differently-tagged task's `when: facts.wsl_installed` to see it set at all. Tag an always-relevant task explicitly if you want that documented in the YAML, but it isn't required for it to keep running.
+A leaf with **no effective tags at all** (neither its own nor any ancestor task's) always runs, regardless of `--tags` - it can't be deliberately targeted or excluded by a tag it doesn't have, so `--tags` simply doesn't apply to it; `when` remains the only gate. This matters for untagged prerequisite tasks a `when` elsewhere depends on - e.g. a `fact` that gathers `facts.wsl_installed` with no `tags:` of its own must still run under `--tags editors` for a later, differently-tagged task's `when: facts.wsl_installed` to see it set at all. Tag an always-relevant task explicitly if you want that documented in the YAML, but it isn't required for it to keep running.
 
 ## Includes
 
@@ -1002,7 +1067,7 @@ tasks:
         layout: colemak
 ```
 
-`include` is handled like `actions:` during tree flattening (see [Task/action model](#taskaction-model)): it loads `packages/lolcat/main.yml` and splices its `tasks:` list in at this position, so the included tasks inherit this task's `tags`/`when` exactly like a nested `actions:` list would. Any `copy.src` or `shell.script` path inside a package's `main.yml` is resolved relative to that package's own directory (e.g. `files/kanata.kbd` → `packages/kanata/files/kanata.kbd`), not the `install/windows` root.
+`include` is handled like `actions:` during tree flattening (see [Task/action model](#taskaction-model)): it loads `packages/lolcat/main.yml` and splices its `tasks:` list in at this position, so the included tasks inherit this task's `tags`/`when` exactly like a nested `actions:` list would. Any `copy.src` or `shell.script` path inside a package's `main.yml` is resolved relative to that package's own directory (e.g. `files/kanata.kbd` → `packages/kanata/files/kanata.kbd`), not the playbook's own root directory.
 
 ```yaml
 # packages/kanata/main.yml

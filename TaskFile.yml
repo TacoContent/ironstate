@@ -1,0 +1,14 @@
+---
+
+version: '3'
+
+tasks:
+  build:
+    desc: Build the project
+    cmds:
+      - echo "Building the project..."
+      - mkdir -p bin
+      - go build -o bin/ironstate.exe ./cmd/ironstate
+      - go vet ./cmd/ironstate
+      - gofmt -l .
+      - go test ./...
