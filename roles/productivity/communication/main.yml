@@ -1,0 +1,75 @@
+---
+
+tasks:
+
+  - name: Microsoft Teams
+    tags:
+      - productivity.communication
+      - productivity.communication.teams
+    when: productivity.communication.teams is defined
+    winget:
+      package: Microsoft.Teams
+      state: ${{ productivity.communication | enabled('teams') | ternary('present', 'absent') }}
+
+  - name: Zoom
+    tags:
+      - productivity.communication
+      - productivity.communication.zoom
+    when: productivity.communication.zoom is defined
+    winget:
+      package: Zoom.Zoom
+      state: ${{ productivity.communication | enabled('zoom') | ternary('present', 'absent') }}
+
+  - name: Slack
+    tags:
+      - productivity.communication
+      - productivity.communication.slack
+    when: productivity.communication.slack is defined
+    winget:
+      package: SlackTechnologies.Slack
+      state: ${{ productivity.communication | enabled('slack') | ternary('present', 'absent') }}
+
+  - name: Discord
+    tags:
+      - productivity.communication
+      - productivity.communication.discord
+    when: productivity.communication.discord is defined
+    winget:
+      package: Discord.Discord
+      state: ${{ productivity.communication | enabled('discord') | ternary('present', 'absent') }}
+
+  - name: mIRC
+    tags:
+      - productivity.communication
+      - productivity.communication.mirc
+    when: productivity.communication.mirc is defined
+    winget:
+      package: mIRC.mIRC
+      state: ${{ productivity.communication | enabled('mirc') | ternary('present', 'absent') }}
+
+  - name: Trillian
+    tags:
+      - productivity.communication
+      - productivity.communication.trillian
+    when: productivity.communication.trillian is defined
+    winget:
+      package: CeruleanStudios.Trillian
+      state: ${{ productivity.communication | enabled('trillian') | ternary('present', 'absent') }}
+
+  - name: Pidgin
+    tags:
+      - productivity.communication
+      - productivity.communication.pidgin
+    when: productivity.communication.pidgin is defined
+    winget:
+      package: Pidgin.Pidgin
+      state: ${{ productivity.communication | enabled('pidgin') | ternary('present', 'absent') }}
+
+  - name: Mozilla Thunderbird
+    tags:
+      - productivity.communication
+      - productivity.communication.thunderbird
+    when: productivity.communication.thunderbird is defined
+    winget:
+      package: Mozilla.Thunderbird
+      state: ${{ productivity.communication | enabled('thunderbird') | ternary('present', 'absent') }}

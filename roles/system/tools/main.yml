@@ -6,7 +6,6 @@ tasks:
     when: system.tools | enabled('sysinternals')
     include:
       name: roles/system/tools/sysinternals
-      state: ${{ system.tools | enabled('sysinternals') | ternary('latest', 'absent') }}
     tags:
       - system
       - system.tools

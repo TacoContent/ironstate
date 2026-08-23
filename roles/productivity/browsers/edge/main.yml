@@ -5,6 +5,7 @@ tasks:
     tags:
       - productivity.browsers
       - productivity.browsers.edge
+    when: productivity.browsers.edge is defined
     winget:
       package: Microsoft.Edge
       state: ${{ productivity.browsers | enabled('edge') | ternary('present', 'absent') }}
@@ -13,6 +14,7 @@ tasks:
     tags:
       - productivity.browsers
       - productivity.browsers.edge_beta
+    when: productivity.browsers.edge_beta is defined
     winget:
       package: Microsoft.Edge.Beta
       state: ${{ productivity.browsers | enabled('edge_beta') | ternary('present', 'absent') }}
@@ -21,6 +23,7 @@ tasks:
     tags:
       - productivity.browsers
       - productivity.browsers.edge_canary
+    when: productivity.browsers.edge_canary is defined
     winget:
       package: Microsoft.Edge.Canary
       state: ${{ productivity.browsers | enabled('edge_canary') | ternary('present', 'absent') }}
@@ -29,6 +32,7 @@ tasks:
     tags:
       - productivity.browsers
       - productivity.browsers.edge_dev
+    when: productivity.browsers.edge_dev is defined
     winget:
       package: Microsoft.Edge.Dev
       state: ${{ productivity.browsers | enabled('edge_dev') | ternary('present', 'absent') }}

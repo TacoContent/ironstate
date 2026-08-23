@@ -37,3 +37,11 @@ tasks:
     when: productivity | enabled('cloud_storage')
     include:
       name: roles/productivity/cloud-storage
+
+  - name: Include Communication Role
+    tags:
+      - productivity
+      - productivity.communication
+    when: productivity | enabled('communication')
+    include:
+      name: roles/productivity/communication

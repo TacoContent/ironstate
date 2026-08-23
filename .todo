@@ -1,9 +1,5 @@
 winget:
   Google.ChromeRemoteDesktopHost
-  Microsoft.Teams
-  SlackTechnologies.Slack
-  Discord.Discord
-  Zoom.Zoom
   Spotify.Spotify
   ShareX.ShareX
   Balena.Etcher
@@ -19,7 +15,13 @@ winget:
   zufuliu.notepad4
   Docker.DockerDesktop
   KeePassXCTeam.KeePassXC
+  AgileBits.1Password
+  LastPass.LastPass
+  
+  7zip.7zip
+  RARLab.WinRAR
   Plex.Plex
+  VideoLAN.VLC
   Ytmdesktop.Ytmdesktop
   AutoHotkey.AutoHotkey
   streamerbot.streamerbot

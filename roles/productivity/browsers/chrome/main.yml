@@ -6,6 +6,7 @@ tasks:
     tags:
       - productivity.browsers
       - productivity.browsers.chrome
+    when: productivity.browsers.chrome is defined
     winget:
       package: Google.Chrome
       state: ${{ productivity.browsers | enabled('chrome') | ternary('present', 'absent') }}
@@ -14,6 +15,7 @@ tasks:
     tags:
       - productivity.browsers
       - productivity.browsers.chrome_beta
+    when: productivity.browsers.chrome_beta is defined
     winget:
       package: Google.Chrome.Beta
       state: ${{ productivity.browsers | enabled('chrome_beta') | ternary('present', 'absent') }}
@@ -22,6 +24,7 @@ tasks:
     tags:
       - productivity.browsers
       - productivity.browsers.chrome_canary
+    when: productivity.browsers.chrome_canary is defined
     winget:
       package: Google.Chrome.Canary
       state: ${{ productivity.browsers | enabled('chrome_canary') | ternary('present', 'absent') }}
@@ -30,6 +33,7 @@ tasks:
     tags:
       - productivity.browsers
       - productivity.browsers.chrome_dev
+    when: productivity.browsers.chrome_dev is defined
     winget:
       package: Google.Chrome.Dev
       state: ${{ productivity.browsers | enabled('chrome_dev') | ternary('present', 'absent') }}

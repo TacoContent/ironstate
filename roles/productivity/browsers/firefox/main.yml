@@ -7,6 +7,7 @@ tasks:
     tags:
       - productivity.browsers
       - productivity.browsers.firefox
+    when: productivity.browsers.firefox is defined
     winget:
       package: Mozilla.Firefox
       state: ${{ productivity.browsers | enabled('firefox') | ternary('present', 'absent') }}
@@ -15,6 +16,7 @@ tasks:
     tags:
       - productivity.browsers
       - productivity.browsers.firefox_beta
+    when: productivity.browsers.firefox_beta is defined
     winget:
       package: Mozilla.Firefox.Beta.MSIX
       state: ${{ productivity.browsers | enabled('firefox_beta') | ternary('present', 'absent') }}
@@ -23,6 +25,7 @@ tasks:
     tags:
       - productivity.browsers
       - productivity.browsers.firefox_dev
+    when: productivity.browsers.firefox_dev is defined
     winget:
       package: Mozilla.Firefox.DeveloperEdition.MSIX
       state: ${{ productivity.browsers | enabled('firefox_dev') | ternary('present', 'absent') }}

@@ -6,12 +6,14 @@ tasks:
     winget:
       package: Box.BoxForOffice
       state: ${{ productivity.cloud_storage | enabled('box') | ternary('present', 'absent') }}
+    when: productivity.cloud_storage.box is defined
     tags:
       - productivity
       - productivity.cloud_storage
       - productivity.cloud_storage.box
 
   - name: Google Drive
+    when: productivity.cloud_storage.google_drive is defined
     winget:
       package: Google.Drive
       state: ${{ productivity.cloud_storage | enabled('google_drive') | ternary('present', 'absent') }}
@@ -21,6 +23,7 @@ tasks:
       - productivity.cloud_storage.google_drive
 
   - name: OneDrive
+    when: productivity.cloud_storage.onedrive is defined
     winget:
       package: Microsoft.OneDrive
       state: ${{ productivity.cloud_storage | enabled('onedrive') | ternary('present', 'absent') }}
@@ -30,6 +33,7 @@ tasks:
       - productivity.cloud_storage.onedrive
 
   - name: Dropbox
+    when: productivity.cloud_storage.dropbox is defined
     winget:
       package: Dropbox.Dropbox
       state: ${{ productivity.cloud_storage | enabled('dropbox') | ternary('present', 'absent') }}
