@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/TacoContent/ironstate/internal/expr"
+	"github.com/TacoContent/ironstate/internal/ui"
 )
 
 type omitMarker struct{}
@@ -30,8 +31,12 @@ func IsOmit(v any) bool {
 
 // Warn reports an unresolved-reference warning, matching ironstate.ps1's
 // Write-Warning usage. Overridable for tests/CLI output redirection.
+// Styled the same as internal/engine's Warn (yellow, stderr) so an
+// unresolved-template warning reads consistently with every other
+// warning in a run.
 var Warn = func(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "warning: "+format+"\n", args...)
+	msg := fmt.Sprintf(format, args...)
+	fmt.Fprintln(os.Stderr, ui.Yellow("⚠ "+msg))
 }
 
 // ExpandValue expands '${{ ... }}' occurrences in value. Non-string

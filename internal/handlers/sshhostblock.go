@@ -211,7 +211,65 @@ func testSshHostBlockPresent(item map[string]any, name string) (bool, error) {
 		return false, err
 	}
 	desired := getDesiredBlockLines(content)
-	return strings.Join(existing, "\n") == strings.Join(desired, "\n"), nil
+	existingCanon := strings.Join(canonicalizeSshHostBlockLines(existing), "\n")
+	desiredCanon := strings.Join(canonicalizeSshHostBlockLines(desired), "\n")
+	return existingCanon == desiredCanon, nil
+}
+
+// canonicalizeSshHostBlockLines makes the presence check insensitive to a
+// host stanza's directive line order: this handler's own generated order
+// is a deterministic alphabetical sort of each entry's extra fields (Go
+// map iteration has no natural order to preserve, unlike the original
+// ironstate.ps1's ordered hashtables), which won't in general match a
+// hand-authored file, or one written before this sort was introduced,
+// even when the ssh_config content is fully equivalent - causing a
+// perpetual false "would install". Splits into blank-line-separated host
+// stanzas; within each stanza, leaves any leading '#'-comment/'Host '/
+// 'HostName ' lines in place and sorts every other directive line, so two
+// stanzas with the same directives in a different order canonicalize
+// identically.
+func canonicalizeSshHostBlockLines(lines []string) []string {
+	var out []string
+	for i, stanza := range splitSshStanzas(lines) {
+		if i > 0 {
+			out = append(out, "")
+		}
+		out = append(out, canonicalizeSshStanza(stanza)...)
+	}
+	return out
+}
+
+func splitSshStanzas(lines []string) [][]string {
+	var stanzas [][]string
+	var current []string
+	for _, l := range lines {
+		if l == "" {
+			if len(current) > 0 {
+				stanzas = append(stanzas, current)
+				current = nil
+			}
+			continue
+		}
+		current = append(current, l)
+	}
+	if len(current) > 0 {
+		stanzas = append(stanzas, current)
+	}
+	return stanzas
+}
+
+func canonicalizeSshStanza(lines []string) []string {
+	var anchors, rest []string
+	for _, l := range lines {
+		trimmed := strings.TrimLeft(l, " \t")
+		if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "Host ") || strings.HasPrefix(trimmed, "HostName ") {
+			anchors = append(anchors, l)
+			continue
+		}
+		rest = append(rest, l)
+	}
+	sort.Strings(rest)
+	return append(anchors, rest...)
 }
 
 func setSshHostBlock(item map[string]any, name string) error {

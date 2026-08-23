@@ -277,6 +277,45 @@ func TestSshHostBlockRendersHostEntry(t *testing.T) {
 	}
 }
 
+func TestSshHostBlockTestIgnoresDirectiveOrder(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "config")
+	// Hand-authored order (HostName, IdentityFile, User, IdentitiesOnly)
+	// deliberately differs from the handler's own alphabetically-sorted
+	// generated order, but is otherwise identical ssh_config content.
+	existing := "# BEGIN IRONSTATE MANAGED - github-commercial\n" +
+		"# Commercial github\n" +
+		"Host github.com\n" +
+		"  HostName github.com\n" +
+		"  IdentityFile ~/.ssh/id_rsa\n" +
+		"  User git\n" +
+		"  IdentitiesOnly yes\n" +
+		"# END IRONSTATE MANAGED - github-commercial\n"
+	if err := os.WriteFile(dest, []byte(existing), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	h := sshHostBlockHandler{}
+	item := map[string]any{
+		"dest":        dest,
+		"marker_name": "github-commercial",
+		"hosts": []any{
+			map[string]any{
+				"comment":         "Commercial github",
+				"host":            "github.com",
+				"identity_file":   "~/.ssh/id_rsa",
+				"user":            "git",
+				"identities_only": true,
+			},
+		},
+	}
+
+	installed, err := h.Test(item, "hosts", testCtx())
+	if err != nil || !installed {
+		t.Fatalf("installed=%v err=%v, want true (same directives, different order)", installed, err)
+	}
+}
+
 func TestCreatesPresentEmptyIsAlwaysFalse(t *testing.T) {
 	if testCreatesPresent(nil) {
 		t.Fatal("empty creates should always report not-installed")

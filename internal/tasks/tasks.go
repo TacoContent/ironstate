@@ -9,11 +9,13 @@ package tasks
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/TacoContent/ironstate/internal/expr"
 	"github.com/TacoContent/ironstate/internal/model"
 	"github.com/TacoContent/ironstate/internal/packages"
 	"github.com/TacoContent/ironstate/internal/template"
+	"github.com/TacoContent/ironstate/internal/ui"
 )
 
 // Leaf is one flattened, dispatch-ready action:
@@ -59,9 +61,12 @@ type Options struct {
 
 // Warn reports a non-fatal tree-shape problem (unrecognized module key,
 // 'id' on a grouping task, missing PackagesRoot for an 'include', ...).
-// Overridable for tests/CLI redirection.
+// Overridable for tests/CLI redirection. Styled the same as
+// internal/engine's Warn (yellow, stderr) for a consistent look across
+// every warning in a run.
 var Warn = func(format string, args ...any) {
-	fmt.Printf("warning: "+format+"\n", args...)
+	msg := fmt.Sprintf(format, args...)
+	fmt.Fprintln(os.Stderr, ui.Yellow("⚠ "+msg))
 }
 
 type scope struct {

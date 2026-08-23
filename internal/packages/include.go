@@ -8,6 +8,7 @@ import (
 	"github.com/TacoContent/ironstate/internal/expr"
 	"github.com/TacoContent/ironstate/internal/model"
 	"github.com/TacoContent/ironstate/internal/template"
+	"github.com/TacoContent/ironstate/internal/ui"
 )
 
 // Included is the result of resolving one 'include:' spec — ports
@@ -21,8 +22,12 @@ type Included struct {
 // Warn reports a non-fatal include problem (missing 'name', package not
 // found) — matches ironstate.ps1's Write-Warning+skip behavior rather
 // than erroring the whole run. Overridable for tests/CLI redirection.
+// Styled the same as internal/engine's Warn (yellow, stderr) so every
+// warning in a run reads consistently regardless of which package raised
+// it.
 var Warn = func(format string, args ...any) {
-	fmt.Printf("warning: "+format+"\n", args...)
+	msg := fmt.Sprintf(format, args...)
+	fmt.Fprintln(os.Stderr, ui.Yellow("⚠ "+msg))
 }
 
 var reservedNamespaces = map[string]bool{"package": true, "inputs": true, "facts": true, "vars": true}
