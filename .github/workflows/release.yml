@@ -30,9 +30,9 @@ jobs:
           go-version-file: go.mod
 
       - uses: anchore/sbom-action/download-syft@v0
-      - uses: sigstore/cosign-installer@v3
+      - uses: sigstore/cosign-installer@v4.1.2
 
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         id: goreleaser
         with:
           distribution: goreleaser
@@ -41,6 +41,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-path: "dist/*.zip,dist/*.tar.gz,dist/checksums.txt"
