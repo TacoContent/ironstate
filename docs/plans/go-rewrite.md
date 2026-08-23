@@ -15,7 +15,7 @@ just a quick at-a-glance progress marker kept in sync with it.
 | --- | --- |
 | 0 — Scaffolding | ✅ Done — `go.mod`, `cmd/ironstate`, cobra/viper CLI (`version`/`filters list`/`doctor` + root flags), `.goreleaser.yaml`, `.github/workflows/ci.yml`+`codeql.yml`, `.golangci.yml` |
 | 1 — Core engine, no I/O | ✅ Done — `internal/expr` (lexer/parser/AST/evaluator + fuzz tests), `internal/template` (span scan/expand, soft-vs-strict, boundary keys), `internal/filters` (all 21 built-ins) |
-| 2 — Document loading & flattening | ⬜ Not started — `internal/packages`, `internal/tasks`, `internal/facts` |
+| 2 — Document loading & flattening | ✅ Done — `internal/model` (generic YAML shape + helpers), `internal/packages` (hierarchy load/merge, `include` resolution, `.env` loader, path resolution), `internal/tasks` (`Expand-TaskTree` port: loops, `parent.item`, tags/when cascading), `internal/facts` (Windows-real / other-stub build split). Validated against the **real** `site.yml` + `hosts/krayt.yml` → `hosts/camalot` → the full `roles/*`/`packages/*` tree (181 flattened leaves, zero errors) |
 | 3 — Engine + low-risk handlers | ⬜ Not started |
 | 4 — Package-manager handlers + `shell` + template engines | ⬜ Not started |
 | 5 — Filter plugin system (script filters) | ⬜ Not started |

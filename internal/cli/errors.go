@@ -41,4 +41,3 @@ func ExitCodeFor(err error) int {
 	}
 	return 1
 }
-

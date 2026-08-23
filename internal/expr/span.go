@@ -107,4 +107,3 @@ func indexOfSpanStart(chars []positionedRune, from int) int {
 	}
 	return -1
 }
-
