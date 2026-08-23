@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -431,6 +432,61 @@ func TestZipHandlerDownloadAndExtractUsesOverridableHTTP(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(destDir, "file.txt")) //nolint:gosec // destDir is a t.TempDir()-derived path this same test just wrote, not user input
 	if err != nil || string(data) != "payload" {
 		t.Fatalf("data=%q err=%v", data, err)
+	}
+}
+
+func TestZipHandlerRejectsZipSlipEntry(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "malicious.zip")
+	writeTestZip(t, zipPath, map[string]string{"../sneaky-file": "payload"})
+
+	origGet := httpGet
+	defer func() { httpGet = origGet }()
+	httpGet = func(url string) (*http.Response, error) {
+		f, err := os.Open(zipPath) //nolint:gosec // zipPath is a t.TempDir()-derived path this same test just wrote, not user input
+		if err != nil {
+			return nil, err
+		}
+		return &http.Response{StatusCode: 200, Body: f}, nil
+	}
+
+	destDir := filepath.Join(dir, "dest")
+	h := zipHandler{}
+	item := map[string]any{"src": "http://example.invalid/malicious.zip", "dest": destDir}
+	if _, err := h.Install(item, "", testCtx()); err == nil {
+		t.Fatal("expected an error for a zip entry containing '..', got nil")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "sneaky-file")); err == nil {
+		t.Fatal("zip-slip entry was written outside dest")
+	}
+}
+
+func TestSafeJoinRejectsTraversalAndAbsolutePaths(t *testing.T) {
+	dest := filepath.Join(t.TempDir(), "dest")
+	names := []string{
+		"../sneaky-file",
+		"a/../../sneaky-file",
+		`..\sneaky-file`, // backslash-smuggled traversal on a zip's always-'/' entry name
+		"/etc/passwd",
+	}
+	if runtime.GOOS == "windows" {
+		names = append(names, `C:\Windows\System32\evil.dll`) // drive-letter absolute path - filepath.IsAbs is Windows-specific here
+	}
+	for _, name := range names {
+		if _, err := safeJoin(dest, name); err == nil {
+			t.Fatalf("safeJoin(%q) = nil error, want rejection", name)
+		}
+	}
+}
+
+func TestSafeJoinAllowsLegitFilenameContainingDotDot(t *testing.T) {
+	dest := filepath.Join(t.TempDir(), "dest")
+	got, err := safeJoin(dest, "video..final.mp4")
+	if err != nil {
+		t.Fatalf("safeJoin rejected a legitimate filename containing \"..\": %v", err)
+	}
+	if want := filepath.Join(dest, "video..final.mp4"); got != want {
+		t.Fatalf("safeJoin = %q, want %q", got, want)
 	}
 }
 

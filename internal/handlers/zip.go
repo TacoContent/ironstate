@@ -139,8 +139,8 @@ func invokeZipDownloadAndExtract(item map[string]any) error {
 		}
 		destPath, err := safeJoin(dest, name)
 		if err != nil {
-			engine.Warn("zip entry %q escapes destination %s, skipping: %v", name, dest, err)
-			continue
+			engine.Danger("zip entry %q escapes destination %s; aborting extraction: %v", name, dest, err)
+			return fmt.Errorf("zip entry %q escapes destination %s: %w", name, dest, err)
 		}
 		if err := extractZipEntry(entry, destPath); err != nil {
 			return err
@@ -153,11 +153,28 @@ func invokeZipDownloadAndExtract(item map[string]any) error {
 	return os.WriteFile(cachePath, []byte(newHash), 0o644) //nolint:gosec // matches the archive's own trust level, no tighter mode intended
 }
 
-// safeJoin joins dest and name, rejecting a zip entry whose name (e.g.
-// containing '../') would resolve outside dest - the standard "zip-slip"
-// path-traversal guard for archive extraction.
+// safeJoin joins dest and name, rejecting a zip entry whose name would
+// resolve outside dest - the standard "zip-slip" path-traversal guard for
+// archive extraction. Zip entry names are always '/'-separated per the
+// zip format spec (an embedded '\' is just a literal character, never a
+// path separator there) - normalized to '/' first so a crafted '..\'
+// entry can't smuggle a traversal past a check that only looks for
+// '../'. Absolute paths are rejected outright; '..' is checked as a
+// cleaned path *segment* (via path.Clean, not a raw substring match),
+// so a legitimate filename that merely contains ".." as text (e.g.
+// 'video..final.mp4') isn't wrongly rejected. The final prefix check
+// against the joined+cleaned destination is kept as a last line of
+// defense.
 func safeJoin(dest, name string) (string, error) {
-	joined := filepath.Join(dest, name)
+	zipName := strings.ReplaceAll(name, "\\", "/")
+	if zipName == "" || strings.HasPrefix(zipName, "/") || filepath.IsAbs(zipName) {
+		return "", fmt.Errorf("illegal file path")
+	}
+	cleanZipName := path.Clean(zipName)
+	if cleanZipName == ".." || strings.HasPrefix(cleanZipName, "../") {
+		return "", fmt.Errorf("illegal file path")
+	}
+	joined := filepath.Join(dest, cleanZipName)
 	cleanDest := filepath.Clean(dest) + string(os.PathSeparator)
 	if joined != filepath.Clean(dest) && !strings.HasPrefix(filepath.Clean(joined)+string(os.PathSeparator), cleanDest) {
 		return "", fmt.Errorf("illegal file path")
