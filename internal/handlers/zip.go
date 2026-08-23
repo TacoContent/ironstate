@@ -1,0 +1,194 @@
+package handlers
+
+import (
+	"archive/zip"
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
+	"net/http"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
+
+	"github.com/TacoContent/ironstate/internal/engine"
+)
+
+// zipHandler ports Handlers/Zip.psm1: downloads and extracts a ZIP
+// archive directly. Idempotency is entirely 'creates'-glob based (shared
+// with the future 'shell' handler, see creates.go) - Test never inspects
+// the archive/dest contents itself.
+type zipHandler struct{}
+
+func zipSha256CachePath(item map[string]any) string {
+	if sha256Spec := getMap(item, "sha256"); sha256Spec != nil {
+		if cache := getString(sha256Spec, "cache"); cache != "" {
+			return resolvePath(cache)
+		}
+	}
+	dest := resolvePath(getString(item, "dest"))
+	src := getString(item, "src")
+	return filepath.Join(dest, path.Base(src)+".sha256")
+}
+
+func httpGetToFile(url, destPath string) error {
+	resp, err := httpGet(url) //nolint:gosec // URL is authored YAML content, same trust boundary as the rest of this tool
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	f, err := os.Create(destPath) //nolint:gosec // destPath is a generated temp file path
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(f, resp.Body)
+	return err
+}
+
+// httpGet is overridable so tests never make a real network call.
+var httpGet = func(url string) (*http.Response, error) { return http.Get(url) } //nolint:gosec // URL is authored YAML content, same trust boundary as the rest of this tool
+
+func sha256HexOfFile(path string) (string, error) {
+	f, err := os.Open(path) //nolint:gosec // path is a generated temp file path
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New() //nolint:gosec // content-identity hash, not a security control
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func matchAny(patterns []any, name string) bool {
+	if len(patterns) == 0 {
+		return false
+	}
+	for _, raw := range patterns {
+		pattern, _ := raw.(string)
+		if pattern == "" {
+			continue
+		}
+		if ok, _ := path.Match(pattern, name); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func invokeZipDownloadAndExtract(item map[string]any) error {
+	src := getString(item, "src")
+	dest := resolvePath(getString(item, "dest"))
+	state := itemState(item)
+	include := asList(item["include"])
+	exclude := asList(item["exclude"])
+
+	if err := ensureParentDir(filepath.Join(dest, "placeholder")); err != nil {
+		return err
+	}
+
+	cachePath := zipSha256CachePath(item)
+	tempFile, err := os.CreateTemp("", "ironstate-*.zip")
+	if err != nil {
+		return err
+	}
+	tempPath := tempFile.Name()
+	tempFile.Close()
+	defer os.Remove(tempPath)
+
+	if err := httpGetToFile(src, tempPath); err != nil {
+		return err
+	}
+
+	newHash, err := sha256HexOfFile(tempPath)
+	if err != nil {
+		return err
+	}
+
+	if state == "latest" && fileExists(cachePath) {
+		cached, err := os.ReadFile(cachePath) //nolint:gosec // cachePath is derived from authored YAML content
+		if err == nil && strings.TrimSpace(string(cached)) == newHash {
+			return nil
+		}
+	}
+
+	r, err := zip.OpenReader(tempPath)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	for _, entry := range r.File {
+		name := entry.Name
+		if name == "" || strings.HasSuffix(name, "/") {
+			continue
+		}
+		if len(include) > 0 && !matchAny(include, name) {
+			continue
+		}
+		if len(exclude) > 0 && matchAny(exclude, name) {
+			continue
+		}
+		destPath := filepath.Join(dest, name)
+		if err := extractZipEntry(entry, destPath); err != nil {
+			return err
+		}
+	}
+
+	if err := ensureParentDir(cachePath); err != nil {
+		return err
+	}
+	return os.WriteFile(cachePath, []byte(newHash), 0o644) //nolint:gosec // matches the archive's own trust level, no tighter mode intended
+}
+
+func extractZipEntry(entry *zip.File, destPath string) error {
+	if err := ensureParentDir(destPath); err != nil {
+		return err
+	}
+	rc, err := entry.Open()
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+
+	out, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644) //nolint:gosec // destPath is derived from authored YAML dest + archive entry name, same trust boundary as the rest of this tool
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, rc) //nolint:gosec // archive contents are authored/trusted install content, same trust boundary as the rest of this tool
+	return err
+}
+
+func removeZipCreates(item map[string]any) {
+	removeCreatesPatterns(asList(item["creates"]))
+	cachePath := zipSha256CachePath(item)
+	if fileExists(cachePath) {
+		_ = os.Remove(cachePath)
+	}
+}
+
+func (zipHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
+	return testCreatesPresent(asList(item["creates"])), nil
+}
+
+func (zipHandler) Describe(item map[string]any, action engine.Action, ctx engine.Context) (string, error) {
+	src := getString(item, "src")
+	dest := resolvePath(getString(item, "dest"))
+	if action == engine.ActionUninstall {
+		return "remove creates entries for " + src + " -> " + dest, nil
+	}
+	return "download and extract " + src + " -> " + dest, nil
+}
+
+func (zipHandler) Install(item map[string]any, name string, ctx engine.Context) (engine.ExecResult, error) {
+	return engine.ExecResult{}, invokeZipDownloadAndExtract(item)
+}
+
+func (zipHandler) Uninstall(item map[string]any, name string, ctx engine.Context) (engine.ExecResult, error) {
+	removeZipCreates(item)
+	return engine.ExecResult{}, nil
+}

@@ -20,22 +20,19 @@ root layout is unchanged (`site.yml`, `hosts/`, `packages/`, `roles/`, `variable
       split). Validated against REAL `site.yml` + `hosts/krayt.yml` + `hosts/camalot` +
       the whole `roles/*`/`packages/*` tree (181 flattened leaves, zero errors) in
       `internal/tasks/realfixture_test.go`.
-- [ ] Phase 3 — `internal/engine`: port `ironstate.ps1`'s `Invoke-Tasks`/`Invoke-PackageItem`
-      main flow. Needs, in order:
-      1. `internal/conditions` (or fold into `internal/expr`) — port `Conditions.psm1`'s
-         `Test-WhenClause`/`Test-Condition`. A leaf's `When`/`FailedWhen` are `[]any`
-         (string or bool entries), unevaluated. For a bool entry, stringify as Go's own
-         lowercase `"true"`/`"false"` (**not** PowerShell's `"True"`/`"False"`) before
-         feeding `internal/expr.Parse` — this is the correct/equivalent behavior; see
-         the "Gotchas" section below for why.
-      2. Registry threading: facts pass first, in document order, then everything else,
-         threading one growing id-registry + userFacts + commandAvailability map forward
-         — exactly like `ironstate.ps1`'s `Invoke-Tasks`.
-      3. `Handler` interface + a handful of low-risk handlers to prove the loop
-         end-to-end: `log`, `path`, `fact`, `assert` (`assert` and an embedded-shell
-         `fact` are the two dry-run-forces-real-execution exceptions — must not skip
-         those under dry-run). Then widen to `file`/`copy`/`blockinfile`/
-         `ssh_host_block`/`symlinks`/`zip` per the plan's Phase 3 list.
+- [x] Phase 3 — `internal/engine`: port `ironstate.ps1`'s `Invoke-Tasks`/`Invoke-PackageItem`
+      main flow. `internal/conditions` (Test-WhenClause/Test-Condition, with the
+      bool-stringify gotcha handled at the `TestWhen` boundary), `internal/engine`
+      (Context/Handler/ExecResult/Result types, registry+userFacts+commandAvailability
+      threading via `*State`, facts-first two-phase `Run`, the two
+      dry-run-forces-real-execution exceptions for `assert`/embedded-shell `fact`,
+      missing-handler/missing-command "no result row" behavior, `FilterByTags`,
+      `PrintTable`/`PrintJSON`), `internal/handlers` (`log`, `path` [Windows-only via
+      `golang.org/x/sys/windows/registry`, build-tagged; non-Windows stub errors clearly],
+      `fact`, `assert`, `file`, `copy`, `symlinks`, `blockinfile`, `ssh_host_block`, `zip`).
+      `internal/cli/root.go` wired end-to-end (load hierarchy → soft-resolve → flatten →
+      tag-filter → `engine.Run` → table/JSON output) and smoke-tested in dry-run against
+      the real `site.yml` (see "Phase 3 smoke test" note below).
 - [ ] Phase 4 — package-manager handlers (`winget`/`chocolatey`/`pipx`/`npm`/`cargo`/`go`/
       `gem`/`eget`) + `registry`/`scheduled_task` (Windows-only, build-tagged) + `shell`
       (incl. per-state present/absent/latest fallback) + `template` module w/ `jinja`
@@ -158,5 +155,68 @@ commit/push without being asked.
 
 ## Next concrete step
 
-Start Phase 3 (`internal/engine`) per the ordered sub-steps above — the 'when'-boolean
-gotcha is the one detail most likely to get silently reintroduced if skipped.
+Start Phase 4 (`internal/handlers`'s package-manager modules + `shell` + template
+engines). Key things the next agent should know before starting:
+
+- **Phase 3 smoke test**: `go run ./cmd/ironstate --file site.yml --tags shell` (dry-run,
+  no `--apply`) runs the real repo's `site.yml` end-to-end through the new engine/handlers
+  without crashing: fact pass runs first (embedded-shell facts like `pwsh_system_profile`
+  actually execute their `Write-Output $PROFILE` shell command for real, even under
+  dry-run, exactly as designed), then the assert `Verify Local Binaries Path Fact` fails
+  and stops the run with exit code 1 — that failure is a genuine pre-existing environment
+  gap (`vars.local.bin_path` isn't set in a bare dev checkout), not a port bug. The
+  `Add public keys to ...` loop tasks print a wall of `unresolved template reference ...
+  - field omitted` warnings during flattening — also expected/pre-existing: each `with`/
+  `items` entry in that list only sets one of `public_key`/`github_user`/`file`, so the
+  other two are legitimately absent per entry (same noise the original PowerShell prints
+  for the same site.yml).
+- **`internal/handlers`'s `fact` handler's embedded-`shell` support is a deliberate,
+  documented Phase 3 stand-in**, not the real thing: it only supports a bare
+  `{ command: <string> }` shape, always run via `pwsh -NoLogo -NoProfile -Command
+  <command>` as a subprocess (see `runPwshCommand` in `internal/handlers/fact.go`,
+  overridable for tests) — no host presets (`cmd`/`bash`/`node`/...), no `script` file
+  support, no per-state (`present`/`absent`/`latest`) fallback, no native-object merge.
+  This is enough to correctly run the two real embedded-shell facts in this repo today
+  (`roles/shell/main.yml`). When Phase 4's real `shell` handler lands (with
+  `Resolve-ShellStateConfig`'s field-by-field fallback, host presets, `creates`), make
+  `fact`'s embedded-shell path delegate to it instead of `runPwshCommand`, and delete the
+  stand-in.
+- **`blockinfile`'s `template:` field is a hard, clear error today** ("not supported yet
+  (Phase 4)") — only a literal `block:` string is implemented. Once Phase 4's `template`
+  module (jinja/gotemplate) lands, wire `getBlockInFileContent` in
+  `internal/handlers/blockinfile.go` to render it instead of erroring.
+- **`path` is Windows-only** (`internal/handlers/path_windows.go`, using
+  `golang.org/x/sys/windows/registry` to read/write `HKCU\Environment\PATH` directly —
+  no admin required, matching the original's User-scope-only behavior); every other OS
+  gets a stub (`path_other.go`) that errors clearly. This mirrors the master plan's
+  Windows-only-handler policy even though `path` itself isn't in the plan's explicit
+  Windows-only list — the underlying mechanism (`[Environment]::SetEnvironmentVariable`
+  User scope) has no real non-Windows equivalent.
+- **`file`'s hard-link detection is a documented, deliberate gap**: Go's stdlib has no
+  portable "is this path a hard link (vs. a ordinary file)" check the way PowerShell's
+  `Get-Item .LinkType -eq 'HardLink'` does, so `filePathKind` never actually returns
+  `"hard"` — a hard-linked path just looks like a plain `"file"`. `testFileItemPresent`'s
+  `type: hard` case still works correctly despite this (it hashes both sides directly
+  rather than relying on `filePathKind`), so real behavior is unaffected; only the
+  (unused) `"hard"` classification itself is a stub.
+- **`engine.Context` carries a `Filters expr.Filters` field** (added while porting
+  `assert`, whose `that` conditions can themselves use `| filter(...)`, e.g. the real
+  `facts.local_bin_path | length > 0` in `site.yml`) — this is a deviation from the
+  master plan's §4.8 `Handler` interface sketch (which didn't show `Context` needing a
+  filter registry at all). Keep this in mind if the plan's interface sketch is ever used
+  as a literal checklist — the *implemented* `Context` shape is `{ Flat, Filters, Apply }`.
+- Every Phase 3 handler lives in one flat `internal/handlers` package (not one
+  subpackage per module as the master plan's §3 layout shows) — documented as a
+  deliberate deviation in `internal/handlers/handlers.go`'s package doc comment, since
+  most of them share small helpers (file-kind checks, blockinfile markers, the
+  `creates`-glob primitive) that aren't worth exporting across a dozen subpackages.
+  Reconsider only if Phase 4's package-manager handler count makes the single package
+  unwieldy.
+- A recurring tool quirk hit repeatedly this session: creating a **new** file whose
+  content starts with a `// Package foo ...` doc comment immediately followed by
+  `package foo` sometimes gets the tool to emit a duplicated leading `package foo` line
+  before the comment, breaking the build (`syntax error: non-declaration statement
+  outside function body`). Workaround used throughout: write `package foo` as the literal
+  first line, then the doc comment, then imports (comment doesn't attach to the package
+  clause as idiomatic godoc, but it compiles reliably) — or immediately `read_file` the
+  first ~5 lines after creating and fix if duplicated.

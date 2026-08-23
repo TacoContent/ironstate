@@ -4,9 +4,21 @@
 package cli
 
 import (
+	"fmt"
+	"path/filepath"
+
 	"github.com/spf13/cobra"
 
 	"github.com/TacoContent/ironstate/internal/config"
+	"github.com/TacoContent/ironstate/internal/engine"
+	"github.com/TacoContent/ironstate/internal/facts"
+	"github.com/TacoContent/ironstate/internal/filters"
+	"github.com/TacoContent/ironstate/internal/handlers"
+	"github.com/TacoContent/ironstate/internal/model"
+	"github.com/TacoContent/ironstate/internal/packages"
+	"github.com/TacoContent/ironstate/internal/pathutil"
+	"github.com/TacoContent/ironstate/internal/tasks"
+	"github.com/TacoContent/ironstate/internal/template"
 )
 
 // Execute builds and runs the root command.
@@ -61,11 +73,68 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	// The real load/flatten/dispatch pipeline lands in later phases
-	// (internal/packages, internal/tasks, internal/engine — see
-	// docs/plans/go-rewrite.md §10). For now this only proves flag/config
-	// wiring end-to-end.
-	cmd.Printf("ironstate: file=%s apply=%v tags=%v output=%s\n", cfg.File, cfg.Apply, cfg.Tags, cfg.Output)
-	cmd.Println("engine not yet implemented (Phase 2+) — see docs/plans/go-rewrite.md")
+
+	resolvedFile := pathutil.ResolveUserPath(cfg.File)
+	doc, err := packages.LoadHierarchy(resolvedFile)
+	if err != nil {
+		return NewLoadError(err)
+	}
+	docMap := model.AsMap(doc)
+
+	hostFacts := facts.Gather()
+	vars := model.Vars(docMap)
+	fset := filters.New()
+
+	// Whole-document '-Soft' pass: resolves facts/vars now, leaves any
+	// bare id/fact reference untouched for the per-leaf strict pass in
+	// internal/engine, once that registry actually exists.
+	softCtx := map[string]any{"facts": hostFacts, "vars": vars}
+	if err := template.ResolveInPlace(docMap, softCtx, fset, "site", true); err != nil {
+		return NewLoadError(err)
+	}
+
+	taskList, err := model.TaskList(docMap)
+	if err != nil {
+		return NewLoadError(err)
+	}
+
+	root := filepath.Dir(resolvedFile)
+	leaves, err := tasks.Expand(taskList, tasks.Options{
+		ModuleNames:  handlers.AllModuleNames,
+		PackagesRoot: root,
+		Facts:        hostFacts,
+		Vars:         vars,
+		Filters:      fset,
+	})
+	if err != nil {
+		return NewLoadError(err)
+	}
+
+	filtered := engine.FilterByTags(leaves, cfg.Tags)
+
+	results, stopped, err := engine.Run(filtered, engine.Options{
+		Handlers: handlers.All(),
+		Facts:    hostFacts,
+		Vars:     vars,
+		Filters:  fset,
+		Apply:    cfg.Apply,
+	})
+	if err != nil {
+		return NewRunError(err)
+	}
+
+	if cfg.Output == "json" {
+		if err := engine.PrintJSON(cmd.OutOrStdout(), results); err != nil {
+			return NewRunError(err)
+		}
+	} else {
+		if err := engine.PrintTable(cmd.OutOrStdout(), results); err != nil {
+			return NewRunError(err)
+		}
+	}
+
+	if stopped {
+		return NewRunError(fmt.Errorf("run stopped due to a failed task"))
+	}
 	return nil
 }
