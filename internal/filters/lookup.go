@@ -65,6 +65,8 @@ func filterLookup(value any, args []any) (any, error) {
 	target := sb.String()
 
 	switch action {
+	case "env":
+		return os.Getenv(target), nil
 	case "url":
 		return httpGet(target)
 	case "file":
