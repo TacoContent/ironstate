@@ -53,6 +53,7 @@ func newRootCommand() (*cobra.Command, error) {
 	cmd.AddCommand(newVersionCommand())
 	cmd.AddCommand(newFiltersCommand())
 	cmd.AddCommand(newDoctorCommand())
+	cmd.AddCommand(newInitCommand())
 
 	return cmd, nil
 }

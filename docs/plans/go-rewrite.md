@@ -18,15 +18,17 @@ just a quick at-a-glance progress marker kept in sync with it.
 | 2 — Document loading & flattening | ✅ Done — `internal/model` (generic YAML shape + helpers), `internal/packages` (hierarchy load/merge, `include` resolution, `.env` loader, path resolution), `internal/tasks` (`Expand-TaskTree` port: loops, `parent.item`, tags/when cascading), `internal/facts` (Windows-real / other-stub build split). Validated against the **real** `site.yml` + `hosts/krayt.yml` → `hosts/camalot` → the full `roles/*`/`packages/*` tree (181 flattened leaves, zero errors) |
 | 3 — Engine + low-risk handlers | ✅ Done — `internal/conditions` (Test-WhenClause/Test-Condition port), `internal/engine` (Invoke-Tasks/Invoke-PackageItem port: registry/user-facts/command-availability threading, facts-first two-phase `Run`, the two dry-run-forces-execution exceptions, missing-handler/missing-command no-result-row, tag filtering, table/JSON output), `internal/handlers` (`log`, `path` [Windows-only, build-tagged], `fact`, `assert`, `file`, `copy`, `symlinks`, `blockinfile`, `ssh_host_block`, `zip`). CLI (`internal/cli/root.go`) now wired end-to-end and smoke-tested (dry-run) against the real `site.yml` |
 | 4 — Package-manager handlers + `shell` + template engines | ✅ Done — `internal/exec` (Runner abstraction), package-manager handlers (`winget`, `chocolatey`, `pipx`, `npm`, `cargo`, `go`, `gem`, `eget`), `shell` (per-state present/absent/latest fallback, host presets, `creates` - pwsh host is always a subprocess in Go, no in-process native-object merge, an audited-unused v1 gap), `registry` (Windows-only, `golang.org/x/sys/windows/registry` directly, no PSDrive mounting needed), `scheduled_task` (Windows-only, generates a Task Scheduler XML definition and shells out to `schtasks.exe` rather than the ScheduledTasks PowerShell module/CIM - keeps `shell.host: pwsh` the only pwsh dependency, at the documented cost of existence+enabled-only idempotency, no deep drift detection), `internal/templateengines` (native `jinja` port reusing `internal/expr`, plus additive `gotemplate` via Go stdlib `text/template`; `eps`/`herestring` are hard errors), `template` module wired to both engines, `fact`'s embedded `shell` and `blockinfile`'s `template` field now delegate to the real `shell`/`template` implementations (closing the two Phase 3 stand-in gaps) |
-| 5 — Filter plugin system (script filters) | ✅ Done — `internal/filters`'s script-filter adapter: a generic, embedded PowerShell shim (`embed/shim.ps1`) speaks a JSON-over-stdio protocol to an unmodified `modules/Filters/*.ps1` file; a persistent per-filter worker process (`Pool`/`scriptWorker`) is kept warm rather than spawned per call; `DiscoverScriptFilters` registers a discovered script under its own name only when no built-in already claims it. `ironstate filters list`/`doctor` report discovered script filters; `internal/cli/root.go`'s real run wires discovery in too. Verified against a live `pwsh`-backed round trip, not just fakes. |
+| 5 — Filter plugin system (script filters) | ✅ Done — `internal/filters`'s script-filter adapter: a generic, embedded PowerShell shim (`embed/shim.ps1`) speaks a JSON-over-stdio protocol to an unmodified `filters/*.ps1` file; a persistent per-filter worker process (`Pool`/`scriptWorker`) is kept warm rather than spawned per call; `DiscoverScriptFilters` registers a discovered script under its own name only when no built-in already claims it. `ironstate filters list`/`doctor` report discovered script filters; `internal/cli/root.go`'s real run wires discovery in too. Verified against a live `pwsh`-backed round trip, not just fakes. |
 | 6 — Hardening (SBOM/packaging/signing) | ✅ Done — `.github/workflows/release.yml` (tag-triggered `goreleaser release`, `syft`/`cosign` installed via actions), `.goreleaser.yaml`'s `signs:` block (keyless cosign signing of `checksums.txt` via GitHub OIDC) alongside the existing `sboms:` block, `actions/attest-build-provenance` on every release artifact, `.github/dependabot.yml` (gomod + github-actions, weekly). `golangci-lint run ./...` reduced from 40 findings to 0 (real zip-slip path-traversal fix in `zip.go`'s extraction, `go.mod`'s `go` directive bumped `1.25.0` → `1.26.7` to clear 5 stdlib CVEs `govulncheck` found, plus errcheck/gosec/unused/staticcheck cleanup — see the progress doc's Phase 6 notes for the full list). `go build`/`go vet`/`gofmt`/`go test ./...` green on `windows`, cross-compiled `linux`/`darwin`. README got a light-touch "Go binary (preview)" section + documented exit-code contract; the full README rewrite/PowerShell-legacy marking is deliberately deferred to Phase 7 (cutover), not done here. |
-| 7 — Cutover | ⬜ Not started |
+| 7 — Cutover | ✅ Done — `ironstate` (Go binary) is now the primary/only tool; `ironstate.ps1`/`modules/*.psm1` removed outright (not deprecated-in-place - git history preserves them if ever needed, and this isn't a full release yet, so no fallback-compatibility window was kept); README has no PowerShell-version references at all. A real-host side-by-side `-Apply` validation run remains an open item, tracked in the progress doc's "Next concrete step" rather than blocking this phase |
 
 Additive work beyond the phase list above (see progress doc for full detail): cross-platform
-`platform`/`arch`/`os_family` facts, and a CLI output/UX overhaul (new `internal/ui` package —
+`platform`/`arch`/`os_family` facts, a CLI output/UX overhaul (new `internal/ui` package —
 colors, emoji, `--no-color`, Windows console UTF-8 fix; `engine.Options.Verbose`; colored/emoji
 `PrintTable`; `PrintFacts`/`PrintSummary` panels; moved `Info` to stderr so `--output json`
-stays pipeable).
+stays pipeable), an `ironstate init` scaffolding command, and the default script-filters
+directory renamed from `modules/Filters` to `filters` (config key `filters.dir`, `ironstate
+init`'s scaffold, `filters list --dir`/`doctor --filters-dir` defaults all updated together).
 
 Detailed engineering notes on what was built, deviations found, and bugs caught during
 implementation are kept in session/repo memory (not duplicated into this document) —
@@ -709,12 +711,16 @@ keeps review tractable and gives natural checkpoints to re-run the rubber-duck r
   live relative to the binary" and "how do users obtain the binary" (the pre-existing
   distribution open question) need a single combined decision, not two independent ones
   made in different phases.
-- **Rollback trigger for Phase 7**: don't rely on "owner sign-off" alone as the only
-  gate for cutover — define a concrete rollback rule up front, e.g. "if any of the first
-  N real-host `-Apply` runs on the Go binary produces an unintended diff vs. the
-  PowerShell version's plan, revert default usage to `ironstate.ps1` and re-open Phase 6"
-  — a tool that writes to the registry and schedules tasks warrants at least this much
-  explicit rollback planning.
+- **Rollback trigger for Phase 7 (adopted, then superseded)**: this plan originally
+  called for keeping `ironstate.ps1`/`modules/*.psm1` in the repo, deprecated in place,
+  as a rollback path in case a real-host `-Apply` run turned up an unintended diff. The
+  repo owner decided against that once cutover actually happened: this isn't a full
+  release yet, so there's no compatibility window to protect, and git history already
+  preserves the old implementation if it's ever needed again - `ironstate.ps1`/`modules/`
+  were deleted outright rather than kept as a fallback. If a real-host `-Apply` run
+  later turns up an unintended diff, the fix is to `git checkout` the old implementation
+  from history for comparison and patch the Go handler, not to revert default usage to a
+  live fallback binary that no longer exists in the working tree.
 - **Distribution of the binary itself**: once `ironstate.ps1` is gone, how do users
   *get* the new binary on a fresh machine (today `ironstate.ps1` is just a file in a
   cloned repo)? Recommend: keep repo-clone-and-run as the primary path (binary built

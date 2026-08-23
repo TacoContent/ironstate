@@ -3,7 +3,7 @@ package filters
 // script.go implements the external-script filter adapter
 // (docs/plans/go-rewrite.md §4.5): a discovered script file is called
 // over a small, stable JSON protocol via a persistent per-file worker
-// process (pool.go), so an existing modules/Filters/*.ps1 file keeps
+// process (pool.go), so an existing filters/*.ps1 file keeps
 // working completely unmodified - the shim (embed/shim.ps1) is the only
 // new artifact, generic and parameterized by target script path, not one
 // per filter.
@@ -211,7 +211,7 @@ func workerFilterFunc(w *scriptWorker) Func {
 // filter, named '<name><ext>') and registers each one into r under its
 // base name - but only if r doesn't already have a filter of that name
 // (a Go built-in, or one discovered earlier, always wins; today's
-// modules/Filters/*.ps1 files continue to work unmodified, and a net-new
+// filters/*.ps1 files continue to work unmodified, and a net-new
 // custom filter can be dropped in the same directory without recompiling
 // the binary). interpreters maps a recognized extension to its
 // interpreter argv prefix (DefaultInterpreters for the shipped default).
@@ -220,7 +220,7 @@ func workerFilterFunc(w *scriptWorker) Func {
 // no known interpreter, or no known shim (shimPathFor), is skipped
 // (documented gap - only PowerShell ships one today), not a hard failure,
 // since a plain "not a recognized filter script" file living alongside
-// real ones is expected (e.g. modules/Filters/README.md).
+// real ones is expected (e.g. filters/README.md).
 //
 // Returns a Pool the caller must Close() when done (usually at process
 // exit), and the names actually registered (for 'filters list'/'doctor'

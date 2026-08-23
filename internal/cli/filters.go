@@ -43,7 +43,7 @@ func newFiltersCommand() *cobra.Command {
 			return nil
 		},
 	}
-	listCmd.Flags().String("dir", "modules/Filters", "directory to scan for external script filters")
+	listCmd.Flags().String("dir", "filters", "directory to scan for external script filters")
 	cmd.AddCommand(listCmd)
 	return cmd
 }

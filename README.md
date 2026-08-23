@@ -8,7 +8,10 @@
 # Build
 go build -o bin/ironstate ./cmd/ironstate     # bin/ironstate.exe on Windows
 
-# Dry-run / apply / tags, against a playbook's site.yml (see Playbooks below)
+# Scaffold a new playbook (see Playbooks below)
+./bin/ironstate init my-playbook
+
+# Dry-run / apply / tags, against a playbook's site.yml
 ./bin/ironstate --file path/to/your/site.yml
 ./bin/ironstate --file path/to/your/site.yml --apply
 ./bin/ironstate --file path/to/your/site.yml --tags cli,security --apply
@@ -31,6 +34,28 @@ go build -o bin/ironstate ./cmd/ironstate     # bin/ironstate.exe on Windows
 ## Playbooks
 
 `ironstate` doesn't hard-code a single site file location - like an Ansible playbook, you create your own directory with a `site.yml` plus whatever `hosts/`, `variables/`, `packages/`/`roles/` overlays it needs, then point `--file` at that directory's `site.yml`. [`playbooks/camalot/`](playbooks/camalot) in this repo is one such playbook, kept here as a real-world worked example (the repo owner's own machine setup) - copy its shape for your own playbook, or start from an empty `site.yml`. Nothing about the `playbooks/` directory name, or `camalot` itself, is special or required by `ironstate` - it's just a sample.
+
+### `ironstate init`
+
+`ironstate init [playbook-name]` scaffolds that starter shape for you - creates `<playbook-name>/` (or initializes the current directory if no name is given) with:
+
+```
+<playbook-name>/
+├── site.yml
+├── roles/
+├── tasks/
+├── packages/
+├── hosts/<machine-name>.yml
+└── variables/<user-name>.yml
+```
+
+Every generated YAML file is intentionally minimal (`vars: {}` / `tasks: []`) - just enough to be a valid document to start editing; `roles/`, `tasks/`, `packages/` are created empty (with a `.gitkeep` placeholder so they survive a fresh `git clone`). `<machine-name>`/`<user-name>` come from this machine's own `computer_name`/`user_name` facts (see [Facts](#facts)), lowercased. Re-running `init` is safe - an already-existing file or directory is left untouched, never overwritten.
+
+```shell
+./bin/ironstate init my-playbook
+cd my-playbook
+../bin/ironstate --file site.yml
+```
 
 ## File hierarchy
 
@@ -134,9 +159,55 @@ Each `internal/handlers/*.go` file implements the shared `Handler` interface (`T
 Two ways to add a `|` filter (see [`when` conditions](#when-conditions) for the pipeline syntax):
 
 - **Built-in** (compiled in): add a function to `internal/filters/builtins.go` and register it there - requires rebuilding the binary, but has no external process to spawn per call.
-- **Script filter** (no rebuild): drop a script implementing the same `param($Value, [object[]] $ArgValues)` contract every PowerShell filter script already has (e.g. `modules/Filters/upper.ps1`) into the directory `ironstate` scans for filters - `modules/Filters` by default, resolved relative to the site file's own directory, configurable via a `filters.dir` config value (`ironstate doctor --filters-dir <dir>` / `ironstate filters list --dir <dir>` to inspect what's discovered). It's registered automatically at startup under its file's base name (`upper.ps1` → the `upper` filter) - **only if no built-in already claims that name** (a built-in always wins). Only `.ps1` ships a runner today: a generic, embedded PowerShell shim speaking a small JSON-over-stdio protocol (`internal/filters/embed/shim.ps1`) that lets an existing script keep its `param($Value, [object[]] $ArgValues)` shape completely unmodified; a `filters.interpreters` config value maps other extensions to their own interpreter argv for whenever a second script language gets a shim. Each discovered script's interpreter process is started once, lazily, and kept warm for the run's lifetime rather than spawned per call.
+- **Script filter** (no rebuild): drop a script implementing the same `param($Value, [object[]] $ArgValues)` contract every PowerShell filter script already has (e.g. `filters/upper.ps1`) into the directory `ironstate` scans for filters - `filters/` by default, resolved relative to the site file's own directory, configurable via a `filters.dir` config value (`ironstate doctor --filters-dir <dir>` / `ironstate filters list --dir <dir>` to inspect what's discovered). It's registered automatically at startup under its file's base name (`upper.ps1` → the `upper` filter) - **only if no built-in already claims that name** (a built-in always wins). Only `.ps1` ships a runner today: a generic, embedded PowerShell shim speaking a small JSON-over-stdio protocol (`internal/filters/embed/shim.ps1`) that lets an existing script keep its `param($Value, [object[]] $ArgValues)` shape completely unmodified; a `filters.interpreters` config value maps other extensions to their own interpreter argv for whenever a second script language gets a shim. Each discovered script's interpreter process is started once, lazily, and kept warm for the run's lifetime rather than spawned per call.
 
 Run `ironstate filters list` (or `ironstate doctor`) to see every filter currently available, built-in or script, by name.
+
+### `ironstate filters list`
+
+Lists every filter available to `${{ }}`/`when` right now - every built-in from the table above, plus whatever script filters (see [Custom filters](#custom-filters)) are discovered under a directory - one `<name> <built-in|script>` line per filter, sorted by name:
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dir` | `filters/` | Directory to scan for external script filters |
+
+```shell
+$ ironstate filters list --dir path/to/your/playbook/filters
+basename             built-in
+concat               built-in
+default              built-in
+...
+upper                built-in
+my_custom_filter     script
+```
+
+A name shown as `built-in` is always resolved from `internal/filters/builtins.go`, even if a same-named script also exists under `--dir` - a built-in always wins (see [Custom filters](#custom-filters)).
+
+### `ironstate doctor`
+
+A single at-a-glance health check: confirms every package-manager CLI a `site.yml` might dispatch to is actually on `PATH`, plus reports discovered script filters (the same listing `filters list` gives, folded into one command since both are "is my environment set up correctly" checks).
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--filters-dir` | `filters` | Directory to scan for external script filters |
+
+```shell
+$ ironstate doctor --filters-dir path/to/your/playbook/filters
+[ok]      winget   C:\Users\you\AppData\Local\Microsoft\WindowsApps\winget.exe
+[missing] choco    not found on PATH
+[ok]      pipx     C:\Users\you\.local\bin\pipx.exe
+[missing] npm      not found on PATH
+[ok]      cargo    C:\Users\you\.cargo\bin\cargo.exe
+[ok]      go       C:\Program Files\Go\bin\go.exe
+[missing] gem      not found on PATH
+[ok]      eget     C:\Users\you\.local\bin\eget.exe
+[ok]      pwsh     C:\Program Files\PowerShell\7\pwsh.exe
+
+script filters discovered under path/to/your/playbook/filters:
+  my_custom_filter
+```
+
+A `[missing]` line isn't necessarily a problem - it only matters for the specific package-manager modules (`winget`/`chocolatey`/`pipx`/`npm`/`cargo`/`go`/`gem`/`eget`) or `shell.host: pwsh` tasks your own `site.yml` actually uses; `doctor` checks a fixed list of every module this build knows about; `bin` availability is otherwise re-checked per-module at dispatch time regardless (see [Architecture](#architecture)).
 
 ## Task/action model
 

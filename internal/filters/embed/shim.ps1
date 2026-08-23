@@ -6,7 +6,7 @@
 # stdin per call; one line of '{"result":<json>}' or '{"error":"..."}'
 # written to stdout in response. Kept alive for the process's lifetime
 # (internal/filters' Go side keeps this process warm rather than spawning
-# one per call) so an existing modules/Filters/*.ps1 file's own
+# one per call) so an existing filters/*.ps1 file's own
 # 'param($Value, [object[]] $ArgValues)' contract needs zero changes.
 param([Parameter(Mandatory)][string] $ScriptPath)
 

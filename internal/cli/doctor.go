@@ -50,6 +50,6 @@ func newDoctorCommand() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().String("filters-dir", "modules/Filters", "directory to scan for external script filters")
+	cmd.Flags().String("filters-dir", "filters", "directory to scan for external script filters")
 	return cmd
 }

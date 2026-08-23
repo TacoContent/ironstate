@@ -43,7 +43,7 @@ func Load(flags *pflag.FlagSet) (*Config, error) {
 
 	v.SetDefault("file", "site.yml")
 	v.SetDefault("output", "table")
-	v.SetDefault("filters.dir", "modules/Filters")
+	v.SetDefault("filters.dir", "filters")
 
 	if err := v.BindPFlags(flags); err != nil {
 		return nil, err

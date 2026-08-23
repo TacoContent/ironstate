@@ -51,7 +51,7 @@ root layout is unchanged (`site.yml`, `hosts/`, `packages/`, `roles/`, `variable
 - [x] Phase 5 — `internal/filters`'s script-filter adapter: `embed/shim.ps1` (embedded via
       `go:embed`, extracted to a temp file once per process) speaks a JSON-over-stdio
       protocol (`{"value":...,"args":[...]}` in, `{"result":...}`/`{"error":"..."}` out,
-      one line each) to an unmodified target `modules/Filters/*.ps1` file, so every
+      one line each) to an unmodified target `filters/*.ps1` file, so every
       existing filter script needs zero changes. `scriptWorker` is a persistent,
       lazily-started interpreter subprocess kept warm for the process lifetime (not
       spawned per call), pooled per filter name by `Pool`. `DiscoverScriptFilters` scans
@@ -114,7 +114,17 @@ root layout is unchanged (`site.yml`, `hosts/`, `packages/`, `roles/`, `variable
       `engine.Options.Verbose`, times the run and calls `engine.PrintSummary` after
       dispatch. The facts panel and summary are both skipped entirely in `--output json`
       mode so that stream stays clean/pipeable (`results | jq` etc.) — verified live.
-- [ ] Phase 7 — cutover
+- [x] Phase 7 — cutover: README fully rewritten to treat `ironstate` (the Go binary) as
+      the primary/only tool - no `ironstate.ps1`/`-Tags`/`-Apply`/`.psm1` references
+      anywhere. `ironstate.ps1` + `modules/*.psm1` were **removed outright** (not kept
+      deprecated-in-place as a fallback - this repo isn't a full release yet, so there's
+      no compatibility window to protect, and git history preserves the old
+      implementation if it's ever needed again; the repo owner made this call explicitly
+      after an earlier pass had conservatively deprecated-in-place instead). **Deliberately
+      not done this session**: an actual real-host side-by-side `-Apply` run (this
+      changes real system state - registry/scheduled tasks/installed packages - and
+      needs the repo owner present to run and review it, not an agent acting alone); see
+      the open item below.
 
 ## Gotchas / findings worth knowing before continuing
 
@@ -259,20 +269,21 @@ commit/push without being asked.
 
 ## Next concrete step
 
-Start Phase 7 (cutover). Key things the next agent should know before starting:
+Phase 7's paperwork/docs are done and `ironstate.ps1`/`modules/` are gone from the
+working tree (see the Status list above); one real exit-criterion item is still open
+and needs the repo owner, not an agent, to execute:
 
-- **Phase 6 is hardening only, deliberately not a full README rewrite or
-  `ironstate.ps1` deprecation** — the master plan's Phase 6 exit criteria mentions
-  "docs updated (README.md rewritten for the Go binary, PowerShell version marked
-  legacy...)" but that's really Phase 7 cutover work (it changes what's authoritative
-  for real users of this repo, not just hardening the release pipeline) - deferred on
-  purpose. What Phase 6 actually did: `.github/workflows/release.yml` (tag-triggered
-  `goreleaser release`, installs `syft` via `anchore/sbom-action/download-syft` and
-  `cosign` via `sigstore/cosign-installer`, then `actions/attest-build-provenance` over
-  every archive + `checksums.txt`), `.goreleaser.yaml`'s new `signs:` block (keyless
-  cosign blob-signing of `checksums.txt`, `artifacts: checksum` - covers every archive
-  transitively via the hash list, so only the one file needs signing), and
-  `.github/dependabot.yml` (gomod + github-actions, weekly).
+- **Run a real, side-by-side `-Apply` validation** on a low-risk host: `git checkout` the
+  old `ironstate.ps1`/`modules/` from history into a scratch location, run it with
+  `-Apply` there and `ironstate --file <site.yml> --apply` from the working tree against
+  the *same* playbook from a known-clean state (or diff their dry-run plans first, then
+  apply the Go binary's), and confirm no unintended diff. Since the PowerShell version no
+  longer exists in the working tree, an unintended diff found here means patching the Go
+  handler directly (informed by the checked-out-from-history comparison), not "reverting
+  default usage" to a live fallback binary - there isn't one anymore.
+
+Everything below this point is retained prior-phase history/gotchas for context; no
+further numbered phase remains after Phase 7.
 - **A real security fix, not just lint suppression**: `golangci-lint run ./...` found a
   genuine zip-slip path-traversal gap in `internal/handlers/zip.go`'s archive
   extraction (`filepath.Join(dest, entry.Name)` with no containment check against a

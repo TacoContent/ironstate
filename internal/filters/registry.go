@@ -1,5 +1,5 @@
 // Package filters implements the built-in '|' pipeline filters (a direct
-// port of modules/Filters/*.ps1) plus the external script-filter adapter
+// port of filters/*.ps1) plus the external script-filter adapter
 // described in docs/plans/go-rewrite.md §4.5 (see script.go/pool.go). It
 // implements internal/expr.Filters so internal/expr never imports it.
 package filters
@@ -47,7 +47,7 @@ func (r *Registry) Names() []string {
 
 // Has reports whether name is already registered - used by script-filter
 // discovery to let an existing (built-in or previously registered) filter
-// of the same name win, matching modules/Filters/*.ps1's "a Go built-in
+// of the same name win, matching filters/*.ps1's "a Go built-in
 // always wins" discovery rule.
 func (r *Registry) Has(name string) bool {
 	_, ok := r.fns[name]

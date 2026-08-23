@@ -2,6 +2,11 @@
 
 tasks:
 
+  - name: Test Leet Filter
+    log:
+      message: ${{ "Testing the 'leet' filter with input 'Hello, World!'" | leet }}
+      level: verbose
+
   - name: Install Package Managers
     include:
       name: roles/package-managers
