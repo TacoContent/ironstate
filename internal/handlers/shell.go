@@ -127,11 +127,7 @@ func shellHostInvocation(hostSpec string) []string {
 	if preset, ok := shellHostPresets[hostSpec]; ok {
 		return preset
 	}
-	var out []string
-	for _, f := range strings.Fields(hostSpec) {
-		out = append(out, f)
-	}
-	return out
+	return strings.Fields(hostSpec)
 }
 
 func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
@@ -162,14 +158,17 @@ func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
 			return engine.ExecResult{}
 		}
 		if _, err := f.WriteString(cfg.Command); err != nil {
-			f.Close()
+			_ = f.Close()
 			engine.Warn("Shell item '%s': %v", label, err)
 			return engine.ExecResult{}
 		}
-		f.Close()
+		if err := f.Close(); err != nil {
+			engine.Warn("Shell item '%s': %v", label, err)
+			return engine.ExecResult{}
+		}
 		tempFile = f.Name()
 		runPath = tempFile
-		defer os.Remove(tempFile)
+		defer func() { _ = os.Remove(tempFile) }()
 	} else if !fileExists(runPath) {
 		engine.Warn("Shell script not found: %s", runPath)
 		return engine.ExecResult{}

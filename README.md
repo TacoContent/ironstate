@@ -2,6 +2,29 @@
 
 `ironstate.ps1` is a declarative, Ansible-style task runner driven by YAML. It reconciles each leaf action's desired `state` against what is currently installed, printing what it would do by default (dry-run) and only making changes when `-Apply` is passed.
 
+## Go binary (preview)
+
+A single-binary Go rewrite of this tool (`ironstate`/`ironstate.exe`) lives alongside `ironstate.ps1` in this repo (see `cmd/ironstate`, `internal/`, and `docs/plans/go-rewrite.md` for the full rewrite plan). It reads the exact same `site.yml`/`hosts/`/`variables/`/`packages/`/`roles/` files and requires no PowerShell runtime to *run* (only `shell.host: pwsh` tasks still need `pwsh` on `PATH`). It is not yet the default/primary tool — `ironstate.ps1` remains authoritative until cutover — but is functionally complete enough for real dry-runs and applies against this repo's own `site.yml`.
+
+```powershell
+# Build
+go build -o bin/ironstate.exe ./cmd/ironstate
+
+# Dry-run / apply / tags — same flags in spirit as ironstate.ps1
+.\bin\ironstate.exe --file site.yml
+.\bin\ironstate.exe --file site.yml --apply
+.\bin\ironstate.exe --file site.yml --tags cli,security --apply
+
+# Introspection
+.\bin\ironstate.exe filters list
+.\bin\ironstate.exe doctor
+.\bin\ironstate.exe version
+```
+
+**Exit codes**: `0` on a clean run; `1` when the run stopped on a task's `failed_when`/unhandled dispatch error; `2` when the site file failed to load or parse (a distinct code from `1`, unlike `ironstate.ps1`'s single `exit 1` for both cases — see `internal/cli/errors.go`).
+
+**Cross-platform facts**: unlike `ironstate.ps1` (always Windows-only), the Go binary itself builds and runs on Windows/Linux/macOS (see `.goreleaser.yaml`), so it gathers three extra facts beyond `modules/Facts.psm1`'s set (see [Facts](#facts)) so a `site.yml` can branch on them: `platform` (Go's `GOOS` - `windows`/`linux`/`darwin`), `arch` (Go's `GOARCH` - `amd64`/`arm64`/...), and `os_family` (a coarser `windows`/`unix` grouping for logic that only cares which broad camp a host falls into). Windows-only modules (`winget`, `chocolatey`, `registry`, `scheduled_task`, `path`) still error clearly when dispatched on a non-Windows host.
+
 ## Usage
 
 ```powershell

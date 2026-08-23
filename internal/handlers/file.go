@@ -94,7 +94,7 @@ func fileSHA256(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	h := sha256.New() //nolint:gosec // content-identity hash for idempotency comparison, not a security control
 	if _, err := io.Copy(h, f); err != nil {
 		return "", err

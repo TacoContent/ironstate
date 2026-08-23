@@ -27,7 +27,7 @@ var registryHiveAliases = map[string]uint32{
 	"HKCC": hive(registry.CURRENT_CONFIG), "HKEY_CURRENT_CONFIG": hive(registry.CURRENT_CONFIG),
 }
 
-func hive(k registry.Key) uint32 { return uint32(k) }
+func hive(k registry.Key) uint32 { return uint32(k) } //nolint:gosec // every registry.*_ROOT/*_USER/etc. constant is a small positive Win32 pseudo-handle (0x80000000-0x80000006), always representable in uint32
 
 var registryValidTypes = map[string]bool{
 	"String": true, "ExpandString": true, "Binary": true, "DWord": true, "MultiString": true, "QWord": true,
@@ -80,13 +80,13 @@ func setRegistryValue(k registry.Key, name, valueType string, value any) error {
 		if err != nil {
 			return err
 		}
-		return k.SetDWordValue(name, uint32(n))
+		return k.SetDWordValue(name, uint32(n)) //nolint:gosec // a DWord registry value is inherently 32-bit; truncation on overflow matches the original PowerShell's own '[int32] $Value' cast
 	case "QWord":
 		n, err := toInt64(value)
 		if err != nil {
 			return err
 		}
-		return k.SetQWordValue(name, uint64(n))
+		return k.SetQWordValue(name, uint64(n)) //nolint:gosec // a QWord registry value is inherently 64-bit; sign reinterpretation matches the original's '[int64] $Value' cast
 	case "Binary":
 		data, err := toByteSlice(value)
 		if err != nil {
@@ -111,7 +111,7 @@ func toInt64(v any) (int64, error) {
 	case int64:
 		return val, nil
 	case uint64:
-		return int64(val), nil
+		return int64(val), nil //nolint:gosec // reads back a value this same code wrote as int64/uint32/uint64; DWord/QWord width is already enforced at write time
 	case string:
 		return strconv.ParseInt(val, 10, 64)
 	default:
@@ -126,6 +126,9 @@ func toByteSlice(v any) ([]byte, error) {
 		n, err := toInt64(raw)
 		if err != nil {
 			return nil, err
+		}
+		if n < 0 || n > 255 {
+			return nil, fmt.Errorf("registry Binary value entry %d (%d) is out of byte range 0-255", i, n)
 		}
 		out[i] = byte(n)
 	}
@@ -191,7 +194,7 @@ func readRegistryRawValue(k registry.Key, name string) (any, string, error) {
 		if valType == registry.QWORD {
 			kind = "QWord"
 		}
-		return int64(n), kind, nil
+		return int64(n), kind, nil //nolint:gosec // DWord/QWord are read back for comparison only, matching Get-RawRegistryValue's own untyped read
 	}
 	if ss, _, err := k.GetStringsValue(name); err == nil {
 		return ss, "MultiString", nil
@@ -213,7 +216,7 @@ func (registryHandler) Test(item map[string]any, name string, ctx engine.Context
 	if err != nil {
 		return false, nil //nolint:nilerr // key missing means "not installed", not an error
 	}
-	defer k.Close()
+	defer func() { _ = k.Close() }()
 
 	if itemState(item) == "absent" {
 		for _, spec := range specs {
@@ -265,7 +268,7 @@ func (registryHandler) Install(item map[string]any, name string, ctx engine.Cont
 	if err != nil {
 		return engine.ExecResult{}, err
 	}
-	defer k.Close()
+	defer func() { _ = k.Close() }()
 
 	for _, spec := range registryValueSpecs(item) {
 		valueType, err := convertRegistryValueType(getString(spec, "type"))
@@ -288,7 +291,7 @@ func (registryHandler) Uninstall(item map[string]any, name string, ctx engine.Co
 	if err != nil {
 		return engine.ExecResult{}, nil //nolint:nilerr // key already gone: nothing to remove
 	}
-	defer k.Close()
+	defer func() { _ = k.Close() }()
 
 	for _, spec := range registryValueSpecs(item) {
 		_ = k.DeleteValue(getString(spec, "name"))

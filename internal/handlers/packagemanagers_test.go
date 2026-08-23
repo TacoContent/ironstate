@@ -113,7 +113,7 @@ func TestEgetHandlerResolvesToArgAndTests(t *testing.T) {
 		t.Fatalf("installed=%v err=%v, want false before target exists", installed, err)
 	}
 
-	if err := os.WriteFile(target, []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(target, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	installed, err = h.Test(item, "", testCtx())
@@ -129,7 +129,7 @@ func TestGoHandlerBinaryPathAndUninstall(t *testing.T) {
 
 	item := map[string]any{"package": "github.com/x/tool"}
 	path := goBinaryPath(item)
-	if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -201,7 +201,7 @@ func TestShellHandlerCreatesGatesTest(t *testing.T) {
 	if installed {
 		t.Fatal("expected not installed before marker exists")
 	}
-	if err := os.WriteFile(marker, []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(marker, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	installed, _ = h.Test(item, "", testCtx())

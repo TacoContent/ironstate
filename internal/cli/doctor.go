@@ -37,7 +37,7 @@ func newDoctorCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer pool.Close()
+			defer func() { _ = pool.Close() }()
 
 			sort.Strings(discovered)
 			cmd.Printf("\nscript filters discovered under %s:\n", dir)

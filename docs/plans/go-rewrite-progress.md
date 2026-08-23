@@ -67,9 +67,23 @@ root layout is unchanged (`site.yml`, `hosts/`, `packages/`, `roles/`, `variable
       dir, actually invoked end-to-end — not just discovery), not just fakes; unit tests
       use an injectable `startWorkerProcess` var (in-memory `io.Pipe` fakes) so the suite
       never depends on `pwsh` being installed.
-- [ ] Phase 6 — hardening: full test matrix green, wire `.goreleaser.yaml`'s `sboms:`
-      block into an actual `release.yml`, signing (cosign),
-      `actions/attest-build-provenance`
+- [x] Phase 6 — hardening: `.goreleaser.yaml`'s `signs:` block (keyless cosign, signing
+      `checksums.txt` via GitHub Actions OIDC) added alongside the existing `sboms:`
+      block; `.github/workflows/release.yml` (tag-triggered, installs `syft`+`cosign`,
+      runs `goreleaser release --clean`, then `actions/attest-build-provenance` over
+      every archive+checksums file); `.github/dependabot.yml` (gomod + github-actions,
+      weekly). Full local lint pass: installed `golangci-lint`/`govulncheck`/`goreleaser`
+      locally and drove `golangci-lint run ./...` from 40 findings down to 0 (see
+      "Gotchas" below for the interesting ones - a real zip-slip fix, not just
+      suppressions) and `govulncheck ./...` clean (bumped `go.mod`'s `go` directive
+      `1.25.0` → `1.26.7` to clear 5 flagged stdlib CVEs, all already fixed upstream by
+      that patch level). `goreleaser check`/`build --snapshot`/`release --snapshot
+      --skip=publish` all verified locally (the last one fails only at the `syft`-needing
+      SBOM stage when run locally without `syft` installed, as expected - CI's
+      `release.yml` installs it). README got a light-touch "Go binary (preview)" section
+      (build/run/introspection commands + the exit-code contract); the full
+      README rewrite and marking `ironstate.ps1` legacy is deliberately deferred to
+      Phase 7 (cutover), not attempted here — see "Next concrete step" below.
 - [ ] Phase 7 — cutover
 
 ## Gotchas / findings worth knowing before continuing
@@ -130,6 +144,19 @@ root layout is unchanged (`site.yml`, `hosts/`, `packages/`, `roles/`, `variable
      .NET's actual (looser) semantics. Caught by `TestLoadFileResolvesRelativePaths`.
      **Lesson: never assume Go's path stdlib matches .NET's `Path.*` semantics on
      Windows — verify each one used.**
+  3. `internal/filters`'s `exists` filter called `os.Stat` directly on the raw string,
+     never expanding a leading `~` - but the original `exists.ps1`'s `Test-Path` resolves
+     `~` automatically. Found via a **side-by-side real dry-run diff** (build the Go
+     binary, run it and `ironstate.ps1` against the exact same real `site.yml`, diff the
+     console output) rather than a unit test - `site.yml`'s own bootstrap assert
+     (`facts.local_bin_path | exists`) passed under PowerShell but failed under Go,
+     stopping every dry-run dead after just a handful of fact leaves. Fixed by resolving
+     via `pathutil.ResolveUserPath` first (see `TestExistsFilterExpandsTilde`).
+     **Lesson: any filter/handler doing a real `os.Stat`/file-open on a YAML-authored
+     path must resolve `~` first** - `dirname`/`basename` don't need this (pure string
+     ops, no filesystem access, matching the originals), but anything touching the
+     filesystem does. This side-by-side technique is worth repeating before any future
+     phase sign-off, not just trusting green unit tests.
 - Filters needing special test treatment (non-deterministic to golden-test against the
   live PowerShell originals): `lookup` (`httpGet`/`readFile` are package vars in
   `internal/filters/lookup.go`, override in tests) and `json_query` (`lookPath`/`runJQ`
@@ -182,51 +209,62 @@ commit/push without being asked.
 
 ## Next concrete step
 
-Start Phase 6 (hardening: full test matrix, SBOM/provenance/signing wired into a real
-`release.yml`, docs updated). Key things the next agent should know before starting:
+Start Phase 7 (cutover). Key things the next agent should know before starting:
 
-- **Phase 5 smoke test**: verified against a *live* `pwsh`-backed round trip, not just
-  fakes — a net-new custom filter (`reverse.ps1`, reversing a string) dropped into a
-  scratch directory was discovered via `ironstate filters list --dir <dir>` (reported as
-  `script`, distinct from the 21 `built-in` names — none of the real
-  `modules/Filters/*.ps1` files ever show as `script`, since the Go built-ins always win)
-  and then actually invoked end-to-end (`filters.DiscoverScriptFilters` +
-  `Registry.Apply("reverse", "hello", nil)` → `"olleh"`), proving the embedded shim +
-  persistent worker + JSON protocol all work against a real `pwsh`, not just the
-  in-memory-pipe fakes the unit tests use.
-- **`internal/filters/script.go`'s `shimPathFor` only knows `.ps1` today** — extracts the
-  single embedded `embed/shim.ps1` to a temp file once per process (`sync.Once`). Adding
-  a second scripting language (e.g. Python) needs BOTH a new `DefaultInterpreters()`
-  entry (extension → interpreter argv prefix) AND a new shim script written in that
-  language's own idiom (a `.ps1` shim can't run a `.py` target file) — `shimPathFor`'s
-  `switch` is the one place to extend, not `DefaultInterpreters` alone. No real second
-  language is needed today (only `.ps1` filters exist in this repo), so this is a
-  documented extension point, not a gap to close.
-- **`internal/config.Config.FilterInterpreters` is nil unless a user's
-  `ironstate.yaml`/`.ironstate.yaml` sets `filters.interpreters`** (via
-  `viper.UnmarshalKey` — deliberately not hardcoded into the viper defaults, to keep
-  `internal/config` free of an `internal/filters` import). Every caller (`root.go`,
-  `filters.go`, `doctor.go`) falls back to `filters.DefaultInterpreters()` when empty —
-  keep doing that rather than baking a default into `config.Load` itself.
-- **`internal/filters`'s script-filter worker pool is the one place in this whole
-  codebase with real concurrency** (docs/plans/go-rewrite.md §4.5/§6) — CI's `race` job
-  already scopes `go test ./internal/filters/... -race` (see `.github/workflows/ci.yml`,
-  set up back in Phase 0). `-race` does **not** work on a Windows dev machine without a
-  C toolchain (`CGO_ENABLED=1` required) — this was re-confirmed this session; don't
-  waste time trying to run it locally on Windows, trust CI's `ubuntu-latest` leg instead.
-  `TestPoolConcurrentDistinctWorkersDoNotBlockEachOther` in
-  `internal/filters/script_test.go` is the test that actually exercises this.
+- **Phase 6 is hardening only, deliberately not a full README rewrite or
+  `ironstate.ps1` deprecation** — the master plan's Phase 6 exit criteria mentions
+  "docs updated (README.md rewritten for the Go binary, PowerShell version marked
+  legacy...)" but that's really Phase 7 cutover work (it changes what's authoritative
+  for real users of this repo, not just hardening the release pipeline) - deferred on
+  purpose. What Phase 6 actually did: `.github/workflows/release.yml` (tag-triggered
+  `goreleaser release`, installs `syft` via `anchore/sbom-action/download-syft` and
+  `cosign` via `sigstore/cosign-installer`, then `actions/attest-build-provenance` over
+  every archive + `checksums.txt`), `.goreleaser.yaml`'s new `signs:` block (keyless
+  cosign blob-signing of `checksums.txt`, `artifacts: checksum` - covers every archive
+  transitively via the hash list, so only the one file needs signing), and
+  `.github/dependabot.yml` (gomod + github-actions, weekly).
+- **A real security fix, not just lint suppression**: `golangci-lint run ./...` found a
+  genuine zip-slip path-traversal gap in `internal/handlers/zip.go`'s archive
+  extraction (`filepath.Join(dest, entry.Name)` with no containment check against a
+  malicious `../`-containing zip entry name) - fixed with a new `safeJoin` helper that
+  rejects any entry resolving outside `dest`. Everything else in the 40 → 0 lint cleanup
+  was either a real (if minor) fix - `internal/filters/embed.go`'s shim-extraction
+  write path now actually checks `f.Close()`'s error, `internal/handlers/registry_windows.go`'s
+  `toByteSlice` now rejects out-of-range Binary byte values instead of silently
+  truncating them - or a documented `//nolint` justification for a conversion that's
+  provably safe given the actual value ranges involved (every Windows registry hive
+  constant, DWord/QWord width casts matching the original PowerShell's own casts, the
+  UTF-16LE byte-splitting in `scheduledtask_windows.go`'s `writeUTF16File`). Don't
+  re-add blanket `errcheck`/`gosec` disables to `.golangci.yml` to make future findings
+  go away quietly - fix or justify per-callsite, matching this established pattern.
+- **`go.mod`'s `go` directive bumped `1.25.0` → `1.26.7`**: `govulncheck ./...` flagged 5
+  vulnerabilities, but all 5 were in the **Go standard library itself** (net/url, tls,
+  asn1, idna/http), not this project's own code - and all 5 are already fixed in
+  upstream Go patch releases at or before 1.26.7. The prior `1.25.0` pin would have made
+  CI's `setup-go@v5` (which reads `go-version-file: go.mod`) install an *older*,
+  *more* vulnerable toolchain than what was already on this dev machine - always
+  re-run `govulncheck ./...` locally after any dependency bump and bump the `go`
+  directive itself when the flagged CVEs are stdlib-only and already patched upstream,
+  rather than trying to "fix" application code that was never actually vulnerable.
+- **Local validation commands that now work and are worth reusing**: `go install
+  github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest` (matches CI's
+  `lint` job's config exactly, since it reads the same `.golangci.yml`), `go install
+  golang.org/x/vuln/cmd/govulncheck@latest`, `go install
+  github.com/goreleaser/goreleaser/v2@latest` (then `goreleaser check`, `goreleaser
+  build --snapshot --clean`, `goreleaser release --snapshot --clean --skip=publish` -
+  the last one fails only at the SBOM stage without `syft` on PATH, exactly as
+  expected locally; CI's `release.yml` installs it). All three took real (if slow)
+  `go install`/network time but worked without any other tooling.
 - **Re-run the `eps`/`herestring` and `shell.host: pwsh` native-merge grep audits**
-  mentioned in the master plan's §10/§11 as part of Phase 6 sign-off, in case either
-  gained real usage since Phase 4 landed — they hadn't as of Phase 4's own re-check.
-- A recurring tool quirk hit again this session (Phase 5): creating a **new** file
-  sometimes gets the tool to emit a duplicated leading `package foo` line — same
-  quirk noted in the Phase 3/4 notes above, not scoped to any particular file-content
-  shape. Every new file this session (`internal/filters/script.go`, `pool.go`,
-  `embed.go`) was checked immediately after creation and none were affected this time,
-  but keep checking every time regardless.
-- All Phase 5 code is build-tag-clean on both `windows` (native build) and `linux`
-  (cross-compiled via `$env:GOOS="linux"; go build ./...`), full test suite green.
+  mentioned in the master plan's §10/§11 one more time immediately before any Phase 7
+  cutover decision, in case either gained real usage since Phase 4/6's own re-checks -
+  they hadn't as of this session.
+- All Phase 6 changes are config/docs/lint-only - no engine/handler *behavior* changed
+  except the zip-slip fix above (a bug fix, not a feature change) - so re-running the
+  full `go build ./...`/`go vet ./...`/`gofmt -l .`/`go test ./...` (all green on
+  `windows`, cross-compiled `linux`/`darwin`) plus the new `golangci-lint run ./...`/
+  `govulncheck ./...` (both clean) was the whole verification loop this session, no
+  new fixtures needed.
 
 - **Phase 4 deviations (documented, not silent)**:
   1. **`shell`'s `pwsh` host is always a subprocess in Go** (`pwsh -NoLogo -NoProfile

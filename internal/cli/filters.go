@@ -24,7 +24,7 @@ func newFiltersCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer pool.Close()
+			defer func() { _ = pool.Close() }()
 
 			discoveredSet := make(map[string]bool, len(discovered))
 			for _, name := range discovered {

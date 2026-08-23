@@ -1,12 +1,19 @@
 // Package facts gathers host facts made available to 'when' conditions
 // and '${{ facts.* }}' templating — a port of modules/Facts.psm1's small,
-// deliberately fixed starter set. Gathered fresh every run (unlike
-// 'vars', which come from YAML and are merged/overridable).
+// deliberately fixed starter set, plus 'platform'/'arch'/'os_family'
+// (docs/plans/go-rewrite.md §1's cross-platform goal): ironstate.ps1 was
+// always Windows-only, but the Go binary itself is genuinely
+// cross-platform (windows/linux/darwin builds, see .goreleaser.yaml), so
+// a site.yml can now usefully branch on 'when: facts.platform == "linux"'
+// - a deliberate addition beyond parity, not a compatibility requirement.
+// Gathered fresh every run (unlike 'vars', which come from YAML and are
+// merged/overridable).
 package facts
 
 import (
 	"os"
 	"os/user"
+	"runtime"
 )
 
 // Gather returns the fixed set of host facts as a map[string]any, ready
@@ -23,6 +30,23 @@ func Gather() map[string]any {
 		"os_build":      float64(build),
 		"is_admin":      isAdmin(),
 		"pwsh_version":  pwshVersion(),
+		"platform":      runtime.GOOS,
+		"arch":          runtime.GOARCH,
+		"os_family":     osFamily(runtime.GOOS),
+	}
+}
+
+// osFamily groups a Go GOOS value into a broader category useful for
+// 'when' branching that only cares "Windows or POSIX-like", not the
+// exact OS - distinct from 'platform', which is the precise GOOS value.
+func osFamily(goos string) string {
+	switch goos {
+	case "windows":
+		return "windows"
+	case "linux", "darwin", "freebsd", "openbsd", "netbsd", "dragonfly", "solaris", "aix":
+		return "unix"
+	default:
+		return goos
 	}
 }
 

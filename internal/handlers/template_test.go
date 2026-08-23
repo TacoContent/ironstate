@@ -20,7 +20,7 @@ func testCtxWithFilters(flat map[string]any) engine.Context {
 func TestTemplateHandlerJinjaRenderAndTest(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "tpl.j2")
-	if err := os.WriteFile(src, []byte("Hello {{ name }}!"), 0o644); err != nil {
+	if err := os.WriteFile(src, []byte("Hello {{ name }}!"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	dest := filepath.Join(dir, "out.txt")
@@ -36,7 +36,7 @@ func TestTemplateHandlerJinjaRenderAndTest(t *testing.T) {
 	if _, err := h.Install(item, "", ctx); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(dest)
+	data, err := os.ReadFile(dest) //nolint:gosec // dest is a t.TempDir()-derived path this same test just wrote, not user input
 	if err != nil || string(data) != "Hello World!" {
 		t.Fatalf("data=%q err=%v", data, err)
 	}
@@ -49,7 +49,7 @@ func TestTemplateHandlerJinjaRenderAndTest(t *testing.T) {
 func TestTemplateHandlerOwnVarsLayerOnTopOfContext(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "tpl.j2")
-	if err := os.WriteFile(src, []byte("{{ profile.name }}"), 0o644); err != nil {
+	if err := os.WriteFile(src, []byte("{{ profile.name }}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	dest := filepath.Join(dir, "out.txt")
@@ -62,7 +62,7 @@ func TestTemplateHandlerOwnVarsLayerOnTopOfContext(t *testing.T) {
 	if _, err := h.Install(item, "", testCtxWithFilters(nil)); err != nil {
 		t.Fatal(err)
 	}
-	data, _ := os.ReadFile(dest)
+	data, _ := os.ReadFile(dest) //nolint:gosec // dest is a t.TempDir()-derived path this same test just wrote, not user input
 	if string(data) != "alice" {
 		t.Fatalf("data = %q", data)
 	}
@@ -71,7 +71,7 @@ func TestTemplateHandlerOwnVarsLayerOnTopOfContext(t *testing.T) {
 func TestTemplateHandlerUnknownEngineErrors(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "tpl.txt")
-	if err := os.WriteFile(src, []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(src, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	h := templateHandler{}
@@ -84,7 +84,7 @@ func TestTemplateHandlerUnknownEngineErrors(t *testing.T) {
 func TestBlockInFileTemplateFieldRendersViaJinja(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "block.j2")
-	if err := os.WriteFile(src, []byte("managed: {{ value }}"), 0o644); err != nil {
+	if err := os.WriteFile(src, []byte("managed: {{ value }}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	dest := filepath.Join(dir, "dest.conf")
@@ -103,7 +103,7 @@ func TestBlockInFileTemplateFieldRendersViaJinja(t *testing.T) {
 	if _, err := h.Install(item, "task", ctx); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(dest)
+	data, err := os.ReadFile(dest) //nolint:gosec // dest is a t.TempDir()-derived path this same test just wrote, not user input
 	if err != nil || !strings.Contains(string(data), "managed: x") {
 		t.Fatalf("data=%q err=%v", data, err)
 	}

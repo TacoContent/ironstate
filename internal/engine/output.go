@@ -12,9 +12,13 @@ import (
 // Action, Failed -AutoSize'.
 func PrintTable(w io.Writer, results []Result) error {
 	tw := tabwriter.NewWriter(w, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(tw, "MODULE\tPACKAGE\tSTATE\tACTION\tFAILED")
+	if _, err := fmt.Fprintln(tw, "MODULE\tPACKAGE\tSTATE\tACTION\tFAILED"); err != nil {
+		return err
+	}
 	for _, r := range results {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%v\n", r.Module, r.Package, r.State, r.Action, r.Failed)
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%v\n", r.Module, r.Package, r.State, r.Action, r.Failed); err != nil {
+			return err
+		}
 	}
 	return tw.Flush()
 }

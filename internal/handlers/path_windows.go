@@ -30,7 +30,7 @@ func getUserPathEntries() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer k.Close()
+	defer func() { _ = k.Close() }()
 	current, _, err := k.GetStringValue("PATH")
 	if err != nil && err != registry.ErrNotExist {
 		return nil, err
@@ -43,7 +43,7 @@ func setUserPathEntries(entries []string) error {
 	if err != nil {
 		return err
 	}
-	defer k.Close()
+	defer func() { _ = k.Close() }()
 	return k.SetExpandStringValue("PATH", strings.Join(entries, ";"))
 }
 

@@ -129,7 +129,7 @@ func TestScriptWorkerCloseIsIdempotentAndStopsTheProcess(t *testing.T) {
 
 func TestDiscoverScriptFiltersSkipsExistingNames(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "upper.ps1"), []byte("# not actually run"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "upper.ps1"), []byte("# not actually run"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -138,7 +138,7 @@ func TestDiscoverScriptFiltersSkipsExistingNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer pool.Close()
+	defer func() { _ = pool.Close() }()
 
 	if len(registered) != 0 {
 		t.Fatalf("expected the built-in 'upper' to win, got newly registered: %v", registered)
@@ -147,7 +147,7 @@ func TestDiscoverScriptFiltersSkipsExistingNames(t *testing.T) {
 
 func TestDiscoverScriptFiltersRegistersNewScript(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "double.ps1"), []byte("# not actually run"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "double.ps1"), []byte("# not actually run"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -161,7 +161,7 @@ func TestDiscoverScriptFiltersRegistersNewScript(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer pool.Close()
+	defer func() { _ = pool.Close() }()
 
 	if len(registered) != 1 || registered[0] != "double" {
 		t.Fatalf("registered = %v, want [double]", registered)
@@ -187,7 +187,7 @@ func TestDiscoverScriptFiltersMissingDirIsNotError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer pool.Close()
+	defer func() { _ = pool.Close() }()
 	if len(registered) != 0 {
 		t.Fatalf("registered = %v", registered)
 	}
@@ -195,7 +195,7 @@ func TestDiscoverScriptFiltersMissingDirIsNotError(t *testing.T) {
 
 func TestDiscoverScriptFiltersSkipsUnknownExtensions(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("docs"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("docs"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -204,7 +204,7 @@ func TestDiscoverScriptFiltersSkipsUnknownExtensions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer pool.Close()
+	defer func() { _ = pool.Close() }()
 	if len(registered) != 0 {
 		t.Fatalf("registered = %v, want none (unrecognized extension)", registered)
 	}

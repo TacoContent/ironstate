@@ -111,7 +111,7 @@ var Warn = func(format string, args ...any) {
 // description) — Write-Host's equivalent. Overridable for tests/CLI
 // output redirection.
 var Info = func(format string, args ...any) {
-	fmt.Fprintf(os.Stdout, format+"\n", args...)
+	_, _ = fmt.Fprintf(os.Stdout, format+"\n", args...)
 }
 
 // LookPath resolves a module's backing CLI on PATH — overridable so tests

@@ -471,8 +471,8 @@ func writeUTF16File(path, content string) error {
 	buf := make([]byte, 2+len(runes)*2)
 	buf[0], buf[1] = 0xFF, 0xFE // BOM (little-endian)
 	for i, r := range runes {
-		buf[2+i*2] = byte(r)
-		buf[2+i*2+1] = byte(r >> 8)
+		buf[2+i*2] = byte(r)        //nolint:gosec // intentional low-byte extraction for UTF-16LE encoding, not a truncation bug
+		buf[2+i*2+1] = byte(r >> 8) //nolint:gosec // intentional high-byte extraction for UTF-16LE encoding, not a truncation bug
 	}
 	return os.WriteFile(path, buf, 0o600)
 }
@@ -529,8 +529,10 @@ func (scheduledTaskHandler) Install(item map[string]any, name string, ctx engine
 		return engine.ExecResult{}, err
 	}
 	tempPath := tempFile.Name()
-	tempFile.Close()
-	defer os.Remove(tempPath)
+	if err := tempFile.Close(); err != nil {
+		return engine.ExecResult{}, err
+	}
+	defer func() { _ = os.Remove(tempPath) }()
 	if err := writeUTF16File(tempPath, xmlDoc); err != nil {
 		return engine.ExecResult{}, err
 	}

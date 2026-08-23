@@ -41,9 +41,27 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# Keyless cosign signing of the checksums file (covers every archive via
+# its hash list) via GitHub Actions OIDC identity — docs/plans/go-rewrite.md
+# §8. Requires `cosign` on the runner (installed by
+# sigstore/cosign-installer in .github/workflows/release.yml) and
+# `id-token: write` permission on the workflow.
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--yes"
+      - "--output-signature=${artifact}.sig"
+      - "--output-certificate=${artifact}.pem"
+      - "${artifact}"
+    artifacts: checksum
+    output: true
+
 # SBOM per artifact — docs/plans/go-rewrite.md §7. Requires `syft` on the
-# runner (installed as a step in .github/workflows/release.yml, added
-# alongside this file once Phase 6 wires up the release workflow).
+# runner (installed via anchore/sbom-action/download-syft in
+# .github/workflows/release.yml).
 sboms:
   - id: ironstate-sbom
     artifacts: archive

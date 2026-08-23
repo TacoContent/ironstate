@@ -109,7 +109,7 @@ func TestFileHandlerDirectory(t *testing.T) {
 func TestFileHandlerSymlink(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "src.txt")
-	if err := os.WriteFile(src, []byte("hi"), 0o644); err != nil {
+	if err := os.WriteFile(src, []byte("hi"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	link := filepath.Join(dir, "link.txt")
@@ -128,7 +128,7 @@ func TestFileHandlerSymlink(t *testing.T) {
 func TestSymlinksHandlerDelegatesToFile(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "src.txt")
-	if err := os.WriteFile(src, []byte("hi"), 0o644); err != nil {
+	if err := os.WriteFile(src, []byte("hi"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	dest := filepath.Join(dir, "dest.txt")
@@ -147,7 +147,7 @@ func TestSymlinksHandlerDelegatesToFile(t *testing.T) {
 func TestCopyHandlerSingleFile(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "src.txt")
-	if err := os.WriteFile(src, []byte("payload"), 0o644); err != nil {
+	if err := os.WriteFile(src, []byte("payload"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	dest := filepath.Join(dir, "out", "dest.txt")
@@ -177,13 +177,13 @@ func TestCopyHandlerSingleFile(t *testing.T) {
 func TestCopyHandlerDirectoryRecursive(t *testing.T) {
 	dir := t.TempDir()
 	srcDir := filepath.Join(dir, "srcdir")
-	if err := os.MkdirAll(filepath.Join(srcDir, "nested"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(srcDir, "nested"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(srcDir, "nested", "b.txt"), []byte("b"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(srcDir, "nested", "b.txt"), []byte("b"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -225,7 +225,7 @@ func TestBlockInFileInsertsAndUpdatesBlock(t *testing.T) {
 		t.Fatalf("installed=%v err=%v", installed, err)
 	}
 
-	data, _ := os.ReadFile(dest)
+	data, _ := os.ReadFile(dest) //nolint:gosec // dest is a t.TempDir()-derived path this same test just wrote, not user input
 	content := string(data)
 	if !strings.Contains(content, "line1") || !strings.Contains(content, "IRONSTATE MANAGED - task") {
 		t.Fatalf("unexpected content: %q", content)
@@ -236,7 +236,7 @@ func TestBlockInFileInsertsAndUpdatesBlock(t *testing.T) {
 	if _, err := h.Install(item, "task", testCtx()); err != nil {
 		t.Fatal(err)
 	}
-	data, _ = os.ReadFile(dest)
+	data, _ = os.ReadFile(dest) //nolint:gosec // dest is a t.TempDir()-derived path this same test just wrote, not user input
 	if strings.Count(string(data), "BEGIN") != 1 {
 		t.Fatalf("expected exactly one BEGIN marker after update, content=%q", string(data))
 	}
@@ -244,7 +244,7 @@ func TestBlockInFileInsertsAndUpdatesBlock(t *testing.T) {
 	if _, err := h.Uninstall(item, "task", testCtx()); err != nil {
 		t.Fatal(err)
 	}
-	data, _ = os.ReadFile(dest)
+	data, _ = os.ReadFile(dest) //nolint:gosec // dest is a t.TempDir()-derived path this same test just wrote, not user input
 	if strings.Contains(string(data), "line1") {
 		t.Fatalf("expected block removed, content=%q", string(data))
 	}
@@ -265,7 +265,7 @@ func TestSshHostBlockRendersHostEntry(t *testing.T) {
 	if _, err := h.Install(item, "hosts", testCtx()); err != nil {
 		t.Fatal(err)
 	}
-	data, _ := os.ReadFile(dest)
+	data, _ := os.ReadFile(dest) //nolint:gosec // dest is a t.TempDir()-derived path this same test just wrote, not user input
 	content := string(data)
 	if !strings.Contains(content, "Host example") || !strings.Contains(content, "HostName example") || !strings.Contains(content, "User alice") || !strings.Contains(content, "IdentitiesOnly yes") {
 		t.Fatalf("unexpected content: %q", content)
@@ -285,7 +285,7 @@ func TestCreatesPresentEmptyIsAlwaysFalse(t *testing.T) {
 
 func TestCreatesPresentGlob(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "a.exe"), []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "a.exe"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	present := testCreatesPresent([]any{filepath.Join(dir, "*.exe")})
@@ -359,7 +359,7 @@ func TestZipHandlerCreatesGatesInstall(t *testing.T) {
 	if err != nil || installed {
 		t.Fatalf("installed=%v err=%v, want false before marker exists", installed, err)
 	}
-	if err := os.WriteFile(marker, []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(marker, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	installed, err = h.Test(item, "", testCtx())
@@ -376,7 +376,7 @@ func TestZipHandlerDownloadAndExtractUsesOverridableHTTP(t *testing.T) {
 	origGet := httpGet
 	defer func() { httpGet = origGet }()
 	httpGet = func(url string) (*http.Response, error) {
-		f, err := os.Open(zipPath)
+		f, err := os.Open(zipPath) //nolint:gosec // zipPath is a t.TempDir()-derived path this same test just wrote, not user input
 		if err != nil {
 			return nil, err
 		}
@@ -389,7 +389,7 @@ func TestZipHandlerDownloadAndExtractUsesOverridableHTTP(t *testing.T) {
 	if _, err := h.Install(item, "", testCtx()); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(filepath.Join(destDir, "file.txt"))
+	data, err := os.ReadFile(filepath.Join(destDir, "file.txt")) //nolint:gosec // destDir is a t.TempDir()-derived path this same test just wrote, not user input
 	if err != nil || string(data) != "payload" {
 		t.Fatalf("data=%q err=%v", data, err)
 	}
@@ -397,11 +397,11 @@ func TestZipHandlerDownloadAndExtractUsesOverridableHTTP(t *testing.T) {
 
 func writeTestZip(t *testing.T, path string, files map[string]string) {
 	t.Helper()
-	f, err := os.Create(path)
+	f, err := os.Create(path) //nolint:gosec // path is a t.TempDir()-derived path supplied by the calling test, not user input
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	zw := zip.NewWriter(f)
 	for name, content := range files {
 		w, err := zw.Create(name)

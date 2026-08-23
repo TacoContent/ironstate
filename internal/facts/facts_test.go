@@ -1,6 +1,9 @@
 package facts
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+)
 
 func TestGatherShape(t *testing.T) {
 	origRunner := pwshRunner
@@ -8,7 +11,7 @@ func TestGatherShape(t *testing.T) {
 	defer func() { pwshRunner = origRunner }()
 
 	f := Gather()
-	for _, key := range []string{"computer_name", "user_name", "home", "os_version", "os_build", "is_admin", "pwsh_version"} {
+	for _, key := range []string{"computer_name", "user_name", "home", "os_version", "os_build", "is_admin", "pwsh_version", "platform", "arch", "os_family"} {
 		if _, ok := f[key]; !ok {
 			t.Errorf("missing fact %q", key)
 		}
@@ -21,6 +24,26 @@ func TestGatherShape(t *testing.T) {
 	}
 	if f["pwsh_version"] != "PowerShell 7.4.6" {
 		t.Errorf("pwsh_version = %q", f["pwsh_version"])
+	}
+	if f["platform"] != runtime.GOOS {
+		t.Errorf("platform = %v, want %q", f["platform"], runtime.GOOS)
+	}
+	if f["arch"] != runtime.GOARCH {
+		t.Errorf("arch = %v, want %q", f["arch"], runtime.GOARCH)
+	}
+}
+
+func TestOSFamily(t *testing.T) {
+	cases := map[string]string{
+		"windows": "windows",
+		"linux":   "unix",
+		"darwin":  "unix",
+		"plan9":   "plan9",
+	}
+	for goos, want := range cases {
+		if got := osFamily(goos); got != want {
+			t.Errorf("osFamily(%q) = %q, want %q", goos, got, want)
+		}
 	}
 }
 

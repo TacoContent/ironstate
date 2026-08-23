@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -115,19 +113,6 @@ func describeLabel(item map[string]any, name string) string {
 		return name
 	}
 	return itemLabel(item)
-}
-
-var errNotImplemented = fmt.Errorf("not implemented")
-
-// runCaptured runs cmd, capturing stdout/stderr as strings separately -
-// the shared subprocess primitive for the Phase 3 embedded-shell fact
-// runner and (later) the real 'shell'/package-manager handlers.
-func runCaptured(cmd *exec.Cmd) (stdout, stderr string, err error) {
-	var outBuf, errBuf strings.Builder
-	cmd.Stdout = &outBuf
-	cmd.Stderr = &errBuf
-	err = cmd.Run()
-	return outBuf.String(), errBuf.String(), err
 }
 
 // runner backs every package-manager handler's CLI invocations -

@@ -196,7 +196,7 @@ func TestExistsFilterExpandsTilde(t *testing.T) {
 	if err := os.WriteFile(marker, []byte("x"), 0o600); err != nil {
 		t.Skip("cannot write to home directory in this environment")
 	}
-	defer os.Remove(marker)
+	defer func() { _ = os.Remove(marker) }()
 
 	if got := apply(t, "exists", "~/.ironstate-exists-filter-test-marker"); got != true {
 		t.Errorf("exists(~/...) = %v, want true", got)

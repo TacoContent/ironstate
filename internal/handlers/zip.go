@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -36,15 +37,17 @@ func httpGetToFile(url, destPath string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	f, err := os.Create(destPath) //nolint:gosec // destPath is a generated temp file path
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	_, err = io.Copy(f, resp.Body)
-	return err
+	if _, err := io.Copy(f, resp.Body); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 // httpGet is overridable so tests never make a real network call.
@@ -55,7 +58,7 @@ func sha256HexOfFile(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	h := sha256.New() //nolint:gosec // content-identity hash, not a security control
 	if _, err := io.Copy(h, f); err != nil {
 		return "", err
@@ -96,8 +99,10 @@ func invokeZipDownloadAndExtract(item map[string]any) error {
 		return err
 	}
 	tempPath := tempFile.Name()
-	tempFile.Close()
-	defer os.Remove(tempPath)
+	if err := tempFile.Close(); err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tempPath) }()
 
 	if err := httpGetToFile(src, tempPath); err != nil {
 		return err
@@ -119,7 +124,7 @@ func invokeZipDownloadAndExtract(item map[string]any) error {
 	if err != nil {
 		return err
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	for _, entry := range r.File {
 		name := entry.Name
@@ -132,7 +137,11 @@ func invokeZipDownloadAndExtract(item map[string]any) error {
 		if len(exclude) > 0 && matchAny(exclude, name) {
 			continue
 		}
-		destPath := filepath.Join(dest, name)
+		destPath, err := safeJoin(dest, name)
+		if err != nil {
+			engine.Warn("zip entry %q escapes destination %s, skipping: %v", name, dest, err)
+			continue
+		}
 		if err := extractZipEntry(entry, destPath); err != nil {
 			return err
 		}
@@ -144,6 +153,18 @@ func invokeZipDownloadAndExtract(item map[string]any) error {
 	return os.WriteFile(cachePath, []byte(newHash), 0o644) //nolint:gosec // matches the archive's own trust level, no tighter mode intended
 }
 
+// safeJoin joins dest and name, rejecting a zip entry whose name (e.g.
+// containing '../') would resolve outside dest - the standard "zip-slip"
+// path-traversal guard for archive extraction.
+func safeJoin(dest, name string) (string, error) {
+	joined := filepath.Join(dest, name)
+	cleanDest := filepath.Clean(dest) + string(os.PathSeparator)
+	if joined != filepath.Clean(dest) && !strings.HasPrefix(filepath.Clean(joined)+string(os.PathSeparator), cleanDest) {
+		return "", fmt.Errorf("illegal file path")
+	}
+	return joined, nil
+}
+
 func extractZipEntry(entry *zip.File, destPath string) error {
 	if err := ensureParentDir(destPath); err != nil {
 		return err
@@ -152,15 +173,17 @@ func extractZipEntry(entry *zip.File, destPath string) error {
 	if err != nil {
 		return err
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
-	out, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644) //nolint:gosec // destPath is derived from authored YAML dest + archive entry name, same trust boundary as the rest of this tool
+	out, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644) //nolint:gosec // destPath is validated by safeJoin against zip-slip, same trust boundary as the rest of this tool
 	if err != nil {
 		return err
 	}
-	defer out.Close()
-	_, err = io.Copy(out, rc) //nolint:gosec // archive contents are authored/trusted install content, same trust boundary as the rest of this tool
-	return err
+	if _, err := io.Copy(out, rc); err != nil { //nolint:gosec // archive contents are authored/trusted install content, same trust boundary as the rest of this tool
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 func removeZipCreates(item map[string]any) {

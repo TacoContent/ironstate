@@ -70,11 +70,12 @@ func extractedPS1ShimPath() (string, error) {
 			ps1ShimErr = err
 			return
 		}
-		defer f.Close()
 		if _, err := f.Write(shimPS1); err != nil {
+			_ = f.Close()
 			ps1ShimErr = err
 			return
 		}
+		ps1ShimErr = f.Close()
 		ps1ShimPath = f.Name()
 	})
 	return ps1ShimPath, ps1ShimErr

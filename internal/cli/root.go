@@ -98,7 +98,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return NewLoadError(err)
 	}
-	defer scriptPool.Close()
+	defer func() { _ = scriptPool.Close() }()
 
 	// Whole-document '-Soft' pass: resolves facts/vars now, leaves any
 	// bare id/fact reference untouched for the per-leaf strict pass in
