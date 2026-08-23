@@ -292,7 +292,7 @@ func filterExists(value any, args []any) (any, error) {
 	if strings.TrimSpace(s) == "" {
 		return !expected, nil
 	}
-	_, err := os.Stat(s)
+	_, err := os.Stat(pathutil.ResolveUserPath(s))
 	return expected == (err == nil), nil
 }
 

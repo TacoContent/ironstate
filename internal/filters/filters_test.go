@@ -184,6 +184,25 @@ func TestExistsFilter(t *testing.T) {
 	}
 }
 
+// TestExistsFilterExpandsTilde guards against the exists filter checking
+// a literal '~' path segment instead of the user's home directory - the
+// original PowerShell's Test-Path resolves '~' automatically.
+func TestExistsFilterExpandsTilde(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("no home directory available")
+	}
+	marker := filepath.Join(home, ".ironstate-exists-filter-test-marker")
+	if err := os.WriteFile(marker, []byte("x"), 0o600); err != nil {
+		t.Skip("cannot write to home directory in this environment")
+	}
+	defer os.Remove(marker)
+
+	if got := apply(t, "exists", "~/.ironstate-exists-filter-test-marker"); got != true {
+		t.Errorf("exists(~/...) = %v, want true", got)
+	}
+}
+
 func TestSHA1Filter(t *testing.T) {
 	got := apply(t, "sha1", "hello")
 	if got != "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d" {

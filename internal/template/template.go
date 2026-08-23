@@ -93,7 +93,7 @@ func expandWholeValue(exprText string, ctx map[string]any, filters expr.Filters,
 		return original, nil
 	}
 	if v == nil {
-		Warn("%s: unresolved template reference '%s' - field omitted", label, exprText)
+		Warn("Package '%s': unresolved template reference '%s' - field omitted", label, exprText)
 		return Omit, nil
 	}
 	return v, nil
@@ -112,7 +112,7 @@ func expandEmbedded(text string, spans []expr.Span, ctx map[string]any, filters 
 		case deferred:
 			sb.WriteString(text[span.Start:span.End])
 		case v == nil:
-			Warn("%s: unresolved template reference '%s'", label, span.Expression)
+			Warn("Package '%s': unresolved template reference '%s'", label, span.Expression)
 		default:
 			sb.WriteString(expr.DisplayString(v))
 		}
