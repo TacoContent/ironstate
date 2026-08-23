@@ -12,6 +12,7 @@ permissions: {}
 jobs:
   analyze:
     permissions:
+      actions: read
       contents: read
       security-events: write
 
