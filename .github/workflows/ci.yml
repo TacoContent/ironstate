@@ -69,6 +69,8 @@ jobs:
   # go test -race requires cgo (a C toolchain); only ubuntu-latest has one
   # available out of the box in GitHub-hosted runners.
   race:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -81,6 +83,8 @@ jobs:
       - run: go test ./internal/filters/... -race
 
   fuzz-smoke:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -94,6 +98,8 @@ jobs:
       - run: go test ./internal/expr/... -run xxx -fuzz FuzzScanSpans -fuzztime 20s
 
   build-snapshot:
+    permissions:
+      contents: read
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
