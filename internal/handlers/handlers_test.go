@@ -461,7 +461,7 @@ func TestZipHandlerRejectsZipSlipEntry(t *testing.T) {
 	}
 }
 
-func TestSafeJoinRejectsTraversalAndAbsolutePaths(t *testing.T) {
+func TestSafeExtractPathRejectsTraversalAndAbsolutePaths(t *testing.T) {
 	dest := filepath.Join(t.TempDir(), "dest")
 	names := []string{
 		"../sneaky-file",
@@ -473,20 +473,24 @@ func TestSafeJoinRejectsTraversalAndAbsolutePaths(t *testing.T) {
 		names = append(names, `C:\Windows\System32\evil.dll`) // drive-letter absolute path - filepath.IsAbs is Windows-specific here
 	}
 	for _, name := range names {
-		if _, err := safeJoin(dest, name); err == nil {
-			t.Fatalf("safeJoin(%q) = nil error, want rejection", name)
+		if _, err := safeExtractPath(dest, name); err == nil {
+			t.Fatalf("safeExtractPath(%q) = nil error, want rejection", name)
 		}
 	}
 }
 
-func TestSafeJoinAllowsLegitFilenameContainingDotDot(t *testing.T) {
+func TestSafeExtractPathAllowsLegitFilenameContainingDotDot(t *testing.T) {
 	dest := filepath.Join(t.TempDir(), "dest")
-	got, err := safeJoin(dest, "video..final.mp4")
+	got, err := safeExtractPath(dest, "video..final.mp4")
 	if err != nil {
-		t.Fatalf("safeJoin rejected a legitimate filename containing \"..\": %v", err)
+		t.Fatalf("safeExtractPath rejected a legitimate filename containing \"..\": %v", err)
 	}
-	if want := filepath.Join(dest, "video..final.mp4"); got != want {
-		t.Fatalf("safeJoin = %q, want %q", got, want)
+	want, err := filepath.Abs(filepath.Join(dest, "video..final.mp4"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("safeExtractPath = %q, want %q", got, want)
 	}
 }
 

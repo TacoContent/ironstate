@@ -160,8 +160,9 @@ func invokeZipDownloadAndExtract(item map[string]any) error {
 // isSafeZipEntryName reports whether a raw zip entry name is safe to
 // extract - no absolute path, no path-traversal ('..') segment. Checked
 // as its own explicit guard directly against the untrusted zip entry
-// name (not only inside safeJoin) so the "no zip-slip" check is visibly
-// applied to the tainted source before any path is constructed from it.
+// name (not only inside safeExtractPath) so the "no zip-slip" check is
+// visibly applied to the tainted source before any path is constructed
+// from it.
 func isSafeZipEntryName(name string) bool {
 	if name == "" {
 		return false
