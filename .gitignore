@@ -1,10 +1,51 @@
-variables/**
-!variables/.gitkeep
-!variables/example.yml
+**/variables/**
+!**/variables/.gitkeep
+!**/variables/example.yml
 
+**/.env
+**/*.env
+**/*.env.*
+**/.env/**
+**/*.env/**
+**/*.env.*/**
 
-# Created by https://www.toptal.com/developers/gitignore/api/windows,powershell,visualstudiocode
-# Edit at https://www.toptal.com/developers/gitignore?templates=windows,powershell,visualstudiocode
+**/.secrets
+**/*.secrets
+**/*.secrets.*
+**/.secrets/**
+**/*.secrets/**
+**/*.secrets.*/**
+
+# Created by https://www.toptal.com/developers/gitignore/api/windows,powershell,visualstudiocode,go
+# Edit at https://www.toptal.com/developers/gitignore?templates=windows,powershell,visualstudiocode,go
+
+### Go ###
+# If you prefer the allow list template instead of the deny list, see community template:
+# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
+#
+
+# binary output directories
+/bin/
+/dist/
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
 
 ### PowerShell ###
 # Exclude packaged modules
@@ -58,11 +99,4 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# End of https://www.toptal.com/developers/gitignore/api/windows,powershell,visualstudiocode
-
-### Go ###
-# Build output / local dev binaries (see docs/plans/go-rewrite.md)
-/bin/
-/dist/
-*.test
-*.out
+# End of https://www.toptal.com/developers/gitignore/api/windows,powershell,visualstudiocode,go

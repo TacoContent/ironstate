@@ -1,0 +1,65 @@
+package engine
+
+import (
+	"bytes"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/TacoContent/ironstate/internal/ui"
+)
+
+func withColorDisabled(t *testing.T) {
+	t.Helper()
+	prev := ui.Enabled
+	ui.Enabled = false
+	t.Cleanup(func() { ui.Enabled = prev })
+}
+
+func TestComputeStats(t *testing.T) {
+	results := []Result{
+		{Action: ActionInstall, Apply: true},
+		{Action: ActionUninstall, Apply: true},
+		{Action: ActionSkip},
+		{Action: ActionSkip},
+		{Action: ActionInstall, Apply: true, Failed: true},
+	}
+	stats := ComputeStats(results)
+	if stats.Total != 5 || stats.Installed != 1 || stats.Uninstalled != 1 || stats.Skipped != 2 || stats.Failed != 1 {
+		t.Fatalf("ComputeStats = %+v, want {Total:5 Installed:1 Uninstalled:1 Skipped:2 Failed:1}", stats)
+	}
+}
+
+func TestPrintSummary(t *testing.T) {
+	withColorDisabled(t)
+	var buf bytes.Buffer
+	stats := Stats{Total: 3, Installed: 1, Uninstalled: 1, Skipped: 1, Failed: 0}
+	if err := PrintSummary(&buf, stats, 250*time.Millisecond); err != nil {
+		t.Fatalf("PrintSummary error: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{"Summary", "Installed", "Uninstalled", "Skipped", "Failed", "Total: 3 task(s)"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("PrintSummary output missing %q; got:\n%s", want, out)
+		}
+	}
+}
+
+func TestPrintTableAlignsWithoutColor(t *testing.T) {
+	withColorDisabled(t)
+	var buf bytes.Buffer
+	results := []Result{
+		{Module: "winget", Package: "Git.Git", State: "present", Action: ActionInstall, Apply: true},
+		{Module: "fact", Package: "computer_name", State: "present", Action: ActionSkip},
+		{Module: "eget", Package: "grype", State: "present", Action: ActionInstall, Apply: true, Failed: true},
+	}
+	if err := PrintTable(&buf, results); err != nil {
+		t.Fatalf("PrintTable error: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{"MODULE", "Git.Git", "installed", "skip", "failed"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("PrintTable output missing %q; got:\n%s", want, out)
+		}
+	}
+}

@@ -6,6 +6,7 @@ package cli
 import (
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/TacoContent/ironstate/internal/pathutil"
 	"github.com/TacoContent/ironstate/internal/tasks"
 	"github.com/TacoContent/ironstate/internal/template"
+	"github.com/TacoContent/ironstate/internal/ui"
 )
 
 // Execute builds and runs the root command.
@@ -46,6 +48,7 @@ func newRootCommand() (*cobra.Command, error) {
 	flags.StringSlice("tags", nil, "restrict processing to tasks/actions carrying any of these tags")
 	flags.String("output", "table", "result output format: table|json")
 	flags.BoolP("verbose", "v", false, "verbose output")
+	flags.Bool("no-color", false, "disable colored output")
 
 	cmd.AddCommand(newVersionCommand())
 	cmd.AddCommand(newFiltersCommand())
@@ -73,6 +76,10 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	if noColor, _ := cmd.Flags().GetBool("no-color"); noColor {
+		ui.Enabled = false
+	}
+	tableOutput := cfg.Output != "json"
 
 	resolvedFile := pathutil.ResolveUserPath(cfg.File)
 	doc, err := packages.LoadHierarchy(resolvedFile)
@@ -84,6 +91,12 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	hostFacts := facts.Gather()
 	vars := model.Vars(docMap)
 	fset := filters.New()
+
+	if tableOutput {
+		if err := ui.PrintFacts(cmd.OutOrStdout(), hostFacts); err != nil {
+			return NewRunError(err)
+		}
+	}
 
 	repoRoot := filepath.Dir(resolvedFile)
 	interpreters := cfg.FilterInterpreters
@@ -127,13 +140,16 @@ func runApply(cmd *cobra.Command, _ []string) error {
 
 	filtered := engine.FilterByTags(leaves, cfg.Tags)
 
+	start := time.Now()
 	results, stopped, err := engine.Run(filtered, engine.Options{
 		Handlers: handlers.All(),
 		Facts:    hostFacts,
 		Vars:     vars,
 		Filters:  fset,
 		Apply:    cfg.Apply,
+		Verbose:  cfg.Verbose,
 	})
+	elapsed := time.Since(start)
 	if err != nil {
 		return NewRunError(err)
 	}
@@ -144,6 +160,9 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		}
 	} else {
 		if err := engine.PrintTable(cmd.OutOrStdout(), results); err != nil {
+			return NewRunError(err)
+		}
+		if err := engine.PrintSummary(cmd.OutOrStdout(), engine.ComputeStats(results), elapsed); err != nil {
 			return NewRunError(err)
 		}
 	}

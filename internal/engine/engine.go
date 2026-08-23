@@ -17,6 +17,7 @@ import (
 	"github.com/TacoContent/ironstate/internal/model"
 	"github.com/TacoContent/ironstate/internal/tasks"
 	"github.com/TacoContent/ironstate/internal/template"
+	"github.com/TacoContent/ironstate/internal/ui"
 )
 
 // Action is a resolved Install/Uninstall/Skip decision — ports
@@ -104,14 +105,27 @@ func NewState() *State {
 // missing command, a failed leaf, ...). Overridable for tests/CLI output
 // redirection, matching internal/tasks and internal/template's pattern.
 var Warn = func(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "warning: "+format+"\n", args...)
+	msg := fmt.Sprintf(format, args...)
+	fmt.Fprintln(os.Stderr, ui.Yellow("⚠ "+msg))
+}
+
+// Danger reports a genuine failure (a leaf that actually failed) in a
+// louder, red/bold style than Warn's plain yellow — the "danger color"
+// requested for failed tasks, distinct from merely-informational warnings
+// like a missing PATH command.
+var Danger = func(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	fmt.Fprintln(os.Stderr, ui.BoldRed("✖ "+msg))
 }
 
 // Info reports a normal operational line (a dispatched leaf's
-// description) — Write-Host's equivalent. Overridable for tests/CLI
-// output redirection.
+// description) — Write-Host's equivalent. Written to stderr, not stdout,
+// so live per-leaf commentary never interleaves with (and corrupts)
+// PrintTable/PrintJSON's final result output on stdout - the same
+// "chatter on stderr, data on stdout" split '--output json' needs to stay
+// pipeable. Overridable for tests/CLI output redirection.
 var Info = func(format string, args ...any) {
-	_, _ = fmt.Fprintf(os.Stdout, format+"\n", args...)
+	_, _ = fmt.Fprintf(os.Stderr, format+"\n", args...)
 }
 
 // LookPath resolves a module's backing CLI on PATH — overridable so tests
@@ -141,6 +155,7 @@ type Options struct {
 	Vars                  map[string]any
 	Filters               expr.Filters
 	Apply                 bool
+	Verbose               bool              // when true, also prints a (dim) line for every skipped/unchanged leaf
 	NoCommandCheckModules map[string]bool   // nil -> DefaultNoCommandCheckModules
 	ModuleCommandNames    map[string]string // nil -> DefaultModuleCommandNames
 }
@@ -258,7 +273,7 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State) ([]Result, bool,
 		// see docs/plans/go-rewrite.md §2/§4.10.
 		effectiveApply := opts.Apply || hasEmbeddedShell || module == "assert"
 
-		result, err := invokePackageItem(module, leaf.Name, leaf.Item, handler, flatContext, opts.Filters, effectiveApply)
+		result, err := invokePackageItem(module, leaf.Name, leaf.Item, handler, flatContext, opts.Filters, effectiveApply, opts.Verbose)
 		if err != nil {
 			return results, false, err
 		}
@@ -279,9 +294,9 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State) ([]Result, bool,
 
 		if failed {
 			if leaf.ContinueOnError {
-				Warn("[%s] %s failed (rc=%d); continuing (continue_on_error).", module, label, result.Exec.RC)
+				Danger("[%s] %s failed (rc=%d); continuing (continue_on_error).", module, label, result.Exec.RC)
 			} else {
-				Warn("[%s] %s failed (rc=%d); stopping. Set continue_on_error: true to continue past this failure.", module, label, result.Exec.RC)
+				Danger("[%s] %s failed (rc=%d); stopping. Set continue_on_error: true to continue past this failure.", module, label, result.Exec.RC)
 				return results, true, nil
 			}
 		}
@@ -362,7 +377,7 @@ func registerLeafResult(state *State, leaf tasks.Leaf, changed, failed bool, exe
 	}
 }
 
-func invokePackageItem(module, name string, item map[string]any, handler Handler, flatContext map[string]any, filters expr.Filters, apply bool) (Result, error) {
+func invokePackageItem(module, name string, item map[string]any, handler Handler, flatContext map[string]any, filters expr.Filters, apply, verbose bool) (Result, error) {
 	label := name
 	if label == "" {
 		label = itemLabel(item)
@@ -383,16 +398,25 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 		return Result{}, fmt.Errorf("%s %s: %w", module, label, err)
 	}
 
+	emoji := ui.ModuleEmoji(module)
 	exec := ExecResult{StdoutLines: []string{}, StderrLines: []string{}}
-	if action != ActionSkip {
+	if action == ActionSkip {
+		if verbose {
+			Info("%s", ui.Dim(fmt.Sprintf("%s · skip   [%s] %s (already %s)", emoji, module, label, state)))
+		}
+	} else {
 		description, err := handler.Describe(item, action, ctx)
 		if err != nil {
 			return Result{}, fmt.Errorf("%s %s: Describe: %w", module, label, err)
 		}
+		verb := "install"
+		if action == ActionUninstall {
+			verb = "remove"
+		}
 		if !apply {
-			Info("[DryRun][%s] %s", module, description)
+			Info("%s %s [%s] %s", emoji, ui.BrightCyan(fmt.Sprintf("› would %s", verb)), module, description)
 		} else {
-			Info("[%s] %s", module, description)
+			Info("%s %s [%s] %s", emoji, ui.Bold(fmt.Sprintf("→ %sing", verb)), module, description)
 			var execErr error
 			if action == ActionInstall {
 				exec, execErr = handler.Install(item, name, ctx)
@@ -401,8 +425,10 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 			}
 			if execErr != nil {
 				msg := execErr.Error()
-				Warn("[%s] %s threw: %s", module, label, msg)
+				Danger("[%s] %s threw: %s", module, label, msg)
 				exec = ExecResult{RC: 1, Stderr: msg, StderrLines: []string{msg}}
+			} else if exec.RC == 0 {
+				Info("%s %s [%s] %s", emoji, ui.BoldGreen(fmt.Sprintf("✔ %sed", verb)), module, label)
 			}
 		}
 	}

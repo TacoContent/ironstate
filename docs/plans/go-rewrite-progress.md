@@ -84,9 +84,59 @@ root layout is unchanged (`site.yml`, `hosts/`, `packages/`, `roles/`, `variable
       (build/run/introspection commands + the exit-code contract); the full
       README rewrite and marking `ironstate.ps1` legacy is deliberately deferred to
       Phase 7 (cutover), not attempted here — see "Next concrete step" below.
+- [x] Cross-platform facts: `internal/facts.Gather()` now also returns `platform`
+      (`runtime.GOOS`), `arch` (`runtime.GOARCH`), `os_family` (new `osFamily()` helper:
+      windows→"windows", linux/darwin/bsd-family→"unix", else→goos itself).
+- [x] CLI output/UX overhaul (additive polish, not a phase from the master plan): new
+      `internal/ui` package (ANSI color helpers gated by `ui.Enabled`, auto-detected via
+      `NO_COLOR`/`IRONSTATE_NO_COLOR` env vars + `golang.org/x/term.IsTerminal`, override
+      via new `--no-color` flag; per-module emoji map; `PrintFacts` host-facts panel; a
+      Windows-only `console_windows.go` that calls `SetConsoleOutputCP(65001)` at init so
+      the emoji/box-drawing glyphs don't render as mojibake in a real Windows console).
+      `internal/engine`: `Options.Verbose` (prints a dim skip line per already-satisfied
+      leaf when set — previously totally silent); per-leaf dispatch lines now show a
+      module emoji + colored intent verb (cyan "would install/remove" for dry-run, bold
+      "installing/removing" then a bold-green "installed/removed" completion line for a
+      real apply); new `Danger` var (bold red, `os.Stderr`) for genuine leaf failures,
+      kept distinct from `Warn`'s plain-yellow lesser warnings (missing PATH command,
+      etc.); `Info` moved from `os.Stdout` to `os.Stderr` — **this was a real
+      pre-existing bug fix**, not just polish: `Info` writing dispatch commentary to
+      stdout interleaved with (and corrupted) `--output json`'s result array on the same
+      stream, defeating the entire point of a machine-parseable output mode. `internal/
+      engine/output.go`: `PrintTable` rewritten to hand-roll column-width padding (NOT
+      `text/tabwriter`, which counts raw ANSI escape bytes toward cell width and breaks
+      alignment across differently-colored rows) with an emoji + colored STATUS column
+      (bright green "installed/removed", cyan "would install/remove", dim gray "skip",
+      bold red "failed" — "changed reads brighter than unchanged, failures read as
+      danger" per the request); new `Stats`/`ComputeStats`/`PrintSummary` for a final
+      colored stats block with elapsed wall-clock time. `internal/cli/root.go`: prints
+      `ui.PrintFacts` right after `facts.Gather()`, wires `cfg.Verbose` into
+      `engine.Options.Verbose`, times the run and calls `engine.PrintSummary` after
+      dispatch. The facts panel and summary are both skipped entirely in `--output json`
+      mode so that stream stays clean/pipeable (`results | jq` etc.) — verified live.
 - [ ] Phase 7 — cutover
 
 ## Gotchas / findings worth knowing before continuing
+
+- **The `create_file` tool sometimes duplicates the first `package X` line** when
+  creating a brand-new Go file — happened again for `internal/ui/ui.go` and
+  `internal/ui/ui_test.go` during the CLI output overhaul. Always read back the first
+  few lines right after `create_file` and fix if doubled; `gofmt`/`go build` will fail
+  loudly with "expected declaration, found 'package'" if missed.
+- **Never build a colored table with `text/tabwriter`** — it counts raw ANSI escape
+  code bytes as part of a cell's width, so two rows with different-length color codes
+  (e.g. bold-red "failed" vs. plain-green "installed") misalign visually even though the
+  *visible* text lengths differ as expected. Pad the plain (uncolored) string to the
+  target width first, THEN wrap the already-padded string in the color function. Same
+  pitfall bit `PrintSummary`'s "Failed" row the first pass (fixed by writing a small
+  `statLine` closure that pads-then-colors).
+- **A Windows console needs `SetConsoleOutputCP(65001)` for real UTF-8 rendering** —
+  without it, PowerShell/cmd renders emoji and box-drawing characters as mojibake
+  (`ΓöÇ` for `─`, `≡ƒºí` for an emoji) even though the underlying bytes are correct
+  UTF-8. Note this only fixes *real interactive console* sessions — redirected/piped
+  output (`ironstate.exe ... | Select-Object`) is decoded by the *parent* process's own
+  encoding assumptions and can still show mojibake in that case; that's expected and not
+  something the child process can control.
 
 - **`include: { name: <path> }` resolves to `<repoRoot>/<path>/main.yml`** — ONE unified
   mechanism. `packages/`, `roles/`, `hosts/<sub>/`, `tasks/wsl-shim/` are just naming

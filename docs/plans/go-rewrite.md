@@ -22,6 +22,12 @@ just a quick at-a-glance progress marker kept in sync with it.
 | 6 — Hardening (SBOM/packaging/signing) | ✅ Done — `.github/workflows/release.yml` (tag-triggered `goreleaser release`, `syft`/`cosign` installed via actions), `.goreleaser.yaml`'s `signs:` block (keyless cosign signing of `checksums.txt` via GitHub OIDC) alongside the existing `sboms:` block, `actions/attest-build-provenance` on every release artifact, `.github/dependabot.yml` (gomod + github-actions, weekly). `golangci-lint run ./...` reduced from 40 findings to 0 (real zip-slip path-traversal fix in `zip.go`'s extraction, `go.mod`'s `go` directive bumped `1.25.0` → `1.26.7` to clear 5 stdlib CVEs `govulncheck` found, plus errcheck/gosec/unused/staticcheck cleanup — see the progress doc's Phase 6 notes for the full list). `go build`/`go vet`/`gofmt`/`go test ./...` green on `windows`, cross-compiled `linux`/`darwin`. README got a light-touch "Go binary (preview)" section + documented exit-code contract; the full README rewrite/PowerShell-legacy marking is deliberately deferred to Phase 7 (cutover), not done here. |
 | 7 — Cutover | ⬜ Not started |
 
+Additive work beyond the phase list above (see progress doc for full detail): cross-platform
+`platform`/`arch`/`os_family` facts, and a CLI output/UX overhaul (new `internal/ui` package —
+colors, emoji, `--no-color`, Windows console UTF-8 fix; `engine.Options.Verbose`; colored/emoji
+`PrintTable`; `PrintFacts`/`PrintSummary` panels; moved `Info` to stderr so `--output json`
+stays pipeable).
+
 Detailed engineering notes on what was built, deviations found, and bugs caught during
 implementation are kept in session/repo memory (not duplicated into this document) —
 ask to have them folded in here if this plan is being handed off.
