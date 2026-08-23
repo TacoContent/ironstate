@@ -59,3 +59,11 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/windows,powershell,visualstudiocode
+
+### Go ###
+# Build output / local dev binaries (see docs/plans/go-rewrite.md)
+/bin/
+/dist/
+*.test
+*.out
+

@@ -1,10 +1,30 @@
 # IronState Go Rewrite — Master Plan
 
-Status: DRAFT (reviewed once via rubber-duck subagent, see [Revision Log](#revision-log))
+Status: IN PROGRESS (reviewed once via rubber-duck subagent, see [Revision Log](#revision-log))
 Owner: (fill in)
 Target: replace `ironstate.ps1` + `modules/*.psm1` with a single Go binary, byte-for-byte
 compatible with the current `site.yml`/`hosts/`/`variables/`/`packages/`/`roles/` document
 model and CLI behavior.
+
+## Implementation status
+
+The phased breakdown lives in [§10](#10-migration--rollout-plan-phased); this table is
+just a quick at-a-glance progress marker kept in sync with it.
+
+| Phase | Status |
+| --- | --- |
+| 0 — Scaffolding | ✅ Done — `go.mod`, `cmd/ironstate`, cobra/viper CLI (`version`/`filters list`/`doctor` + root flags), `.goreleaser.yaml`, `.github/workflows/ci.yml`+`codeql.yml`, `.golangci.yml` |
+| 1 — Core engine, no I/O | ✅ Done — `internal/expr` (lexer/parser/AST/evaluator + fuzz tests), `internal/template` (span scan/expand, soft-vs-strict, boundary keys), `internal/filters` (all 21 built-ins) |
+| 2 — Document loading & flattening | ⬜ Not started — `internal/packages`, `internal/tasks`, `internal/facts` |
+| 3 — Engine + low-risk handlers | ⬜ Not started |
+| 4 — Package-manager handlers + `shell` + template engines | ⬜ Not started |
+| 5 — Filter plugin system (script filters) | ⬜ Not started |
+| 6 — Hardening (SBOM/packaging/signing) | ⬜ Partially scaffolded — `.goreleaser.yaml` has an `sboms:` block, not yet wired into a real `release.yml` |
+| 7 — Cutover | ⬜ Not started |
+
+Detailed engineering notes on what was built, deviations found, and bugs caught during
+implementation are kept in session/repo memory (not duplicated into this document) —
+ask to have them folded in here if this plan is being handed off.
 
 ## 1. Goals & non-goals
 

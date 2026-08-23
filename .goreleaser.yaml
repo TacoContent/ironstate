@@ -1,0 +1,60 @@
+version: 2
+
+project_name: ironstate
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: ironstate
+    main: ./cmd/ironstate
+    binary: ironstate
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/TacoContent/ironstate/internal/cli.version={{.Version}}
+      - -X github.com/TacoContent/ironstate/internal/cli.commit={{.ShortCommit}}
+      - -X github.com/TacoContent/ironstate/internal/cli.date={{.Date}}
+
+archives:
+  - id: ironstate
+    formats: [zip]
+    format_overrides:
+      - goos: linux
+        formats: [tar.gz]
+      - goos: darwin
+        formats: [tar.gz]
+    files:
+      - README.md
+      - LICENSE*
+      - site.schema.json
+
+checksum:
+  name_template: checksums.txt
+
+# SBOM per artifact — docs/plans/go-rewrite.md §7. Requires `syft` on the
+# runner (installed as a step in .github/workflows/release.yml, added
+# alongside this file once Phase 6 wires up the release workflow).
+sboms:
+  - id: ironstate-sbom
+    artifacts: archive
+
+snapshot:
+  version_template: "{{ .Tag }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
