@@ -141,7 +141,7 @@ func invokeZipDownloadAndExtract(item map[string]any) error {
 			engine.Danger("zip entry %q is unsafe; aborting extraction", name)
 			return fmt.Errorf("zip entry %q is unsafe", name)
 		}
-		destPath, err := safeJoin(dest, name)
+		destPath, err := safeExtractPath(dest, name)
 		if err != nil {
 			engine.Danger("zip entry %q escapes destination %s; aborting extraction: %v", name, dest, err)
 			return fmt.Errorf("zip entry %q escapes destination %s: %w", name, dest, err)
@@ -174,25 +174,32 @@ func isSafeZipEntryName(name string) bool {
 	return cleanZipName != ".." && !strings.HasPrefix(cleanZipName, "../")
 }
 
-// safeJoin joins dest and name, rejecting a zip entry whose name would
-// resolve outside dest - the standard "zip-slip" path-traversal guard for
-// archive extraction. Zip entry names are always '/'-separated per the
-// zip format spec (an embedded '\' is just a literal character, never a
-// path separator there) - normalized to '/' first so a crafted '..\'
-// entry can't smuggle a traversal past a check that only looks for
-// '../'. The final prefix check against the joined+cleaned destination
-// is kept as a last line of defense beyond isSafeZipEntryName's checks.
-func safeJoin(dest, name string) (string, error) {
+// safeExtractPath resolves a zip entry output path and enforces that the
+// resulting absolute path stays within dest.
+func safeExtractPath(dest, name string) (string, error) {
 	if !isSafeZipEntryName(name) {
 		return "", fmt.Errorf("illegal file path")
 	}
+
 	cleanZipName := path.Clean(strings.ReplaceAll(name, "\\", "/"))
 	joined := filepath.Join(dest, cleanZipName)
-	cleanDest := filepath.Clean(dest) + string(os.PathSeparator)
-	if joined != filepath.Clean(dest) && !strings.HasPrefix(filepath.Clean(joined)+string(os.PathSeparator), cleanDest) {
+
+	baseAbs, err := filepath.Abs(dest)
+	if err != nil {
+		return "", err
+	}
+	targetAbs, err := filepath.Abs(joined)
+	if err != nil {
+		return "", err
+	}
+
+	baseAbs = filepath.Clean(baseAbs)
+	targetAbs = filepath.Clean(targetAbs)
+	baseWithSep := baseAbs + string(os.PathSeparator)
+	if targetAbs != baseAbs && !strings.HasPrefix(targetAbs+string(os.PathSeparator), baseWithSep) {
 		return "", fmt.Errorf("illegal file path")
 	}
-	return joined, nil
+	return targetAbs, nil
 }
 
 func extractZipEntry(entry *zip.File, destPath string) error {
