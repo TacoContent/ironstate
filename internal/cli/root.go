@@ -85,6 +85,21 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	vars := model.Vars(docMap)
 	fset := filters.New()
 
+	repoRoot := filepath.Dir(resolvedFile)
+	interpreters := cfg.FilterInterpreters
+	if len(interpreters) == 0 {
+		interpreters = filters.DefaultInterpreters()
+	}
+	filtersDir := cfg.FiltersDir
+	if !filepath.IsAbs(filtersDir) {
+		filtersDir = filepath.Join(repoRoot, filtersDir)
+	}
+	scriptPool, _, err := filters.DiscoverScriptFilters(fset, filtersDir, interpreters)
+	if err != nil {
+		return NewLoadError(err)
+	}
+	defer scriptPool.Close()
+
 	// Whole-document '-Soft' pass: resolves facts/vars now, leaves any
 	// bare id/fact reference untouched for the per-leaf strict pass in
 	// internal/engine, once that registry actually exists.
@@ -98,7 +113,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		return NewLoadError(err)
 	}
 
-	root := filepath.Dir(resolvedFile)
+	root := repoRoot
 	leaves, err := tasks.Expand(taskList, tasks.Options{
 		ModuleNames:  handlers.AllModuleNames,
 		PackagesRoot: root,

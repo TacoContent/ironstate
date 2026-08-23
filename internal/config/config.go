@@ -18,6 +18,9 @@ type Config struct {
 	Tags    []string // --tags
 	Output  string   // --output table|json
 	Verbose bool     // -v/--verbose
+
+	FiltersDir         string              // directory scanned for external script filters
+	FilterInterpreters map[string][]string // script extension -> interpreter argv prefix
 }
 
 // Load resolves Config from flags (highest precedence), IRONSTATE_* env
@@ -40,8 +43,14 @@ func Load(flags *pflag.FlagSet) (*Config, error) {
 
 	v.SetDefault("file", "site.yml")
 	v.SetDefault("output", "table")
+	v.SetDefault("filters.dir", "modules/Filters")
 
 	if err := v.BindPFlags(flags); err != nil {
+		return nil, err
+	}
+
+	var interpreters map[string][]string
+	if err := v.UnmarshalKey("filters.interpreters", &interpreters); err != nil {
 		return nil, err
 	}
 
@@ -51,5 +60,8 @@ func Load(flags *pflag.FlagSet) (*Config, error) {
 		Tags:    v.GetStringSlice("tags"),
 		Output:  v.GetString("output"),
 		Verbose: v.GetBool("verbose"),
+
+		FiltersDir:         v.GetString("filters.dir"),
+		FilterInterpreters: interpreters,
 	}, nil
 }

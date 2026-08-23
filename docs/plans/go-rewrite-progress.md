@@ -48,9 +48,25 @@ root layout is unchanged (`site.yml`, `hosts/`, `packages/`, `roles/`, `variable
       delegate to the real `shell`/`template` implementations, closing the two Phase 3
       stand-in gaps. All new code build-tag-clean on both `windows` and (cross-compiled)
       `linux`, full test suite green including a real-HKCU registry round-trip test.
-- [ ] Phase 5 — filter plugin system: external-script filter loader + JSON-over-stdio
-      shim + persistent worker pool, `filters list`/`doctor` wiring for discovered
-      script filters
+- [x] Phase 5 — `internal/filters`'s script-filter adapter: `embed/shim.ps1` (embedded via
+      `go:embed`, extracted to a temp file once per process) speaks a JSON-over-stdio
+      protocol (`{"value":...,"args":[...]}` in, `{"result":...}`/`{"error":"..."}` out,
+      one line each) to an unmodified target `modules/Filters/*.ps1` file, so every
+      existing filter script needs zero changes. `scriptWorker` is a persistent,
+      lazily-started interpreter subprocess kept warm for the process lifetime (not
+      spawned per call), pooled per filter name by `Pool`. `DiscoverScriptFilters` scans
+      a directory and registers each recognized script under its base name — but only
+      if `Registry.Has` reports no built-in (or earlier-discovered) filter of that name
+      already claims it. `DefaultInterpreters` maps `.ps1 -> pwsh -NoProfile -File`
+      (the only shipped interpreter/shim pair today — see "Next concrete step" below for
+      the multi-language extension point). `ironstate filters list --dir <dir>` and
+      `ironstate doctor --filters-dir <dir>` both report discovered script filters;
+      `internal/cli/root.go`'s real run wires discovery in too (`cfg.FiltersDir`/
+      `cfg.FilterInterpreters`, resolved relative to the site file's directory). Verified
+      against a live `pwsh`-backed round trip (a net-new custom filter dropped in a temp
+      dir, actually invoked end-to-end — not just discovery), not just fakes; unit tests
+      use an injectable `startWorkerProcess` var (in-memory `io.Pipe` fakes) so the suite
+      never depends on `pwsh` being installed.
 - [ ] Phase 6 — hardening: full test matrix green, wire `.goreleaser.yaml`'s `sboms:`
       block into an actual `release.yml`, signing (cosign),
       `actions/attest-build-provenance`
@@ -166,23 +182,52 @@ commit/push without being asked.
 
 ## Next concrete step
 
-Start Phase 5 (external-script filter loader + JSON-over-stdio shim + persistent worker
-pool, `filters list`/`doctor` wiring for discovered script filters). Key things the next
-agent should know before starting:
+Start Phase 6 (hardening: full test matrix, SBOM/provenance/signing wired into a real
+`release.yml`, docs updated). Key things the next agent should know before starting:
 
-- **Phase 4 smoke test**: `go run ./cmd/ironstate --file site.yml --tags git,development`
-  (dry-run) runs end-to-end without crashing: fact pass runs first (the `shell`-backed
-  `wsl_installed`/`pwsh_system_profile*` facts now describe as `via 'pwsh'`, confirming
-  `fact`'s embedded shell delegates to the real `shell` handler, not the old Phase 3
-  `runPwshCommand` stand-in — that stand-in and its `splitLines` helper were deleted),
-  then the same pre-existing `Verify Local Binaries Path Fact` assert stops the run with
-  exit code 1 (`vars.local.bin_path` unset in a bare dev checkout) before ever reaching
-  the git-role's `winget`/`eget`/`template`/`blockinfile` tasks later in document order —
-  expected, not a port bug (same as the Phase 3 smoke test note). Real dispatch of
-  `template`/`blockinfile.template`/package-manager argv is instead covered by unit tests
-  (`internal/handlers/template_test.go`, `internal/handlers/packagemanagers_test.go`,
-  `internal/templateengines/jinja_test.go` — the latter exercises the exact nested
-  `{% for %}` construct used by `roles/development/git/templates/gitconfig.enterprise.urls.j2`).
+- **Phase 5 smoke test**: verified against a *live* `pwsh`-backed round trip, not just
+  fakes — a net-new custom filter (`reverse.ps1`, reversing a string) dropped into a
+  scratch directory was discovered via `ironstate filters list --dir <dir>` (reported as
+  `script`, distinct from the 21 `built-in` names — none of the real
+  `modules/Filters/*.ps1` files ever show as `script`, since the Go built-ins always win)
+  and then actually invoked end-to-end (`filters.DiscoverScriptFilters` +
+  `Registry.Apply("reverse", "hello", nil)` → `"olleh"`), proving the embedded shim +
+  persistent worker + JSON protocol all work against a real `pwsh`, not just the
+  in-memory-pipe fakes the unit tests use.
+- **`internal/filters/script.go`'s `shimPathFor` only knows `.ps1` today** — extracts the
+  single embedded `embed/shim.ps1` to a temp file once per process (`sync.Once`). Adding
+  a second scripting language (e.g. Python) needs BOTH a new `DefaultInterpreters()`
+  entry (extension → interpreter argv prefix) AND a new shim script written in that
+  language's own idiom (a `.ps1` shim can't run a `.py` target file) — `shimPathFor`'s
+  `switch` is the one place to extend, not `DefaultInterpreters` alone. No real second
+  language is needed today (only `.ps1` filters exist in this repo), so this is a
+  documented extension point, not a gap to close.
+- **`internal/config.Config.FilterInterpreters` is nil unless a user's
+  `ironstate.yaml`/`.ironstate.yaml` sets `filters.interpreters`** (via
+  `viper.UnmarshalKey` — deliberately not hardcoded into the viper defaults, to keep
+  `internal/config` free of an `internal/filters` import). Every caller (`root.go`,
+  `filters.go`, `doctor.go`) falls back to `filters.DefaultInterpreters()` when empty —
+  keep doing that rather than baking a default into `config.Load` itself.
+- **`internal/filters`'s script-filter worker pool is the one place in this whole
+  codebase with real concurrency** (docs/plans/go-rewrite.md §4.5/§6) — CI's `race` job
+  already scopes `go test ./internal/filters/... -race` (see `.github/workflows/ci.yml`,
+  set up back in Phase 0). `-race` does **not** work on a Windows dev machine without a
+  C toolchain (`CGO_ENABLED=1` required) — this was re-confirmed this session; don't
+  waste time trying to run it locally on Windows, trust CI's `ubuntu-latest` leg instead.
+  `TestPoolConcurrentDistinctWorkersDoNotBlockEachOther` in
+  `internal/filters/script_test.go` is the test that actually exercises this.
+- **Re-run the `eps`/`herestring` and `shell.host: pwsh` native-merge grep audits**
+  mentioned in the master plan's §10/§11 as part of Phase 6 sign-off, in case either
+  gained real usage since Phase 4 landed — they hadn't as of Phase 4's own re-check.
+- A recurring tool quirk hit again this session (Phase 5): creating a **new** file
+  sometimes gets the tool to emit a duplicated leading `package foo` line — same
+  quirk noted in the Phase 3/4 notes above, not scoped to any particular file-content
+  shape. Every new file this session (`internal/filters/script.go`, `pool.go`,
+  `embed.go`) was checked immediately after creation and none were affected this time,
+  but keep checking every time regardless.
+- All Phase 5 code is build-tag-clean on both `windows` (native build) and `linux`
+  (cross-compiled via `$env:GOOS="linux"; go build ./...`), full test suite green.
+
 - **Phase 4 deviations (documented, not silent)**:
   1. **`shell`'s `pwsh` host is always a subprocess in Go** (`pwsh -NoLogo -NoProfile
      -File <tempfile> args...`), never the original's in-process execution — Go has no
@@ -249,4 +294,3 @@ agent should know before starting:
 - All Phase 4 code is build-tag-clean on both `windows` (native build) and `linux`
   (cross-compiled via `$env:GOOS="linux"; go build ./...`) — verified before considering
   the phase done, per the working-locally checklist below.
-
