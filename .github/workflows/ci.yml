@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0 # needed for golangci-lint's changelog generation
           persist-credentials: false # avoid exposing GITHUB_TOKEN to submodules
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - uses: golangci/golangci-lint-action@v6
@@ -33,7 +33,7 @@ jobs:
         with:
           fetch-depth: 0 # needed for govulncheck's changelog generation
           persist-credentials: false # avoid exposing GITHUB_TOKEN to submodules
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: go vet ./...
@@ -56,7 +56,7 @@ jobs:
         with:
           fetch-depth: 0 # needed for coverage's changelog generation
           persist-credentials: false # avoid exposing GITHUB_TOKEN to submodules
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: go build ./...
@@ -75,7 +75,7 @@ jobs:
         with:
           fetch-depth: 0 # needed for coverage's changelog generation
           persist-credentials: false # avoid exposing GITHUB_TOKEN to submodules
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: go test ./internal/filters/... -race
@@ -87,7 +87,7 @@ jobs:
         with:
           fetch-depth: 0 # needed for coverage's changelog generation
           persist-credentials: false # avoid exposing GITHUB_TOKEN to submodules
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: go test ./internal/expr/... -run xxx -fuzz FuzzParse -fuzztime 20s
@@ -100,7 +100,7 @@ jobs:
         with:
           fetch-depth: 0 # needed for goreleaser's changelog generation
           persist-credentials: false # avoid exposing GITHUB_TOKEN to submodules
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - uses: goreleaser/goreleaser-action@v6
