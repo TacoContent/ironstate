@@ -1,0 +1,6 @@
+---
+
+tasks:
+  - name: Some Windows Only Task (hosts/)
+    shell:
+      command: echo "This is a Windows only task (hosts/)"

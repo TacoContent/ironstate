@@ -7,12 +7,9 @@
 package template
 
 import (
-	"fmt"
-	"os"
 	"strings"
 
 	"github.com/TacoContent/ironstate/internal/expr"
-	"github.com/TacoContent/ironstate/internal/ui"
 )
 
 type omitMarker struct{}
@@ -29,15 +26,15 @@ func IsOmit(v any) bool {
 	return ok
 }
 
-// Warn reports an unresolved-reference warning, matching ironstate.ps1's
-// Write-Warning usage. Overridable for tests/CLI output redirection.
-// Styled the same as internal/engine's Warn (yellow, stderr) so an
-// unresolved-template warning reads consistently with every other
-// warning in a run.
-var Warn = func(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	fmt.Fprintln(os.Stderr, ui.Yellow("⚠ "+msg))
-}
+// Warn reports an unresolved-reference warning. Hidden by default: a
+// still-unresolved '${{ }}' reference at this soft/strict resolution
+// point is routinely expected (e.g. a value that depends on an id/loop
+// item not yet in scope) rather than a genuine problem, so it's noisy to
+// surface unconditionally - unlike internal/engine's Warn, which is for
+// operational warnings the user actually needs to see. No flag/config to
+// show these has been added yet (deliberately deferred); overridable for
+// tests in the meantime.
+var Warn = func(format string, args ...any) {}
 
 // ExpandValue expands '${{ ... }}' occurrences in value. Non-string
 // values pass through unchanged. label names the owning
@@ -84,6 +81,17 @@ func resolveSoft(exprText string, ctx map[string]any, filters expr.Filters, soft
 	}
 	v, err := expr.Eval(node, ctx, filters)
 	if err != nil {
+		if soft {
+			// A soft pass is a speculative, whole-document walk that runs
+			// ahead of 'when' filtering/task flattening - an expression
+			// that errors right now (e.g. a script filter whose
+			// interpreter isn't on this machine) may belong to a leaf
+			// that 'when' will end up skipping entirely once tasks are
+			// flattened. Defer it for the real per-leaf strict pass
+			// (which only ever runs for a leaf that actually dispatches)
+			// instead of aborting this whole speculative pass.
+			return nil, true, nil
+		}
 		return nil, false, err
 	}
 	return v, false, nil

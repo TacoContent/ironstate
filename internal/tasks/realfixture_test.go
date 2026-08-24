@@ -99,13 +99,13 @@ func TestFlattenRealSiteYAMLWithHostOverlay(t *testing.T) {
 	t.Setenv("COMPUTERNAME", "KRAYT")
 	t.Setenv("USERNAME", "nonexistent-test-user")
 
-	doc, err := packages.LoadHierarchy(sitePath)
+	f := facts.Gather()
+	doc, err := packages.LoadHierarchy(sitePath, f)
 	if err != nil {
 		t.Fatalf("LoadHierarchy error: %v", err)
 	}
 	docMap := model.AsMap(doc)
 
-	f := facts.Gather()
 	v := model.Vars(docMap)
 	fset := filters.New()
 

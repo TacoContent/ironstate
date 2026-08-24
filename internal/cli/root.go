@@ -42,8 +42,9 @@ func newRootCommand() (*cobra.Command, error) {
 	}
 
 	flags := cmd.Flags()
-	flags.String("file", "site.yml", "path to the YAML task document")
-	flags.String("packages-file", "", "deprecated alias for --file")
+	flags.String("playbook", "", "path to the site/main YAML document, or a directory/bare name to search for one (site.yml, main.yml, etc.); defaults to the current directory")
+	flags.StringArray("vars-file", nil, "additional vars document to merge in on top of the auto-detected hostname/architecture/os_family/platform chain, before --var (repeatable; later files win on overlapping keys)")
+	flags.StringArray("var", nil, "override a var by dotted key path: --var key=value (repeatable, highest precedence)")
 	flags.Bool("apply", false, "actually apply changes (default: dry-run)")
 	flags.StringSlice("tags", nil, "restrict processing to tasks/actions carrying any of these tags")
 	flags.String("output", "table", "result output format: table|json")
@@ -59,15 +60,9 @@ func newRootCommand() (*cobra.Command, error) {
 }
 
 func loadConfig(cmd *cobra.Command) (*config.Config, error) {
-	packagesFile, _ := cmd.Flags().GetString("packages-file")
 	cfg, err := config.Load(cmd.Flags())
 	if err != nil {
 		return nil, NewLoadError(err)
-	}
-	// --packages-file is a deprecated alias for --file; only honored if
-	// --file was left at its default and --packages-file was actually set.
-	if packagesFile != "" && !cmd.Flags().Changed("file") {
-		cfg.File = packagesFile
 	}
 	return cfg, nil
 }
@@ -96,15 +91,48 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		return NewLoadError(err)
 	}
 
-	resolvedFile := pathutil.ResolveUserPath(cfg.File)
-	doc, err := packages.LoadHierarchy(resolvedFile)
+	resolvedFile, err := packages.ResolvePlaybookPath(cfg.Playbook)
+	if err != nil {
+		return NewLoadError(err)
+	}
+
+	hostFacts := facts.Gather()
+	doc, err := packages.LoadHierarchy(resolvedFile, hostFacts)
 	if err != nil {
 		return NewLoadError(err)
 	}
 	docMap := model.AsMap(doc)
+	repoRoot := filepath.Dir(resolvedFile)
 
-	hostFacts := facts.Gather()
+	// --vars-file is repeatable: each extra vars document merges in, in
+	// the order given, after the auto-detected hostname/architecture/
+	// os_family/platform chain (and the legacy per-username overlay) so
+	// they win on overlapping keys - a later --vars-file wins over an
+	// earlier one - but all before --var (the most explicit override of
+	// all).
+	for _, raw := range cfg.VarsFiles {
+		varsFilePath := pathutil.ResolveUserPath(raw)
+		overlay, err := packages.LoadFile(varsFilePath, repoRoot)
+		if err != nil {
+			return NewLoadError(err)
+		}
+		overlayMap, ok := overlay.(map[string]any)
+		if !ok {
+			return NewLoadError(fmt.Errorf("--vars-file %s must use the explicit 'tasks:'/'vars:' mapping form", varsFilePath))
+		}
+		docMap = packages.MergeDocuments(docMap, overlayMap)
+	}
+
 	vars := model.Vars(docMap)
+	for _, raw := range cfg.VarOverrides {
+		key, value, err := model.ParseVarOverride(raw)
+		if err != nil {
+			return NewLoadError(err)
+		}
+		model.SetVarPath(vars, key, value)
+	}
+	docMap["vars"] = vars
+
 	engine.RegisterSecretVarPaths(vars)
 	fset := filters.New()
 
@@ -114,7 +142,6 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	repoRoot := filepath.Dir(resolvedFile)
 	interpreters := cfg.FilterInterpreters
 	if len(interpreters) == 0 {
 		interpreters = filters.DefaultInterpreters()

@@ -1,22 +1,9 @@
 package facts
 
-import (
-	"os/exec"
-	"strings"
-)
+import "strings"
 
 // pwshRunner is overridable in tests.
-var pwshRunner = func() (string, error) {
-	path, err := exec.LookPath("pwsh")
-	if err != nil {
-		return "", err
-	}
-	out, err := exec.Command(path, "--version").Output() //nolint:gosec // fixed argv, discovered via LookPath, no user input
-	if err != nil {
-		return "", err
-	}
-	return string(out), nil
-}
+var pwshRunner = func() (string, error) { return runVersionProbe("pwsh", "--version") }
 
 // pwshVersion reports the newest PowerShell found on PATH, or "" if none
 // — the runner itself no longer needs to *be* PowerShell, unlike

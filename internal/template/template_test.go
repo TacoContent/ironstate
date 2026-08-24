@@ -102,6 +102,48 @@ func TestSoftPassVarsAndPackageNamespacesResolveOnTopSegmentAlone(t *testing.T) 
 	}
 }
 
+// erroringFilters lets a test force a specific filter call to fail,
+// regardless of the piped value/args.
+type erroringFilters struct{ name string }
+
+func (f erroringFilters) Apply(name string, value any, args []any) (any, error) {
+	if name == f.name {
+		return nil, errBoom
+	}
+	return fset.Apply(name, value, args)
+}
+
+var errBoom = &boomErr{}
+
+type boomErr struct{}
+
+func (*boomErr) Error() string { return "boom filter always fails" }
+
+// TestSoftPassDefersOnFilterError guards a real bug: an expression with
+// no var-path to defer on (e.g. a literal piped through a filter) used
+// to propagate a filter's error straight out of a soft pass, aborting
+// the whole document-wide walk even for a leaf 'when' would go on to
+// skip once tasks are flattened. A soft pass must instead defer it,
+// unchanged, for the later per-leaf strict pass (soft=false), which DOES
+// propagate the error - exercised separately below.
+func TestSoftPassDefersOnFilterError(t *testing.T) {
+	original := "${{ 'x' | boom }}"
+	got, err := ExpandValue(original, map[string]any{}, erroringFilters{name: "boom"}, "test", true)
+	if err != nil {
+		t.Fatalf("soft pass must defer a filter error, not propagate it: %v", err)
+	}
+	if got != original {
+		t.Fatalf("soft defer = %#v, want original string unchanged", got)
+	}
+}
+
+func TestStrictPassPropagatesFilterError(t *testing.T) {
+	_, err := ExpandValue("${{ 'x' | boom }}", map[string]any{}, erroringFilters{name: "boom"}, "test", false)
+	if err == nil {
+		t.Fatal("expected the strict (soft=false) pass to propagate the filter error")
+	}
+}
+
 func TestExpandNodeRecursesAndOmitsKeys(t *testing.T) {
 	data := map[string]any{
 		"keep": "static",

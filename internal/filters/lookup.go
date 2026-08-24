@@ -55,12 +55,18 @@ func registerLookupFilter(r *Registry) {
 // list of maps, of header-name -> value entries) off of a 'url' action's
 // pieces, so the remaining pieces are exactly the URL text to concatenate
 // - e.g. 'lookup("url", base, path, vars.api_headers)'. Every other
-// action ignores this entirely (no HTTP request to attach headers to).
-// A header value that's nil/empty is skipped rather than sent as an
-// empty header, so e.g. an unset token env var quietly omits that header
-// instead of sending "Bearer ".
+// action ignores this entirely (no HTTP request to attach headers to). A
+// nil trailing piece is treated as "no headers" too (and still stripped
+// off), not as a missing URL fragment - a headers argument computed from
+// a fact/var that's legitimately absent/null (e.g. no auth token) should
+// still let the request through headerless, matching how a nil/empty
+// value WITHIN a header map is already skipped rather than sent empty.
+// Requires at least 2 pieces so a lone URL piece that happens to be nil
+// still falls through to the normal "missing piece omits the whole
+// lookup" behavior below, rather than being misread as an absent
+// headers argument.
 func extractLookupHeaders(action string, pieces []any) ([]any, http.Header, error) {
-	if action != "url" || len(pieces) == 0 {
+	if action != "url" || len(pieces) < 2 {
 		return pieces, nil, nil
 	}
 	last := pieces[len(pieces)-1]
@@ -76,6 +82,8 @@ func extractLookupHeaders(action string, pieces []any) ([]any, http.Header, erro
 
 func parseLookupHeaders(v any) (http.Header, bool, error) {
 	switch entries := v.(type) {
+	case nil:
+		return http.Header{}, true, nil
 	case []any:
 		headers := make(http.Header)
 		for _, raw := range entries {

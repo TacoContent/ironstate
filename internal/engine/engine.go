@@ -248,6 +248,20 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State) ([]Result, bool,
 
 		flatContext := mergeFlatContext(opts.Facts, state.UserFacts, leaf.PackageVars, leaf.PackageInputs, leaf.PackagePackage, opts.Vars, state.Registry)
 
+		// 'when' is a bare-expression condition (deliberately not
+		// '${{ }}'-wrapped - see internal/conditions) evaluated directly
+		// against flatContext, with no dependency on leaf.Item's own
+		// template fields - check it BEFORE resolving those fields, so a
+		// skipped leaf never runs a field's '${{ }}' expression (and any
+		// side-effecting filter it calls) at all.
+		whenOK, err := conditions.TestWhen(leaf.When, flatContext, opts.Filters)
+		if err != nil {
+			return results, false, err
+		}
+		if !whenOK {
+			continue
+		}
+
 		// A 'fact' with an embedded 'shell' computes its value from that
 		// command's own not-yet-run result - defer 'value's template
 		// resolution until after the command runs (see runFactLeaf).
@@ -264,17 +278,32 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State) ([]Result, bool,
 
 		wrapper := map[string]any{"item": leaf.Item}
 		if err := template.ResolveInPlace(wrapper, flatContext, opts.Filters, label, false); err != nil {
-			return results, false, err
+			// A field's own '${{ }}' expression can throw for reasons
+			// that only show up at run time (e.g. a script filter whose
+			// interpreter isn't installed on this machine) - treat this
+			// exactly like a handler's Install/Uninstall throwing (see
+			// invokePackageItem): a failed leaf (rc=1) that
+			// 'continue_on_error' can still recover from, not a fatal
+			// abort of the whole run.
+			msg := err.Error()
+			Danger("[%s] %s: resolving template fields threw: %s", module, label, msg)
+			result := Result{
+				Module:  module,
+				Package: label,
+				Action:  ActionInstall,
+				Apply:   opts.Apply,
+				Exec:    ExecResult{RC: 1, Stderr: msg, StderrLines: []string{msg}, StdoutLines: []string{}},
+				Failed:  true,
+			}
+			results = append(results, result)
+			if leaf.ContinueOnError {
+				Danger("[%s] %s failed (rc=%d); continuing (continue_on_error).", module, label, result.Exec.RC)
+				continue
+			}
+			Danger("[%s] %s failed (rc=%d); stopping. Set continue_on_error: true to continue past this failure.", module, label, result.Exec.RC)
+			return results, true, nil
 		}
 		leaf.Item = model.AsMap(wrapper["item"])
-
-		whenOK, err := conditions.TestWhen(leaf.When, flatContext, opts.Filters)
-		if err != nil {
-			return results, false, err
-		}
-		if !whenOK {
-			continue
-		}
 
 		// A fact's embedded shell and every 'assert' have no real system
 		// side effect, so previews stay accurate even without '-Apply' -
@@ -535,9 +564,13 @@ func resolvePackageAction(state string, installed bool) (Action, error) {
 
 // mergeFlatContext ports Common.psm1's Merge-FlatContext: gathered host
 // facts and user-registered facts merge under one 'facts' key (user facts
-// win); everything else - a leaf's owning package's own local vars, then
-// site vars (override), then the growing id-registry (override) - stays
-// flattened to bare top-level names, last write wins.
+// win) - AND are also flattened to bare top-level names (matching the
+// README's documented 'when'/'${{ }}' contract: "a flat context of
+// gathered facts, user-defined vars, and any id-registered results");
+// everything else - a leaf's owning package's own local vars, then site
+// vars (override), then the growing id-registry (override) - stays
+// flattened to bare top-level names too, last write wins, so a same-
+// named var/registry entry overrides a fact's bare name on collision.
 func mergeFlatContext(facts, userFacts, packageVars, packageInputs, packagePackage, vars map[string]any, registry map[string]map[string]any) map[string]any {
 	mergedFacts := map[string]any{}
 	for k, v := range facts {
@@ -551,6 +584,9 @@ func mergeFlatContext(facts, userFacts, packageVars, packageInputs, packagePacka
 	flat["facts"] = mergedFacts
 	flat["inputs"] = packageInputs
 	flat["package"] = packagePackage
+	for k, v := range mergedFacts {
+		flat[k] = v
+	}
 	for k, v := range packageVars {
 		flat[k] = v
 	}

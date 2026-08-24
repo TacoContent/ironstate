@@ -346,6 +346,28 @@ func TestLookupFilterURLHeaders(t *testing.T) {
 	if _, present := gotHeaders["Authorization"]; present {
 		t.Errorf("expected empty header value to be omitted, got %v", gotHeaders)
 	}
+
+	// A nil headers argument (e.g. facts.github_url_headers explicitly
+	// set to null when there's no auth token) means "no headers", not a
+	// missing URL fragment - the request must still go through.
+	requested := false
+	httpGet = func(url string, headers http.Header) (string, error) {
+		requested = true
+		if url != "https://example.com/x.keys" {
+			t.Fatalf("unexpected URL: %s", url)
+		}
+		if len(headers) != 0 {
+			t.Errorf("expected no headers, got %v", headers)
+		}
+		return "ssh-ed25519 AAAA", nil
+	}
+	got = apply(t, "lookup", nil, "url", "https://example.com/", "x", ".keys", nil)
+	if got != "ssh-ed25519 AAAA" {
+		t.Errorf("lookup url with nil headers arg = %v, want the request to succeed", got)
+	}
+	if !requested {
+		t.Fatal("expected the request to actually be made, not silently omitted")
+	}
 }
 
 func TestNamesIncludesEveryBuiltin(t *testing.T) {

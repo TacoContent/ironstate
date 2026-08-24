@@ -1,27 +1,10 @@
 # Notes
 
-- allow loading of a variables file from flag `--vars-file`
-- allow automatic loading of a variables file based on hostname, architecture, os family, platform.
-- allow combo of both `--vars-file` and automatic loading based on system characteristics
-- allow "chained" name like: `hostname.architecture.os_family.platform.yml` or `hostname.architecture.yml` or `hostname.yml` or any combination of these based on available system characteristics.
-  - hosts/ path should also be able to automatically load tasks file based on system characteristics.
-  - other paths should support automatic loading of tasks files based on system characteristics as well. if the task file is "loaded" by using an `include` for example. 
+## Possible Handlers
 
-  ``` yaml
-    - include:
-      name: hosts/camalot
-  ```
-
-  this should load `main.yml`, and then more specific files based on system characteristics if they exist.
-
-- allow "default" variables file like `main.yml` to be loaded if no specific file is found based on system characteristics.
-- allow overriding of specific variables through command-line flags. `--var key=value`
-
-
----
-
-- change `--file` to be `--playbook`. it should not require the path to the file specifically.
-  - `--playbook=playbooks/camalot` for example should be supported as well as `--playbook=playbooks/camalot/main.yml`
-  - it should support looking for `site.{yml, yaml}` or `main.{yml, yaml}` in the no file is specified.
-  - if a specific playbook is provided, it should use that instead of the default files.
-  - if no playbook is found, it should raise an error indicating that no playbook could be located.
+- [cron](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/cron_module.html#ansible-collections-ansible-builtin-cron-module): manage cron jobs (Linux/macOS) or alias for scheduled tasks (Windows)
+- [fail](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/fail_module.html#ansible-collections-ansible-builtin-fail-module): fail the playbook with a message
+- [fetch](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/fail_module.html#ansible-collections-ansible-builtin-fail-module): fetch a file from a remote and use it locally
+- [find](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/find_module.html#ansible-collections-ansible-builtin-find-module): find files on the target system
+- [get_url](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/get_url_module.html#ansible-collections-ansible-builtin-get-url-module): download a file from a HTTP/HTTPS/FTP
+- [git](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/git_module.html#ansible-collections-ansible-builtin-git-module): manage git checkouts

@@ -58,6 +58,15 @@ func LoadIncludedPackage(includeSpec map[string]any, packagesRoot string, facts,
 	if err != nil {
 		return nil, err
 	}
+	// Chained hostname/architecture/os_family/platform overlays sitting
+	// alongside this package's main.yml (e.g. 'roles/foo/krayt.yml' or
+	// 'roles/foo/amd64.windows.yml') — least-specific first, most
+	// specific wins — same mechanism as the top-level hosts:/variables:
+	// overlays in LoadHierarchy, per docs/plans/notes.md.
+	pkgData, err = MergeChainOverlays(pkgData, pkgDir, pkgDir, facts)
+	if err != nil {
+		return nil, err
+	}
 
 	pkg := map[string]any{
 		"name":  nameStr,

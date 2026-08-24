@@ -11,13 +11,20 @@ go build -o bin/ironstate ./cmd/ironstate     # bin/ironstate.exe on Windows
 # Scaffold a new playbook (see Playbooks below)
 ./bin/ironstate init my-playbook
 
-# Dry-run / apply / tags, against a playbook's site.yml
-./bin/ironstate --file path/to/your/site.yml
-./bin/ironstate --file path/to/your/site.yml --apply
-./bin/ironstate --file path/to/your/site.yml --tags cli,security --apply
+# Dry-run / apply / tags - --playbook takes a specific file, a playbook
+# directory (searches for site.yml/main.yml inside it), or a bare name
+# with a sibling '<name>.yml'; omit it to use the current directory.
+./bin/ironstate --playbook path/to/your/playbook
+./bin/ironstate --playbook path/to/your/site.yml --apply
+./bin/ironstate --playbook path/to/your/site.yml --tags cli,security --apply
 
 # Verbose (also prints a line for every already-satisfied/skipped leaf)
-./bin/ironstate --file path/to/your/site.yml --verbose
+./bin/ironstate --playbook path/to/your/site.yml --verbose
+
+# Merge in an extra vars document, and/or override individual vars by
+# dotted key path (repeatable, highest precedence of all)
+./bin/ironstate --playbook path/to/your/site.yml --vars-file ./ci-vars.yml
+./bin/ironstate --playbook path/to/your/site.yml --var editor=nvim --var ssh.port=2222
 
 # Introspection
 ./bin/ironstate filters list
@@ -33,7 +40,9 @@ go build -o bin/ironstate ./cmd/ironstate     # bin/ironstate.exe on Windows
 
 ## Playbooks
 
-`ironstate` doesn't hard-code a single site file location - like an Ansible playbook, you create your own directory with a `site.yml` plus whatever `hosts/`, `variables/`, `packages/`/`roles/` overlays it needs, then point `--file` at that directory's `site.yml`. [`playbooks/camalot/`](playbooks/camalot) in this repo is one such playbook, kept here as a real-world worked example (the repo owner's own machine setup) - copy its shape for your own playbook, or start from an empty `site.yml`. Nothing about the `playbooks/` directory name, or `camalot` itself, is special or required by `ironstate` - it's just a sample.
+`ironstate` doesn't hard-code a single site file location - like an Ansible playbook, you create your own directory with a `site.yml` plus whatever `hosts/`, `variables/`, `packages/`/`roles/` overlays it needs, then point `--playbook` at that directory (or its `site.yml` directly). [`playbooks/camalot/`](playbooks/camalot) in this repo is one such playbook, kept here as a real-world worked example (the repo owner's own machine setup) - copy its shape for your own playbook, or start from an empty `site.yml`. Nothing about the `playbooks/` directory name, or `camalot` itself, is special or required by `ironstate` - it's just a sample.
+
+`--playbook` doesn't require the exact file path: point it at a directory and it searches for `site.yml`, `site.yaml`, `main.yml`, then `main.yaml` inside it; point it at a bare name (e.g. `playbooks/camalot`) and it also tries a sibling `playbooks/camalot.yml`/`.yaml` file; omit `--playbook` entirely to search the current directory. An error names every path tried if none exist.
 
 ### `ironstate init`
 
@@ -54,21 +63,53 @@ Every generated YAML file is intentionally minimal (`vars: {}` / `tasks: []`) - 
 ```shell
 ./bin/ironstate init my-playbook
 cd my-playbook
-../bin/ironstate --file site.yml
+../bin/ironstate --playbook site.yml
 ```
 
 ## File hierarchy
 
-Files are loaded and merged in this order. Each subsequent file's `tasks` list is **appended** to the base file's list; `vars` **deep-merges** key-by-key (a host/user overlay can add or override individual vars without wiping out the base set).
+Files are loaded and merged in this order. Each subsequent file's `tasks` list is **appended** to the base file's list; `vars` **deep-merges** key-by-key (an overlay can add or override individual vars without wiping out the base set).
 
 ``` tree
 <playbook>/
-├── site.yml              ← base (always loaded)
-├── hosts/<COMPUTERNAME>.yml  ← merged if the file exists
-└── variables/<USERNAME>.yml  ← merged if the file exists
+├── site.yml                              ← base (always loaded)
+├── hosts/
+│   ├── main.yml                          ← default, merged if it exists
+│   └── <chained-name>.yml                ← chained overlays, merged least-to-most specific
+└── variables/
+    ├── main.yml                          ← default, merged if it exists
+    ├── <chained-name>.yml                ← chained overlays, merged least-to-most specific
+    └── <USERNAME>.yml                    ← legacy per-user overlay, merged last
 ```
 
-`COMPUTERNAME` and `USERNAME` come from the environment variables of the same name. Overlay files use the explicit `tasks:`/`vars:` mapping form (not the bare-list form) so they have somewhere to merge into.
+The **chained overlay** filenames are built from this machine's own facts (see [Facts](#facts)): `hostname`, `os_family`, `platform`, `arch`. Use **any N of them**, joined by `.`, **in any order you like** - so a bare single-characteristic name like `windows.yml` (matching `os_family`/`platform`) or `amd64.yml` (matching `arch`) works, and so does `amd64.krayt.yml` written arch-before-hostname instead of `krayt.amd64.yml`:
+
+```
+windows.yml                     # any host where os_family or platform == "windows"
+amd64.yml                       # any host where arch == "amd64"
+amd64.windows.yml                # arch == "amd64" AND os_family/platform == "windows"
+krayt.yml                       # this specific host, any arch/os
+krayt.amd64.yml                 # same as amd64.krayt.yml - order doesn't matter
+krayt.amd64.windows.yml
+krayt.amd64.windows.windows.yml # the fully-qualified chain (os_family and platform both listed)
+```
+
+`ironstate` merges every one of these that exists, broadest first, most specific last. Precedence is a weighted priority - hostname (8) > os_family (4) > platform (2) > arch (1) - so a name's "specificity" is the sum of the characteristics it names: any hostname-containing name always outranks any name without one (8 alone beats 4+2+1=7 combined), and within that, adding more/higher-priority characteristics always ranks higher still. So `hosts/windows.yml` applies to any Windows machine, `hosts/krayt.yml` layers a `krayt`-only override on top of it, and `hosts/krayt.amd64.yml` layers on top of that again. This same `main.yml` + chained-overlay mechanism also applies to **every** `include:` (`roles/`, `packages/`, `hosts/<name>/`, etc. - see [Architecture](#architecture)): a package can ship e.g. `roles/foo/windows.yml` or `roles/foo/krayt.yml` right next to its `roles/foo/main.yml` to override/extend it for a class of hosts or one specific host.
+
+`--vars-file <path>` (repeatable) merges one or more additional documents on top of everything above, in the order given (a later `--vars-file` wins over an earlier one on overlapping keys) - highest precedence short of `--var` - handy for a CI-only or one-off vars file that isn't part of the playbook's own hierarchy:
+
+```shell
+./bin/ironstate --playbook site.yml --vars-file ./ci-vars.yml
+./bin/ironstate --playbook site.yml --vars-file ./ci-vars.yml --vars-file ./local-overrides.yml
+```
+
+`--var key=value` (repeatable) overrides a single var by dotted key path, after everything else has merged - the final, most explicit word on a var's value:
+
+```shell
+./bin/ironstate --playbook site.yml --var editor=nvim --var ssh.port=2222
+```
+
+Overlay files use the explicit `tasks:`/`vars:` mapping form (not the bare-list form) so they have somewhere to merge into.
 
 ### `.env` / `.secrets`
 
@@ -113,7 +154,7 @@ A few safeguards are deliberate:
 
 ### Machine-specific overrides — `hosts/`
 
-Create a file named after the machine's hostname to add or change tasks for that machine only (the same `computer_name` fact - see [Facts](#facts) - falls back to the OS hostname on Linux/macOS).
+Create a file named after the machine's hostname to add or change tasks for that machine only (the same `computer_name` fact - see [Facts](#facts) - falls back to the OS hostname on Linux/macOS). You can also chain on `.arch`/`.os_family`/`.platform` for a narrower override (e.g. `KRAYT.amd64.windows.yml`), use a bare characteristic name with no hostname at all for a broader one (e.g. `windows.yml` for every Windows machine), or drop in a `hosts/main.yml` as a default applied to every machine before any of these - see [File hierarchy](#file-hierarchy).
 
 ```powershell
 # Find your hostname
@@ -141,7 +182,7 @@ tasks:
 
 ### User-specific overrides — `variables/`
 
-Create a file named after the username to add tasks or vars for a specific user account on any machine.
+Create a file named after the username to add tasks or vars for a specific user account on any machine. This same directory also accepts the chained hostname/arch/os_family/platform overlays (including bare characteristic names like `windows.yml`) and a `variables/main.yml` default described in [File hierarchy](#file-hierarchy) - the username file always merges last (highest precedence of the auto-detected files, before `--vars-file`/`--var`).
 
 ```powershell
 # Find your username
@@ -200,7 +241,12 @@ Each `internal/handlers/*.go` file implements the shared `Handler` interface (`T
 Two ways to add a `|` filter (see [`when` conditions](#when-conditions) for the pipeline syntax):
 
 - **Built-in** (compiled in): add a function to `internal/filters/builtins.go` and register it there - requires rebuilding the binary, but has no external process to spawn per call.
-- **Script filter** (no rebuild): drop a script implementing the same `param($Value, [object[]] $ArgValues)` contract every PowerShell filter script already has (e.g. `filters/upper.ps1`) into the directory `ironstate` scans for filters - `filters/` by default, resolved relative to the site file's own directory, configurable via a `filters.dir` config value (`ironstate doctor --filters-dir <dir>` / `ironstate filters list --dir <dir>` to inspect what's discovered). It's registered automatically at startup under its file's base name (`upper.ps1` → the `upper` filter) - **only if no built-in already claims that name** (a built-in always wins). Only `.ps1` ships a runner today: a generic, embedded PowerShell shim speaking a small JSON-over-stdio protocol (`internal/filters/embed/shim.ps1`) that lets an existing script keep its `param($Value, [object[]] $ArgValues)` shape completely unmodified; a `filters.interpreters` config value maps other extensions to their own interpreter argv for whenever a second script language gets a shim. Each discovered script's interpreter process is started once, lazily, and kept warm for the run's lifetime rather than spawned per call.
+- **Script filter** (no rebuild): drop a script implementing the shim's contract into the directory `ironstate` scans for filters - `filters/` by default, resolved relative to the site file's own directory, configurable via a `filters.dir` config value (`ironstate doctor --filters-dir <dir>` / `ironstate filters list --dir <dir>` to inspect what's discovered). It's registered automatically at startup under its file's base name (`upper.ps1` → the `upper` filter, `leet.sh` → the `leet` filter) - **only if no built-in already claims that name** (a built-in always wins). If a directory has more than one script implementing the *same* filter name (e.g. both `leet.ps1` and `leet.sh`), only one wins, by this fixed priority order: **PowerShell → bash → zsh → fish → nushell**. Five extensions ship a runner today, each via a generic, embedded shim speaking a small JSON-over-stdio protocol:
+  - `.ps1` - PowerShell, `param($Value, [object[]] $ArgValues)` (`internal/filters/embed/shim.ps1`), returning any JSON-serializable value.
+  - `.sh` / `.zsh` / `.fish` - bash/zsh/fish, plain positional args (`$1`/`$argv[1]` is the value, the rest are the call's args, always coerced to strings) and stdout as the string result (`internal/filters/embed/shim.sh`/`shim.zsh`/`shim.fish`) - each requires `jq` on `PATH` for the shim itself to decode/encode requests (these three shells have no native JSON support). On Windows, a bare `bash` on `PATH` very commonly resolves to Windows' own WSL launcher stub (`System32\bash.exe`), which is incompatible (it mangles Windows-style paths) - ironstate skips that launcher and prefers a real Windows-path-aware bash (Git for Windows, MSYS2, Cygwin) instead.
+  - `.nu` - nushell, `def main [value, ...args] { ... }` printing its result (`internal/filters/embed/shim.nu`) - like the other shells, always a plain string result. Unlike every other extension, a `.nu` filter is **not** kept warm as a persistent worker process across calls - nushell has no reliable way to read one request, respond, then read a later request on the same still-open stdin pipe, so each call spawns a fresh `nu` process instead (slower per call, but correct).
+
+  A `filters.interpreters` config value maps other extensions to their own interpreter argv for whenever a new script language gets a shim. Each discovered script's interpreter process is started once, lazily, and kept warm for the run's lifetime rather than spawned per call (except `.nu`, see above).
 
 Run `ironstate filters list` (or `ironstate doctor`) to see every filter currently available, built-in or script, by name.
 
@@ -448,7 +494,16 @@ Gathered fresh every run; a deliberately small, easy-to-extend starter set (see 
 | `os_version` | OS version, as `major.minor.build` |
 | `os_build` | OS build number |
 | `is_admin` | Whether the current process is running elevated |
-| `pwsh_version` | Output of `pwsh --version` if `pwsh` is on `PATH`, else empty |
+| `shell_pwsh` | Whether `pwsh` is on `PATH` |
+| `pwsh_version` | Output of `pwsh --version` if `pwsh` is on `PATH`, else `null` |
+| `shell_bash` | Whether `bash` is on `PATH` |
+| `bash_version` | Output of `bash --version` (first line only) if `bash` is on `PATH`, else `null` |
+| `shell_zsh` | Whether `zsh` is on `PATH` |
+| `zsh_version` | Output of `zsh --version` if `zsh` is on `PATH`, else `null` |
+| `shell_fish` | Whether `fish` is on `PATH` |
+| `fish_version` | Output of `fish --version` if `fish` is on `PATH`, else `null` |
+| `shell_nu` | Whether `nu` is on `PATH` |
+| `nu_version` | Output of `nu --version` if `nu` is on `PATH`, else `null` |
 | `platform` | Go's `GOOS` - `windows`, `linux`, or `darwin` |
 | `arch` | Go's `GOARCH` - `amd64`, `arm64`, ... |
 | `os_family` | A coarser grouping of `platform`: `windows` or `unix` |

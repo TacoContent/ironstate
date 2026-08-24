@@ -38,7 +38,7 @@ func TestRunApplyLoadsDotEnvAndDotSecretsFromCWD(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd.SetArgs([]string{"--file", sitePath, "--output", "json"})
+	cmd.SetArgs([]string{"--playbook", sitePath, "--output", "json"})
 	cmd.SetOut(new(bytes.Buffer))
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute error: %v", err)
@@ -49,5 +49,56 @@ func TestRunApplyLoadsDotEnvAndDotSecretsFromCWD(t *testing.T) {
 	}
 	if got := os.Getenv("TEST_SECRETS_CLI_VAR"); got != "from-dotsecrets" {
 		t.Errorf("TEST_SECRETS_CLI_VAR = %q, want %q (.secrets not loaded)", got, "from-dotsecrets")
+	}
+}
+
+func TestRunApplyMergesVarsFileAndVarOverrides(t *testing.T) {
+	dir := t.TempDir()
+
+	sitePath := filepath.Join(dir, "site.yml")
+	if err := os.WriteFile(sitePath, []byte(`
+vars:
+  editor: code
+  ssh:
+    port: 21
+tasks:
+  - name: verify merged vars
+    assert:
+      that:
+        - "editor == 'code'"
+        - "theme == 'dark'"
+        - "font == 'mono'"
+        - "ssh.port == '22'"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	varsFilePath := filepath.Join(dir, "extra-vars.yml")
+	if err := os.WriteFile(varsFilePath, []byte("---\nvars:\n  theme: light\n  font: mono\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A second --vars-file, applied after the first, so it wins on the
+	// overlapping 'theme' key while 'font' (only set by the first file)
+	// survives untouched.
+	secondVarsFilePath := filepath.Join(dir, "override-vars.yml")
+	if err := os.WriteFile(secondVarsFilePath, []byte("---\nvars:\n  theme: dark\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd, err := newRootCommand()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	cmd.SetArgs([]string{
+		"--playbook", sitePath,
+		"--vars-file", varsFilePath,
+		"--vars-file", secondVarsFilePath,
+		"--var", "ssh.port=22",
+		"--output", "json",
+	})
+	cmd.SetOut(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute error (assertion of merged vars failed): %v\noutput: %s", err, out.String())
 	}
 }

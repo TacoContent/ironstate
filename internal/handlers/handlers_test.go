@@ -44,6 +44,62 @@ func TestLogHandlerAbsentStateAlwaysUninstalls(t *testing.T) {
 	}
 }
 
+func TestLogHandlerNoConfigAtAllAlwaysRuns(t *testing.T) {
+	h := logHandler{}
+	// Nothing scoped at all (no 'message', no 'install'/'uninstall'
+	// section) - not scoped to either phase specifically, so it still
+	// runs (matching log's "no real idempotent 'already applied'
+	// concept"); this is also what a message that resolved to nothing
+	// (e.g. an unresolved '${{ }}' reference, omitted entirely) looks
+	// like by the time the handler sees it - it should still run, not
+	// silently skip.
+	installed, err := h.Test(map[string]any{}, "", testCtx())
+	if err != nil || installed {
+		t.Fatalf("installed=%v err=%v, want false (runs, even with nothing to say)", installed, err)
+	}
+}
+
+func TestLogHandlerAbsentStateWithNoUninstallMessageSkips(t *testing.T) {
+	h := logHandler{}
+	// An explicit but empty 'uninstall' section blocks falling back to
+	// any flat default - present-but-empty means "nothing to log here".
+	item := map[string]any{"state": "absent", "uninstall": map[string]any{}}
+	installed, err := h.Test(item, "", testCtx())
+	if err != nil || installed {
+		t.Fatalf("installed=%v err=%v, want false (skip: 'uninstall' section present but has no message)", installed, err)
+	}
+}
+
+func TestLogHandlerInstallOnlyMissingFallsBackToDefault(t *testing.T) {
+	h := logHandler{}
+	item := map[string]any{"message": "default message", "uninstall": map[string]any{"message": "bye"}}
+	installed, err := h.Test(item, "", testCtx())
+	if err != nil || installed {
+		t.Fatalf("installed=%v err=%v, want false (install phase falls back to the flat default)", installed, err)
+	}
+	desc, err := h.Describe(item, engine.ActionInstall, testCtx())
+	if err != nil || desc != "log (install): default message" {
+		t.Fatalf("desc=%q err=%v", desc, err)
+	}
+}
+
+func TestLogHandlerUninstallOnlySkipsInstallPhase(t *testing.T) {
+	h := logHandler{}
+	// No 'install' section, no flat default message - only 'uninstall' -
+	// so this log only ever runs when state is 'absent'.
+	item := map[string]any{"uninstall": map[string]any{"message": "bye"}}
+	installed, err := h.Test(item, "", testCtx())
+	if err != nil || !installed {
+		t.Fatalf("installed=%v err=%v, want true (skip: install-phase has nothing to say)", installed, err)
+	}
+
+	item["state"] = "absent"
+	installed, err = h.Test(item, "", testCtx())
+	if err != nil || !installed {
+		t.Fatalf("installed=%v err=%v, want true ('absent' + has an uninstall message -> uninstall runs)", installed, err)
+	}
+}
+
 func TestAssertHandlerPassAndFail(t *testing.T) {
 	h := assertHandler{}
 	installed, err := h.Test(nil, "", testCtx())

@@ -119,10 +119,10 @@ tasks:
     log: { message: user }
 `)
 
-	t.Setenv("COMPUTERNAME", "TESTHOST")
 	t.Setenv("USERNAME", "testuser")
+	hostFacts := map[string]any{"computer_name": "TESTHOST"}
 
-	doc, err := LoadHierarchy(filepath.Join(dir, "site.yml"))
+	doc, err := LoadHierarchy(filepath.Join(dir, "site.yml"), hostFacts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,10 +143,10 @@ tasks:
   - name: base task
     log: { message: base }
 `)
-	t.Setenv("COMPUTERNAME", "NOSUCHHOST")
 	t.Setenv("USERNAME", "nosuchuser")
+	hostFacts := map[string]any{"computer_name": "NOSUCHHOST"}
 
-	doc, err := LoadHierarchy(filepath.Join(dir, "site.yml"))
+	doc, err := LoadHierarchy(filepath.Join(dir, "site.yml"), hostFacts)
 	if err != nil {
 		t.Fatal(err)
 	}

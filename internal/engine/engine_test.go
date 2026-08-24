@@ -398,6 +398,114 @@ func TestRunLeavesContinueOnErrorKeepsGoing(t *testing.T) {
 	}
 }
 
+// TestRunLeavesWhenSeesBareGatheredFacts guards mergeFlatContext's
+// contract (README's "when accepts... a flat context of gathered facts,
+// user-defined vars...") - a gathered fact must be usable as a bare
+// identifier in 'when', not only under 'facts.*'.
+func TestRunLeavesWhenSeesBareGatheredFacts(t *testing.T) {
+	h := &fakeHandler{installed: false, installExec: ExecResult{RC: 0}}
+	opts := baseOpts(map[string]Handler{"widget": h})
+	opts.Apply = true
+	opts.Facts = map[string]any{"shell_pwsh": true, "shell_nu": false}
+
+	results, _, err := RunLeaves([]tasks.Leaf{
+		leaf("widget", map[string]any{"state": "present"}, withName("a"), withWhen("shell_pwsh")),
+		leaf("widget", map[string]any{"state": "present"}, withName("b"), withWhen("shell_nu")),
+	}, opts, NewState())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].Package != "a" {
+		t.Fatalf("results = %#v, want only leaf 'a' to run ('shell_pwsh' true, 'shell_nu' false)", results)
+	}
+	if h.installCall != 1 {
+		t.Fatalf("expected exactly 1 Install call, got %d", h.installCall)
+	}
+}
+
+// TestRunLeavesWhenGatesBeforeFieldTemplateResolution guards the fix
+// where a leaf's own field '${{ }}' expressions (e.g. a filter call) used
+// to resolve BEFORE 'when' was checked - so a filter with real side
+// effects/errors ran even for a leaf 'when' would go on to skip. A
+// filter that always errors must never even be invoked for a skipped leaf.
+func TestRunLeavesWhenGatesBeforeFieldTemplateResolution(t *testing.T) {
+	h := &fakeHandler{installed: false, installExec: ExecResult{RC: 0}}
+	opts := baseOpts(map[string]Handler{"widget": h})
+	opts.Apply = true
+	fset := filters.New()
+	boomCalls := 0
+	fset.Register("boom", func(value any, args []any) (any, error) {
+		boomCalls++
+		return nil, fmt.Errorf("boom filter always fails")
+	})
+	opts.Filters = fset
+
+	results, stopped, err := RunLeaves([]tasks.Leaf{
+		leaf("widget", map[string]any{"state": "present", "message": "${{ 'x' | boom }}"}, withWhen("false")),
+	}, opts, NewState())
+	if err != nil || stopped {
+		t.Fatalf("err=%v stopped=%v", err, stopped)
+	}
+	if len(results) != 0 {
+		t.Fatalf("expected the leaf to be skipped entirely, got %#v", results)
+	}
+	if boomCalls != 0 {
+		t.Fatalf("expected the 'boom' filter to never be called for a when-skipped leaf, got %d calls", boomCalls)
+	}
+}
+
+// TestRunLeavesFieldTemplateResolutionErrorRespectsContinueOnError guards
+// the fix making a field's own '${{ }}' resolution error behave like a
+// handler's Install/Uninstall throwing (a failed leaf, not a fatal Go
+// error) - continue_on_error must be able to recover from it.
+func TestRunLeavesFieldTemplateResolutionErrorRespectsContinueOnError(t *testing.T) {
+	newOpts := func() (Options, *filters.Registry) {
+		h := &fakeHandler{installed: false, installExec: ExecResult{RC: 0}}
+		opts := baseOpts(map[string]Handler{"widget": h})
+		opts.Apply = true
+		fset := filters.New()
+		fset.Register("boom", func(value any, args []any) (any, error) {
+			return nil, fmt.Errorf("boom filter always fails")
+		})
+		opts.Filters = fset
+		return opts, fset
+	}
+
+	t.Run("stops by default", func(t *testing.T) {
+		opts, _ := newOpts()
+		results, stopped, err := RunLeaves([]tasks.Leaf{
+			leaf("widget", map[string]any{"state": "present", "message": "${{ 'x' | boom }}"}, withName("a")),
+			leaf("widget", map[string]any{"state": "present"}, withName("b")),
+		}, opts, NewState())
+		if err != nil {
+			t.Fatalf("expected a failed leaf, not a fatal error: %v", err)
+		}
+		if !stopped {
+			t.Fatal("expected the run to stop by default")
+		}
+		if len(results) != 1 || !results[0].Failed || results[0].Exec.RC != 1 {
+			t.Fatalf("results = %#v", results)
+		}
+	})
+
+	t.Run("continues with continue_on_error", func(t *testing.T) {
+		opts, _ := newOpts()
+		results, stopped, err := RunLeaves([]tasks.Leaf{
+			leaf("widget", map[string]any{"state": "present", "message": "${{ 'x' | boom }}"}, withName("a"), withContinueOnError()),
+			leaf("widget", map[string]any{"state": "present"}, withName("b")),
+		}, opts, NewState())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stopped {
+			t.Fatal("expected continue_on_error to keep the run going")
+		}
+		if len(results) != 2 || !results[0].Failed || results[1].Failed {
+			t.Fatalf("results = %#v", results)
+		}
+	})
+}
+
 func TestRunLeavesWhenFalseSkipsLeaf(t *testing.T) {
 	h := &fakeHandler{installed: false}
 	opts := baseOpts(map[string]Handler{"widget": h})

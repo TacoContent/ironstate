@@ -13,11 +13,13 @@ import (
 
 // Config is the fully-resolved set of options every subcommand reads.
 type Config struct {
-	File    string   // site.yml path (--file, alias --packages-file)
-	Apply   bool     // --apply
-	Tags    []string // --tags
-	Output  string   // --output table|json
-	Verbose bool     // -v/--verbose
+	Playbook     string   // --playbook: site/main YAML document, or a directory/bare name to search for one
+	VarsFiles    []string // --vars-file (repeatable): extra vars documents merged in, in order, on top of the auto-detected chain, before --var
+	VarOverrides []string // --var key=value (repeatable, dotted key paths, highest precedence)
+	Apply        bool     // --apply
+	Tags         []string // --tags
+	Output       string   // --output table|json
+	Verbose      bool     // -v/--verbose
 
 	FiltersDir         string              // directory scanned for external script filters
 	FilterInterpreters map[string][]string // script extension -> interpreter argv prefix
@@ -41,7 +43,7 @@ func Load(flags *pflag.FlagSet) (*Config, error) {
 		}
 	}
 
-	v.SetDefault("file", "site.yml")
+	v.SetDefault("playbook", "")
 	v.SetDefault("output", "table")
 	v.SetDefault("filters.dir", "filters")
 
@@ -54,12 +56,27 @@ func Load(flags *pflag.FlagSet) (*Config, error) {
 		return nil, err
 	}
 
+	// --var and --vars-file are read directly from the flag set (not
+	// through viper) since their values are raw strings that may
+	// themselves contain commas — viper/pflag's StringSlice would wrongly
+	// split those, unlike StringArray.
+	varOverrides, err := flags.GetStringArray("var")
+	if err != nil {
+		return nil, err
+	}
+	varsFiles, err := flags.GetStringArray("vars-file")
+	if err != nil {
+		return nil, err
+	}
+
 	return &Config{
-		File:    v.GetString("file"),
-		Apply:   v.GetBool("apply"),
-		Tags:    v.GetStringSlice("tags"),
-		Output:  v.GetString("output"),
-		Verbose: v.GetBool("verbose"),
+		Playbook:     v.GetString("playbook"),
+		VarsFiles:    varsFiles,
+		VarOverrides: varOverrides,
+		Apply:        v.GetBool("apply"),
+		Tags:         v.GetStringSlice("tags"),
+		Output:       v.GetString("output"),
+		Verbose:      v.GetBool("verbose"),
 
 		FiltersDir:         v.GetString("filters.dir"),
 		FilterInterpreters: interpreters,

@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/user"
 	"runtime"
+	"sync"
 )
 
 // Gather returns the fixed set of host facts as a map[string]any, ready
@@ -22,6 +23,7 @@ import (
 // numeric convention.
 func Gather() map[string]any {
 	major, minor, build := osVersion()
+	shells := gatherShellVersions()
 	return map[string]any{
 		"computer_name": computerName(),
 		"user_name":     userName(),
@@ -29,11 +31,49 @@ func Gather() map[string]any {
 		"os_version":    formatVersion(major, minor, build),
 		"os_build":      float64(build),
 		"is_admin":      isAdmin(),
-		"pwsh_version":  pwshVersion(),
+		"shell_pwsh":    shells.pwsh != "",
+		"pwsh_version":  stringOrNil(shells.pwsh),
+		"shell_bash":    shells.bash != "",
+		"bash_version":  stringOrNil(shells.bash),
+		"shell_zsh":     shells.zsh != "",
+		"zsh_version":   stringOrNil(shells.zsh),
+		"shell_fish":    shells.fish != "",
+		"fish_version":  stringOrNil(shells.fish),
+		"shell_nu":      shells.nu != "",
+		"nu_version":    stringOrNil(shells.nu),
 		"platform":      runtime.GOOS,
 		"arch":          runtime.GOARCH,
 		"os_family":     osFamily(runtime.GOOS),
 	}
+}
+
+// shellVersionFacts holds every shell version probe's result, gathered
+// concurrently by gatherShellVersions.
+type shellVersionFacts struct {
+	pwsh, bash, zsh, fish, nu string
+}
+
+// gatherShellVersions runs every '--version' probe (each independently
+// bounded by versionProbeTimeout, see shells.go) in parallel, so a slow
+// or misbehaving interpreter on PATH adds at most one timeout's worth of
+// latency to Gather() instead of stacking one after another.
+func gatherShellVersions() shellVersionFacts {
+	var v shellVersionFacts
+	var wg sync.WaitGroup
+	probe := func(dst *string, fn func() string) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			*dst = fn()
+		}()
+	}
+	probe(&v.pwsh, pwshVersion)
+	probe(&v.bash, bashVersion)
+	probe(&v.zsh, zshVersion)
+	probe(&v.fish, fishVersion)
+	probe(&v.nu, nuVersion)
+	wg.Wait()
+	return v
 }
 
 // osFamily groups a Go GOOS value into a broader category useful for

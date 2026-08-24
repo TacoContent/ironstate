@@ -95,7 +95,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		cmd.Printf("created %s\n", f.path)
 	}
 
-	cmd.Printf("\nPlaybook ready. Try:\n  ironstate --file %s\n", filepath.Join(root, "site.yml"))
+	cmd.Printf("\nPlaybook ready. Try:\n  ironstate --playbook %s\n", filepath.Join(root, "site.yml"))
 	return nil
 }
 
