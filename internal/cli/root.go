@@ -89,10 +89,10 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	// repo/project root). A missing file is not an error. Must happen
 	// before anything that could reference an env var (facts, lookup('env',
 	// ...), '.env'-derived vars/tags) - loaded first, deliberately.
-	if err := packages.ImportEnvFile(".env"); err != nil {
+	if _, err := packages.ImportEnvFile(".env"); err != nil {
 		return NewLoadError(err)
 	}
-	if err := packages.ImportEnvFile(".secrets"); err != nil {
+	if err := packages.RegisterEnvFileSecrets(".secrets"); err != nil {
 		return NewLoadError(err)
 	}
 
@@ -105,6 +105,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 
 	hostFacts := facts.Gather()
 	vars := model.Vars(docMap)
+	engine.RegisterSecretVarPaths(vars)
 	fset := filters.New()
 
 	if tableOutput {

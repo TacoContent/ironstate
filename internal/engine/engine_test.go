@@ -1,9 +1,13 @@
 package engine
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/TacoContent/ironstate/internal/expr"
 	"github.com/TacoContent/ironstate/internal/filters"
+	"github.com/TacoContent/ironstate/internal/secrets"
 	"github.com/TacoContent/ironstate/internal/tasks"
 )
 
@@ -189,6 +193,118 @@ func TestRunLeavesFactRegistersUserFactValue(t *testing.T) {
 	}
 	if len(results) != 1 {
 		t.Fatalf("expected the widget leaf to run since its 'when' should see the registered fact, got %#v", results)
+	}
+}
+
+func TestSecretVarValueIsRegisteredWhenEvaluated(t *testing.T) {
+	secrets.Reset()
+	secrets.MarkSecretVarPaths(map[string]any{"$token": "super-secret-value"})
+
+	node, err := expr.Parse("vars.token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := map[string]any{"vars": map[string]any{"token": "super-secret-value"}}
+	v, err := expr.Eval(node, ctx, filters.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v != "super-secret-value" {
+		t.Fatalf("Eval(vars.token) = %#v, want secret value", v)
+	}
+	masked := secrets.Redact("prefix super-secret-value suffix")
+	if strings.Contains(masked, "super-secret-value") {
+		t.Fatalf("Redact leaked value: %q", masked)
+	}
+	if !strings.Contains(masked, "***") {
+		t.Fatalf("Redact should mask value, got %q", masked)
+	}
+}
+
+func TestRunLeavesSecretFactRegistersBareNameAndValue(t *testing.T) {
+	h := &fakeHandler{installed: false}
+	opts := baseOpts(map[string]Handler{"fact": h})
+	opts.Apply = true
+
+	state := NewState()
+	_, stopped, err := RunLeaves([]tasks.Leaf{
+		leaf("fact", map[string]any{"name": "$token", "value": "super-secret-value"}),
+	}, opts, state)
+	if err != nil || stopped {
+		t.Fatalf("err=%v stopped=%v", err, stopped)
+	}
+	if state.UserFacts["token"] != "super-secret-value" {
+		t.Fatalf("UserFacts[\"token\"] = %#v, want secret value stored under bare name", state.UserFacts)
+	}
+	if !state.SecretFacts["token"] {
+		t.Fatalf("SecretFacts[\"token\"] = false, want true for $-prefixed fact")
+	}
+}
+
+func TestRunLeavesSecretIDRegistersValueAndUsesBareName(t *testing.T) {
+	secrets.Reset()
+	h := &fakeHandler{installed: false, installExec: ExecResult{RC: 0, Stdout: "super-secret-value"}}
+	opts := baseOpts(map[string]Handler{"widget": h})
+	opts.Apply = true
+
+	state := NewState()
+	_, stopped, err := RunLeaves([]tasks.Leaf{
+		leaf("widget", map[string]any{"state": "present"}, withID("$token")),
+	}, opts, state)
+	if err != nil || stopped {
+		t.Fatalf("err=%v stopped=%v", err, stopped)
+	}
+	if state.Registry["token"]["stdout"] != "super-secret-value" {
+		t.Fatalf("registry[\"token\"] = %#v, want secret stdout under bare name", state.Registry["token"])
+	}
+	masked := secrets.Redact("prefix super-secret-value suffix")
+	if strings.Contains(masked, "super-secret-value") {
+		t.Fatalf("Redact leaked value: %q", masked)
+	}
+}
+
+func TestRunLeavesSecretIDSuppressesVerboseOutput(t *testing.T) {
+	oldInfo := Info
+	oldWarn := Warn
+	oldDanger := Danger
+	defer func() {
+		Info = oldInfo
+		Warn = oldWarn
+		Danger = oldDanger
+	}()
+
+	var infoBuf strings.Builder
+	Info = func(format string, args ...any) {
+		infoBuf.WriteString(fmt.Sprintf(format, args...))
+		infoBuf.WriteByte('\n')
+	}
+	Warn = func(format string, args ...any) {
+		infoBuf.WriteString("WARN: ")
+		infoBuf.WriteString(fmt.Sprintf(format, args...))
+		infoBuf.WriteByte('\n')
+	}
+	Danger = func(format string, args ...any) {
+		infoBuf.WriteString("DANGER: ")
+		infoBuf.WriteString(fmt.Sprintf(format, args...))
+		infoBuf.WriteByte('\n')
+	}
+
+	fake := &fakeHandler{installed: false, installExec: ExecResult{RC: 0, Stdout: "secret message", Stderr: "internal warning"}}
+	opts := baseOpts(map[string]Handler{"widget": fake})
+	opts.Apply = true
+
+	_, _, err := RunLeaves([]tasks.Leaf{
+		leaf("widget", map[string]any{"state": "present"}, withID("$token"), withName("do-the-thing")),
+	}, opts, NewState())
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := infoBuf.String()
+	if strings.Contains(out, "secret message") || strings.Contains(out, "do-the-thing") || strings.Contains(out, "internal warning") {
+		t.Fatalf("secret verbose output leaked into logs: %q", out)
+	}
+	if !strings.Contains(out, "***") {
+		t.Fatalf("expected a redacted description placeholder for secret IDs, got %q", out)
 	}
 }
 

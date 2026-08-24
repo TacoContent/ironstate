@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/TacoContent/ironstate/internal/secrets"
 	"github.com/TacoContent/ironstate/internal/ui"
 )
 
@@ -61,5 +62,32 @@ func TestPrintTableAlignsWithoutColor(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("PrintTable output missing %q; got:\n%s", want, out)
 		}
+	}
+}
+
+func TestPrintJSONRedactsRegisteredSecrets(t *testing.T) {
+	secrets.Register("super-secret-value")
+	var buf bytes.Buffer
+	results := []Result{{
+		Module:  "log",
+		Package: "show-token",
+		State:   "present",
+		Action:  ActionInstall,
+		Apply:   true,
+		Exec: ExecResult{
+			RC:     0,
+			Stdout: "super-secret-value\n",
+			Stderr: "super-secret-value",
+		},
+	}}
+	if err := PrintJSON(&buf, results); err != nil {
+		t.Fatalf("PrintJSON error: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "super-secret-value") {
+		t.Fatalf("PrintJSON leaked secret in output:\n%s", out)
+	}
+	if !strings.Contains(out, "***") {
+		t.Fatalf("PrintJSON should redact registered secrets, got:\n%s", out)
 	}
 }

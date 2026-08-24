@@ -3,6 +3,8 @@ package expr
 import (
 	"fmt"
 	"strings"
+
+	"github.com/TacoContent/ironstate/internal/secrets"
 )
 
 // Filters is the pipeline's filter registry, injected rather than
@@ -26,7 +28,13 @@ func Eval(node Node, ctx map[string]any, filters Filters) (any, error) {
 		return n.Value, nil
 
 	case *PathNode:
-		v, _ := ResolvePath(ctx, n)
+		v, ok := ResolvePath(ctx, n)
+		if ok {
+			pathText := pathNodeString(n)
+			if s, isString := v.(string); isString && secrets.IsSecretVarPath(pathText) {
+				secrets.Register(s)
+			}
+		}
 		return v, nil
 
 	case *ListNode:
@@ -318,6 +326,27 @@ func ResolvePath(ctx map[string]any, p *PathNode) (any, bool) {
 		current = v
 	}
 	return current, true
+}
+
+func pathNodeString(p *PathNode) string {
+	if p == nil || len(p.Segments) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	for i, seg := range p.Segments {
+		if seg.IsIndex {
+			if i == 0 {
+				continue
+			}
+			fmt.Fprintf(&sb, "[%d]", seg.Index)
+			continue
+		}
+		if i > 0 {
+			sb.WriteString(".")
+		}
+		sb.WriteString(seg.Key)
+	}
+	return sb.String()
 }
 
 // VarPaths returns every PathNode referenced anywhere in node, in the same

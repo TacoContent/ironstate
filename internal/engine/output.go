@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/TacoContent/ironstate/internal/secrets"
 	"github.com/TacoContent/ironstate/internal/ui"
 )
 
@@ -48,10 +49,10 @@ func PrintTable(w io.Writer, results []Result) error {
 	rows := make([]row, len(results))
 	for i, r := range results {
 		status, colorFn := statusCell(r)
-		rows[i] = row{ui.ModuleEmoji(r.Module), r.Module, r.Package, r.State, status, colorFn}
-		widths[0] = max(widths[0], len(r.Module))
-		widths[1] = max(widths[1], len(r.Package))
-		widths[2] = max(widths[2], len(r.State))
+		rows[i] = row{ui.ModuleEmoji(r.Module), secrets.Redact(r.Module), secrets.Redact(r.Package), secrets.Redact(r.State), status, colorFn}
+		widths[0] = max(widths[0], len(rows[i].module))
+		widths[1] = max(widths[1], len(rows[i].pkg))
+		widths[2] = max(widths[2], len(rows[i].state))
 		statusWidth = max(statusWidth, len(status))
 	}
 
@@ -160,22 +161,33 @@ func PrintJSON(w io.Writer, results []Result) error {
 	out := make([]jsonResult, len(results))
 	for i, r := range results {
 		out[i] = jsonResult{
-			Module:  r.Module,
-			Package: r.Package,
-			State:   r.State,
+			Module:  secrets.Redact(r.Module),
+			Package: secrets.Redact(r.Package),
+			State:   secrets.Redact(r.State),
 			Action:  r.Action,
 			Apply:   r.Apply,
 			Failed:  r.Failed,
 			Exec: jsonExecResult{
 				RC:          r.Exec.RC,
-				Stdout:      r.Exec.Stdout,
-				StdoutLines: r.Exec.StdoutLines,
-				Stderr:      r.Exec.Stderr,
-				StderrLines: r.Exec.StderrLines,
+				Stdout:      secrets.Redact(r.Exec.Stdout),
+				StdoutLines: redactStrings(r.Exec.StdoutLines),
+				Stderr:      secrets.Redact(r.Exec.Stderr),
+				StderrLines: redactStrings(r.Exec.StderrLines),
 			},
 		}
 	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(out)
+}
+
+func redactStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, len(values))
+	for i, v := range values {
+		out[i] = secrets.Redact(v)
+	}
+	return out
 }

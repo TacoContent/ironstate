@@ -10,6 +10,7 @@ package tasks
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/TacoContent/ironstate/internal/expr"
 	"github.com/TacoContent/ironstate/internal/model"
@@ -29,6 +30,7 @@ type Leaf struct {
 	Tags            []string
 	When            []any
 	ID              string
+	SecretID        bool
 	FailedWhen      []any
 	ContinueOnError bool
 	Looped          bool
@@ -184,6 +186,10 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 
 		name, _ := item["name"].(string)
 		id, _ := item["id"].(string)
+		secretID := strings.HasPrefix(id, "$")
+		if secretID {
+			id = strings.TrimPrefix(id, "$")
+		}
 		continueOnError, _ := item["continue_on_error"].(bool)
 
 		results = append(results, Leaf{
@@ -191,6 +197,7 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 			Tags:            effectiveTags,
 			When:            effectiveWhen,
 			ID:              id,
+			SecretID:        secretID,
 			FailedWhen:      model.AsList(item["failed_when"]),
 			ContinueOnError: continueOnError,
 			Looped:          sc.parentLooped,

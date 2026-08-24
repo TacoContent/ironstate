@@ -213,7 +213,8 @@ func TestLoadIncludedPackageMissingReturnsNilNotError(t *testing.T) {
 func TestImportEnvFileSetsEnvironment(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, ".env"), "FOO=bar\n# comment\nQUOTED=\"with spaces\"\n")
-	if err := ImportEnvFile(filepath.Join(dir, ".env")); err != nil {
+	loaded, err := ImportEnvFile(filepath.Join(dir, ".env"))
+	if err != nil {
 		t.Fatal(err)
 	}
 	if os.Getenv("FOO") != "bar" {
@@ -222,10 +223,17 @@ func TestImportEnvFileSetsEnvironment(t *testing.T) {
 	if os.Getenv("QUOTED") != "with spaces" {
 		t.Errorf("QUOTED = %q", os.Getenv("QUOTED"))
 	}
+	if loaded["FOO"] != "bar" || loaded["QUOTED"] != "with spaces" {
+		t.Fatalf("ImportEnvFile returned %#v, want FOO=bar and QUOTED=with spaces", loaded)
+	}
 }
 
 func TestImportEnvFileMissingIsNotAnError(t *testing.T) {
-	if err := ImportEnvFile(filepath.Join(t.TempDir(), "nope.env")); err != nil {
+	loaded, err := ImportEnvFile(filepath.Join(t.TempDir(), "nope.env"))
+	if err != nil {
 		t.Fatalf("missing .env file should not error, got %v", err)
+	}
+	if len(loaded) != 0 {
+		t.Fatalf("missing .env file should return empty map, got %#v", loaded)
 	}
 }

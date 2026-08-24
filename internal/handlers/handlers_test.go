@@ -385,6 +385,21 @@ func TestFactHandlerEmbeddedShellRunsViaOverridableRunner(t *testing.T) {
 	}
 }
 
+func TestFactHandlerDescribeRedactsSecretValue(t *testing.T) {
+	h := factHandler{}
+	item := map[string]any{"name": "$token", "value": "super-secret-value"}
+	desc, err := h.Describe(item, engine.ActionInstall, engine.Context{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(desc, "super-secret-value") {
+		t.Fatalf("Describe leaked secret value: %q", desc)
+	}
+	if !strings.Contains(desc, "***") {
+		t.Fatalf("Describe should redact value in secret fact output: %q", desc)
+	}
+}
+
 type fakeRunnerFunc func(exe string, args []string) (ironexec.Result, error)
 
 func (f fakeRunnerFunc) Run(exe string, args []string) (ironexec.Result, error) { return f(exe, args) }

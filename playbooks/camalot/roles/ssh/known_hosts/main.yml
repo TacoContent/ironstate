@@ -3,15 +3,15 @@ tasks:
   - name: Add host keys to known_hosts
     tags:
       - ssh
-      - known_hosts
+      - ssh.known_hosts
     when: ssh.known_hosts is defined
-    items: "${{ vars.ssh.known_hosts }}"
+    items: "${{ vars.ssh.known_hosts | default([]) }}"
     actions:
-      - name: Add GitHub user's public key(s) to known_hosts
+      - name: Add GitHub public key(s) to known_hosts
         when: "${{ item.key is defined }}"
         tags:
           - ssh
-          - known_hosts
+          - ssh.known_hosts
 
         blockinfile:
           dest: ~/.ssh/known_hosts

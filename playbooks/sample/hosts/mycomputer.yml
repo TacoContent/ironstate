@@ -1,0 +1,29 @@
+---
+vars: {}
+tasks:
+
+  - name: Secret from .secrets
+    log:
+      level: warning
+      message: "This is a secret from .secrets ${{ lookup('env', 'MY_SECRET') }}"
+
+  - name: Fact with a secret
+    fact:
+      name: $my_secret
+      value: ${{ lookup('env', 'MY_SECRET') }}
+
+  - name: Fact with Constant Secert
+    fact:
+      name: $constant_secret
+      value: "supersecretvalue"
+
+  - name: Task as a secret
+    id: $task_secret
+    shell:
+      command: |
+        Write-Output "secret message"
+
+  - name: Log task secret
+    log:
+      level: warning
+      message: "This is a secret from a task: ${{ task_secret.stdout }}"

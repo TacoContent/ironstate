@@ -15,6 +15,7 @@ import (
 	"github.com/TacoContent/ironstate/internal/conditions"
 	"github.com/TacoContent/ironstate/internal/expr"
 	"github.com/TacoContent/ironstate/internal/model"
+	"github.com/TacoContent/ironstate/internal/secrets"
 	"github.com/TacoContent/ironstate/internal/tasks"
 	"github.com/TacoContent/ironstate/internal/template"
 	"github.com/TacoContent/ironstate/internal/ui"
@@ -89,6 +90,7 @@ type Result struct {
 type State struct {
 	Registry            map[string]map[string]any
 	UserFacts           map[string]any
+	SecretFacts         map[string]bool
 	CommandAvailability map[string]bool
 }
 
@@ -97,6 +99,7 @@ func NewState() *State {
 	return &State{
 		Registry:            map[string]map[string]any{},
 		UserFacts:           map[string]any{},
+		SecretFacts:         map[string]bool{},
 		CommandAvailability: map[string]bool{},
 	}
 }
@@ -106,7 +109,7 @@ func NewState() *State {
 // redirection, matching internal/tasks and internal/template's pattern.
 var Warn = func(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	fmt.Fprintln(os.Stderr, ui.Yellow("⚠ "+msg))
+	fmt.Fprintln(os.Stderr, ui.Yellow("⚠ "+secrets.Redact(msg)))
 }
 
 // Danger reports a genuine failure (a leaf that actually failed) in a
@@ -115,7 +118,7 @@ var Warn = func(format string, args ...any) {
 // like a missing PATH command.
 var Danger = func(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	fmt.Fprintln(os.Stderr, ui.BoldRed("✖ "+msg))
+	fmt.Fprintln(os.Stderr, ui.BoldRed("✖ "+secrets.Redact(msg)))
 }
 
 // Info reports a normal operational line (a dispatched leaf's
@@ -125,7 +128,8 @@ var Danger = func(format string, args ...any) {
 // "chatter on stderr, data on stdout" split '--output json' needs to stay
 // pipeable. Overridable for tests/CLI output redirection.
 var Info = func(format string, args ...any) {
-	_, _ = fmt.Fprintf(os.Stderr, format+"\n", args...)
+	msg := fmt.Sprintf(format, args...)
+	_, _ = fmt.Fprintln(os.Stderr, secrets.Redact(msg))
 }
 
 // LookPath resolves a module's backing CLI on PATH — overridable so tests
@@ -214,6 +218,10 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State) ([]Result, bool,
 
 	var results []Result
 	for _, leaf := range leaves {
+		if leaf.ID != "" && strings.HasPrefix(leaf.ID, "$") {
+			leaf.SecretID = true
+			leaf.ID = strings.TrimPrefix(leaf.ID, "$")
+		}
 		module := leaf.Module
 		label := leafLabel(leaf)
 
@@ -273,7 +281,7 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State) ([]Result, bool,
 		// see docs/plans/go-rewrite.md §2/§4.10.
 		effectiveApply := opts.Apply || hasEmbeddedShell || module == "assert"
 
-		result, err := invokePackageItem(module, leaf.Name, leaf.Item, handler, flatContext, opts.Filters, effectiveApply, opts.Verbose)
+		result, err := invokePackageItem(module, leaf.Name, leaf.Item, handler, flatContext, opts.Filters, effectiveApply, opts.Verbose, leaf.SecretID)
 		if err != nil {
 			return results, false, err
 		}
@@ -318,9 +326,15 @@ func applyFactResult(item map[string]any, result Result, state *State, flatConte
 	if factName == "" {
 		return
 	}
+	secret := strings.HasPrefix(factName, "$")
+	if secret {
+		factName = strings.TrimPrefix(factName, "$")
+		state.SecretFacts[factName] = true
+	}
 	switch {
 	case result.Action == ActionUninstall:
 		delete(state.UserFacts, factName)
+		delete(state.SecretFacts, factName)
 	case hasEmbeddedShell:
 		if hasDeferredFactValue {
 			valueContext := cloneFlat(flatContext)
@@ -330,12 +344,25 @@ func applyFactResult(item map[string]any, result Result, state *State, flatConte
 				Warn("fact '%s': resolving deferred value failed: %v", factName, err)
 				return
 			}
+			if secret {
+				secrets.Register(fmt.Sprint(valueWrapper["value"]))
+			}
 			state.UserFacts[factName] = valueWrapper["value"]
 		} else {
-			state.UserFacts[factName] = strings.TrimSpace(result.Exec.Stdout)
+			value := strings.TrimSpace(result.Exec.Stdout)
+			if secret {
+				secrets.Register(value)
+			}
+			state.UserFacts[factName] = value
 		}
 	default:
-		state.UserFacts[factName] = item["value"]
+		value := item["value"]
+		if secret {
+			if s, ok := value.(string); ok {
+				secrets.Register(s)
+			}
+		}
+		state.UserFacts[factName] = value
 	}
 }
 
@@ -352,6 +379,24 @@ func registerLeafResult(state *State, leaf tasks.Leaf, changed, failed bool, exe
 	for k, v := range exec.Extra {
 		if _, exists := registered[k]; !exists {
 			registered[k] = v
+		}
+	}
+	if leaf.SecretID {
+		for _, v := range registered {
+			switch s := v.(type) {
+			case string:
+				secrets.Register(s)
+			case []string:
+				for _, item := range s {
+					secrets.Register(item)
+				}
+			case []any:
+				for _, item := range s {
+					if ss, ok := item.(string); ok {
+						secrets.Register(ss)
+					}
+				}
+			}
 		}
 	}
 
@@ -377,10 +422,14 @@ func registerLeafResult(state *State, leaf tasks.Leaf, changed, failed bool, exe
 	}
 }
 
-func invokePackageItem(module, name string, item map[string]any, handler Handler, flatContext map[string]any, filters expr.Filters, apply, verbose bool) (Result, error) {
+func invokePackageItem(module, name string, item map[string]any, handler Handler, flatContext map[string]any, filters expr.Filters, apply, verbose, secretID bool) (Result, error) {
 	label := name
 	if label == "" {
 		label = itemLabel(item)
+	}
+	displayLabel := label
+	if secretID {
+		displayLabel = "***"
 	}
 	state, _ := item["state"].(string)
 	if state == "" {
@@ -402,12 +451,15 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 	exec := ExecResult{StdoutLines: []string{}, StderrLines: []string{}}
 	if action == ActionSkip {
 		if verbose {
-			Info("%s", ui.Dim(fmt.Sprintf("%s · skip   [%s] %s (already %s)", emoji, module, label, state)))
+			Info("%s", ui.Dim(fmt.Sprintf("%s · skip   [%s] %s (already %s)", emoji, module, displayLabel, state)))
 		}
 	} else {
 		description, err := handler.Describe(item, action, ctx)
 		if err != nil {
 			return Result{}, fmt.Errorf("%s %s: Describe: %w", module, label, err)
+		}
+		if secretID {
+			description = fmt.Sprintf("run %s via %q ***", module, "secure command")
 		}
 		verb := "install"
 		if action == ActionUninstall {
@@ -418,17 +470,30 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 		} else {
 			Info("%s %s [%s] %s", emoji, ui.Bold(fmt.Sprintf("→ %sing", verb)), module, description)
 			var execErr error
-			if action == ActionInstall {
-				exec, execErr = handler.Install(item, name, ctx)
+			if secretID {
+				oldInfo, oldWarn, oldDanger := Info, Warn, Danger
+				Info = func(string, ...any) {}
+				Warn = func(string, ...any) {}
+				Danger = func(string, ...any) {}
+				if action == ActionInstall {
+					exec, execErr = handler.Install(item, name, ctx)
+				} else {
+					exec, execErr = handler.Uninstall(item, name, ctx)
+				}
+				Info, Warn, Danger = oldInfo, oldWarn, oldDanger
 			} else {
-				exec, execErr = handler.Uninstall(item, name, ctx)
+				if action == ActionInstall {
+					exec, execErr = handler.Install(item, name, ctx)
+				} else {
+					exec, execErr = handler.Uninstall(item, name, ctx)
+				}
 			}
 			if execErr != nil {
 				msg := execErr.Error()
-				Danger("[%s] %s threw: %s", module, label, msg)
+				Danger("[%s] %s threw: %s", module, displayLabel, msg)
 				exec = ExecResult{RC: 1, Stderr: msg, StderrLines: []string{msg}}
 			} else if exec.RC == 0 {
-				Info("%s %s [%s] %s", emoji, ui.BoldGreen(fmt.Sprintf("✔ %sed", verb)), module, label)
+				Info("%s %s [%s] %s", emoji, ui.BoldGreen(fmt.Sprintf("✔ %sed", verb)), module, displayLabel)
 			}
 		}
 	}
@@ -441,7 +506,7 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 
 	return Result{
 		Module:  module,
-		Package: label,
+		Package: displayLabel,
 		State:   state,
 		Action:  action,
 		Apply:   apply,
@@ -496,6 +561,10 @@ func mergeFlatContext(facts, userFacts, packageVars, packageInputs, packagePacka
 		flat[k] = v
 	}
 	return flat
+}
+
+func RegisterSecretVarPaths(vars map[string]any) {
+	secrets.MarkSecretVarPaths(vars)
 }
 
 func cloneFlat(ctx map[string]any) map[string]any {

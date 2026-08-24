@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/TacoContent/ironstate/internal/engine"
+	"github.com/TacoContent/ironstate/internal/secrets"
 )
 
 // factHandler ports Handlers/Fact.psm1: sets an arbitrary named value
@@ -28,6 +30,10 @@ func (factHandler) Test(item map[string]any, name string, ctx engine.Context) (b
 
 func (factHandler) Describe(item map[string]any, action engine.Action, ctx engine.Context) (string, error) {
 	factName := getStringOr(item, "name", getStringOr(item, "package", "<unnamed>"))
+	secretName := strings.HasPrefix(factName, "$")
+	if secretName {
+		factName = strings.TrimPrefix(factName, "$")
+	}
 	if action == engine.ActionUninstall {
 		return fmt.Sprintf("unset fact '%s'", factName), nil
 	}
@@ -37,7 +43,14 @@ func (factHandler) Describe(item map[string]any, action engine.Action, ctx engin
 		cfg := resolveShellStateConfig(shellSpec, state)
 		return fmt.Sprintf("run shell '%s' via '%s' -> fact '%s'", label, cfg.HostSpec, factName), nil
 	}
-	return fmt.Sprintf("set fact '%s' = %v", factName, item["value"]), nil
+	value := item["value"]
+	if secretName {
+		if s, ok := value.(string); ok {
+			secrets.Register(s)
+			value = secrets.Redact(s)
+		}
+	}
+	return fmt.Sprintf("set fact '%s' = %v", factName, value), nil
 }
 
 func (factHandler) Install(item map[string]any, name string, ctx engine.Context) (engine.ExecResult, error) {

@@ -74,6 +74,43 @@ Files are loaded and merged in this order. Each subsequent file's `tasks` list i
 
 Before anything else runs, `ironstate` loads `KEY=VALUE` lines from a `.env` file, then a `.secrets` file, out of the **current working directory** (not the playbook's own directory, and not relative to the binary) into the process environment - so `lookup('env', 'KEY')`, a `scheduled_task`'s `password_env`, or anything else reading `$env:KEY`/`os.Getenv` sees them. Either file is optional; a missing one is silently skipped. Each non-blank, non-`#`-comment line is `KEY=VALUE`; a value wrapped in matching `'...'`/`"..."` has those quotes stripped. Loaded in that order (`.env` then `.secrets`), so run `ironstate` from wherever these files live - typically your playbook's own root, alongside `site.yml`, if you keep it there.
 
+### Secrets and sensitive values
+
+`ironstate` treats sensitive values as secret once they are known, then masks them in any later output it prints while leaving the value usable for actual evaluation.
+
+This is done in two ways:
+
+- `.secrets` is automatically sensitive. Anything loaded from `.secrets` is registered as a secret value immediately, before tasks start running. This makes `.secrets` the authenticated/stored-secret channel, while `.env` remains ordinary config and is not treated as automatically secret.
+- A fact/var/task result can be marked as secret by prefixing the authored name with `$`. The `$` is stripped for runtime access, but the value is still tracked as secret and redacted from logs, tables, and JSON output.
+
+```yaml
+vars:
+  $github_token: "ghp_..."
+
+tasks:
+  - fact:
+      name: $api_token
+      value: ${{ lookup('env', 'MY_TOKEN') }}
+
+  - id: $task_secret
+    shell:
+      command: Write-Output "secret message"
+```
+
+Accessible names remain normal after the prefix is stripped:
+
+- `vars.github_token`
+- `facts.api_token`
+- `task_secret.stdout`
+
+The secret marker is display-only. Conditions and template expressions still resolve the real value; redaction happens when `ironstate` prints it back out, replacing the sensitive value with `***` instead of emitting the raw string. This applies to per-task logging, task result tables, and `--output json` output alike.
+
+A few safeguards are deliberate:
+
+- very short values are ignored by the registry to avoid over-redacting common values like `true` or `1`
+- transformed outputs such as `${{ vars.token | upper }}` are only redacted when the underlying secret value is the exact registered string, matching the usual CI-style secret masking model
+- a secret task still preserves the real value internally for evaluation, but its verbose log lines and result labels are suppressed/redacted to avoid leaking the script text, task name, or stdout/stderr content
+
 ### Machine-specific overrides — `hosts/`
 
 Create a file named after the machine's hostname to add or change tasks for that machine only (the same `computer_name` fact - see [Facts](#facts) - falls back to the OS hostname on Linux/macOS).
