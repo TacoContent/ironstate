@@ -272,7 +272,7 @@ func TestDiscoverScriptFiltersRunsRealZshFilters(t *testing.T) {
 
 	dir := t.TempDir()
 	script := "if [ -z \"$1\" ]; then\n\techo \"\"\n\texit 0\nfi\necho -n \"$1\" | tr '[:lower:]' '[:upper:]'\n"
-	if err := os.WriteFile(filepath.Join(dir, "shout.zsh"), []byte(script), 0o700); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "shout.zsh"), []byte(script), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -306,7 +306,7 @@ func TestDiscoverScriptFiltersRunsRealFishFilters(t *testing.T) {
 
 	dir := t.TempDir()
 	script := "if test -z \"$argv[1]\"\n\techo \"\"\n\texit 0\nend\necho -n (string upper $argv[1])\n"
-	if err := os.WriteFile(filepath.Join(dir, "shout.fish"), []byte(script), 0o700); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "shout.fish"), []byte(script), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

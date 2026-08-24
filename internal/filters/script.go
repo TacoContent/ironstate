@@ -81,7 +81,7 @@ func resolveBashExecutable() string {
 		return p
 	}
 	for _, candidate := range wellKnownWindowsBashLocations() {
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() { //nolint:gosec // candidate is a fixed Git-for-Windows subpath under a well-known env var (ProgramFiles/LocalAppData), not user/network input
 			return candidate
 		}
 	}
@@ -95,7 +95,7 @@ func usableBashOnPath() string {
 		if strings.HasSuffix(lower, `\system32\bash.exe`) || strings.Contains(lower, `\windowsapps\`) {
 			continue
 		}
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() { //nolint:gosec // candidate is PATH-dir + a fixed "bash.exe" suffix, not user/network input
 			return candidate
 		}
 	}

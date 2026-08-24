@@ -11,7 +11,8 @@ jobs:
   lint:
     permissions:
       contents: read
-    runs-on: windows-latest
+    # runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:

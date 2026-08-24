@@ -275,17 +275,17 @@ func TestRunLeavesSecretIDSuppressesVerboseOutput(t *testing.T) {
 
 	var infoBuf strings.Builder
 	Info = func(format string, args ...any) {
-		infoBuf.WriteString(fmt.Sprintf(format, args...))
+		fmt.Fprintf(&infoBuf, format, args...)
 		infoBuf.WriteByte('\n')
 	}
 	Warn = func(format string, args ...any) {
 		infoBuf.WriteString("WARN: ")
-		infoBuf.WriteString(fmt.Sprintf(format, args...))
+		fmt.Fprintf(&infoBuf, format, args...)
 		infoBuf.WriteByte('\n')
 	}
 	Danger = func(format string, args ...any) {
 		infoBuf.WriteString("DANGER: ")
-		infoBuf.WriteString(fmt.Sprintf(format, args...))
+		fmt.Fprintf(&infoBuf, format, args...)
 		infoBuf.WriteByte('\n')
 	}
 
