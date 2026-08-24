@@ -2,8 +2,10 @@ package filters
 
 import (
 	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -244,9 +246,30 @@ func TestFromJSONAndJSONQuery(t *testing.T) {
 	}
 }
 
+func TestFromJSONInvalidInputErrorIncludesInputSnippet(t *testing.T) {
+	_, err := filterFromJSON("<html>not json</html>", nil)
+	if err == nil {
+		t.Fatal("expected an error for non-JSON input, got nil")
+	}
+	if !strings.Contains(err.Error(), "<html>not json</html>") {
+		t.Fatalf("error %q does not include the offending input for debugging", err.Error())
+	}
+}
+
+func TestTruncateForErrorLimitsLength(t *testing.T) {
+	long := strings.Repeat("x", 500)
+	got := truncateForError(long)
+	if len(got) >= len(long) {
+		t.Fatalf("truncateForError did not shorten a long input: len=%d", len(got))
+	}
+	if !strings.HasSuffix(got, "...(truncated)") {
+		t.Fatalf("truncateForError result missing truncation marker: %q", got)
+	}
+}
+
 func TestLookupFilter(t *testing.T) {
 	origHTTPGet := httpGet
-	httpGet = func(url string) (string, error) {
+	httpGet = func(url string, headers http.Header) (string, error) {
 		if url != "https://example.com/x.keys" {
 			t.Fatalf("unexpected URL: %s", url)
 		}
@@ -272,6 +295,56 @@ func TestLookupFilter(t *testing.T) {
 	got = apply(t, "lookup", nil, "file", "~/some/path")
 	if got != "content" {
 		t.Errorf("lookup file = %v", got)
+	}
+}
+
+func TestLookupFilterURLHeaders(t *testing.T) {
+	origHTTPGet := httpGet
+	defer func() { httpGet = origHTTPGet }()
+
+	var gotHeaders http.Header
+	httpGet = func(url string, headers http.Header) (string, error) {
+		if url != "https://example.com/x.keys" {
+			t.Fatalf("unexpected URL: %s", url)
+		}
+		gotHeaders = headers
+		return "ssh-ed25519 AAAA", nil
+	}
+
+	// A list of single-key maps - the shape a 'vars:'-defined header list
+	// naturally has (each YAML list item '- Name: value' is a one-key map).
+	headers := []any{
+		map[string]any{"Authorization": "Bearer abc123"},
+		map[string]any{"Accept": "application/vnd.github+json"},
+	}
+	got := apply(t, "lookup", nil, "url", "https://example.com/", "x", ".keys", headers)
+	if got != "ssh-ed25519 AAAA" {
+		t.Errorf("lookup url = %v", got)
+	}
+	if gotHeaders.Get("Authorization") != "Bearer abc123" {
+		t.Errorf("Authorization header = %q", gotHeaders.Get("Authorization"))
+	}
+	if gotHeaders.Get("Accept") != "application/vnd.github+json" {
+		t.Errorf("Accept header = %q", gotHeaders.Get("Accept"))
+	}
+
+	// A bare map (not wrapped in a list) works the same way.
+	got = apply(t, "lookup", nil, "url", "https://example.com/", "x", ".keys", map[string]any{"X-Test": "1"})
+	if got != "ssh-ed25519 AAAA" {
+		t.Errorf("lookup url with bare map headers = %v", got)
+	}
+	if gotHeaders.Get("X-Test") != "1" {
+		t.Errorf("X-Test header = %q", gotHeaders.Get("X-Test"))
+	}
+
+	// A nil/empty header value is omitted rather than sent as an empty
+	// header - e.g. an unset token env var shouldn't send "Bearer ".
+	got = apply(t, "lookup", nil, "url", "https://example.com/", "x", ".keys", []any{map[string]any{"Authorization": ""}})
+	if got != "ssh-ed25519 AAAA" {
+		t.Errorf("lookup url with empty header value = %v", got)
+	}
+	if _, present := gotHeaders["Authorization"]; present {
+		t.Errorf("expected empty header value to be omitted, got %v", gotHeaders)
 	}
 }
 

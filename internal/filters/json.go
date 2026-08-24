@@ -40,9 +40,22 @@ func filterFromJSON(value any, _ []any) (any, error) {
 	}
 	var out any
 	if err := json.Unmarshal([]byte(s), &out); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("from_json filter: %w (input: %s)", err, truncateForError(s))
 	}
 	return out, nil
+}
+
+// truncateForError shortens s for inclusion in an error message - a
+// piped 'lookup' result (e.g. an unexpected HTML error/rate-limit page
+// from a remote URL) can be arbitrarily large, and the raw
+// encoding/json error alone ("invalid character '<' looking for
+// beginning of value") gives no clue what was actually being parsed.
+func truncateForError(s string) string {
+	const max = 200
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "...(truncated)"
 }
 
 func filterJSONQuery(value any, args []any) (any, error) {

@@ -82,6 +82,20 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	}
 	tableOutput := cfg.Output != "json"
 
+	// Loaded from the current working directory (not the playbook's own
+	// directory, and not relative to the binary) - matches how
+	// config.Load's own ironstate.yaml is resolved, and how these were
+	// found in the original apply.sh/ironstate.ps1 (always run from a
+	// repo/project root). A missing file is not an error. Must happen
+	// before anything that could reference an env var (facts, lookup('env',
+	// ...), '.env'-derived vars/tags) - loaded first, deliberately.
+	if err := packages.ImportEnvFile(".env"); err != nil {
+		return NewLoadError(err)
+	}
+	if err := packages.ImportEnvFile(".secrets"); err != nil {
+		return NewLoadError(err)
+	}
+
 	resolvedFile := pathutil.ResolveUserPath(cfg.File)
 	doc, err := packages.LoadHierarchy(resolvedFile)
 	if err != nil {

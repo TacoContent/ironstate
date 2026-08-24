@@ -11,9 +11,19 @@ import (
 )
 
 // httpGet is overridable in tests so 'lookup("url", ...)' never needs a
-// live network endpoint (docs/plans/go-rewrite.md §4.5).
-var httpGet = func(url string) (string, error) {
-	resp, err := http.Get(url) //nolint:gosec // target is user-authored YAML content, same trust boundary as the rest of this tool
+// live network endpoint (docs/plans/go-rewrite.md §4.5). headers is nil
+// for a plain request.
+var httpGet = func(url string, headers http.Header) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil) //nolint:gosec // target is user-authored YAML content, same trust boundary as the rest of this tool
+	if err != nil {
+		return "", err
+	}
+	for name, values := range headers {
+		for _, v := range values {
+			req.Header.Add(name, v)
+		}
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -41,12 +51,76 @@ func registerLookupFilter(r *Registry) {
 	r.Register("lookup", filterLookup)
 }
 
+// extractLookupHeaders splits a trailing headers argument (a map, or a
+// list of maps, of header-name -> value entries) off of a 'url' action's
+// pieces, so the remaining pieces are exactly the URL text to concatenate
+// - e.g. 'lookup("url", base, path, vars.api_headers)'. Every other
+// action ignores this entirely (no HTTP request to attach headers to).
+// A header value that's nil/empty is skipped rather than sent as an
+// empty header, so e.g. an unset token env var quietly omits that header
+// instead of sending "Bearer ".
+func extractLookupHeaders(action string, pieces []any) ([]any, http.Header, error) {
+	if action != "url" || len(pieces) == 0 {
+		return pieces, nil, nil
+	}
+	last := pieces[len(pieces)-1]
+	headers, ok, err := parseLookupHeaders(last)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !ok {
+		return pieces, nil, nil
+	}
+	return pieces[:len(pieces)-1], headers, nil
+}
+
+func parseLookupHeaders(v any) (http.Header, bool, error) {
+	switch entries := v.(type) {
+	case []any:
+		headers := make(http.Header)
+		for _, raw := range entries {
+			m, ok := raw.(map[string]any)
+			if !ok {
+				return nil, false, fmt.Errorf("lookup filter headers entry must be a map, got %T", raw)
+			}
+			addLookupHeaderEntries(headers, m)
+		}
+		return headers, true, nil
+	case map[string]any:
+		headers := make(http.Header)
+		addLookupHeaderEntries(headers, entries)
+		return headers, true, nil
+	default:
+		return nil, false, nil
+	}
+}
+
+func addLookupHeaderEntries(headers http.Header, m map[string]any) {
+	for name, raw := range m {
+		if raw == nil {
+			continue
+		}
+		if s, ok := raw.(string); ok && s == "" {
+			continue
+		}
+		headers.Add(name, toStr(raw))
+	}
+}
+
 func filterLookup(value any, args []any) (any, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("lookup filter requires at least one argument")
 	}
 	action := strings.ToLower(toStr(args[0]))
 	pieces := args[1:]
+	if len(pieces) == 0 {
+		return nil, fmt.Errorf("lookup filter '%s' action requires at least one more argument", action)
+	}
+
+	pieces, headers, err := extractLookupHeaders(action, pieces)
+	if err != nil {
+		return nil, err
+	}
 	if len(pieces) == 0 {
 		return nil, fmt.Errorf("lookup filter '%s' action requires at least one more argument", action)
 	}
@@ -68,7 +142,7 @@ func filterLookup(value any, args []any) (any, error) {
 	case "env":
 		return os.Getenv(target), nil
 	case "url":
-		return httpGet(target)
+		return httpGet(target, headers)
 	case "file":
 		path := pathutil.ResolveUserPath(target)
 		content, found, err := readFile(path)

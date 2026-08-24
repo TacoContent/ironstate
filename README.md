@@ -70,6 +70,10 @@ Files are loaded and merged in this order. Each subsequent file's `tasks` list i
 
 `COMPUTERNAME` and `USERNAME` come from the environment variables of the same name. Overlay files use the explicit `tasks:`/`vars:` mapping form (not the bare-list form) so they have somewhere to merge into.
 
+### `.env` / `.secrets`
+
+Before anything else runs, `ironstate` loads `KEY=VALUE` lines from a `.env` file, then a `.secrets` file, out of the **current working directory** (not the playbook's own directory, and not relative to the binary) into the process environment - so `lookup('env', 'KEY')`, a `scheduled_task`'s `password_env`, or anything else reading `$env:KEY`/`os.Getenv` sees them. Either file is optional; a missing one is silently skipped. Each non-blank, non-`#`-comment line is `KEY=VALUE`; a value wrapped in matching `'...'`/`"..."` has those quotes stripped. Loaded in that order (`.env` then `.secrets`), so run `ironstate` from wherever these files live - typically your playbook's own root, alongside `site.yml`, if you keep it there.
+
 ### Machine-specific overrides — `hosts/`
 
 Create a file named after the machine's hostname to add or change tasks for that machine only (the same `computer_name` fact - see [Facts](#facts) - falls back to the OS hostname on Linux/macOS).
