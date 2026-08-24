@@ -24,6 +24,7 @@ playbooks/
 !**/variables/.gitkeep
 !**/variables/example.yml
 !**/variables/username.yml
+!**/variables/windows.yml
 
 
 # Created by https://www.toptal.com/developers/gitignore/api/windows,powershell,visualstudiocode,go
