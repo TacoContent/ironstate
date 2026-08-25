@@ -142,7 +142,7 @@ var LookPath = func(name string) (string, error) { return exec.LookPath(name) }
 // modules, which are NOT in this set (they DO need a PATH check).
 var DefaultNoCommandCheckModules = map[string]bool{
 	"symlinks": true, "zip": true, "copy": true, "shell": true,
-	"blockinfile": true, "log": true, "path": true, "fact": true,
+	"blockinfile": true, "lineinfile": true, "log": true, "fail": true, "path": true, "fact": true,
 	"registry": true, "scheduled_task": true, "file": true, "template": true,
 	"assert": true, "ssh_host_block": true,
 }
@@ -277,6 +277,20 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State) ([]Result, bool,
 		}
 
 		wrapper := map[string]any{"item": leaf.Item}
+		if module == "lineinfile" {
+			if withMap, ok := leaf.Item["with"].(map[string]any); ok {
+				if _, present := flatContext["inputs"]; !present {
+					flatContext["inputs"] = withMap
+				}
+				flatContext["input"] = withMap
+				flatContext["with"] = withMap
+				for k, v := range withMap {
+					if _, present := flatContext[k]; !present {
+						flatContext[k] = v
+					}
+				}
+			}
+		}
 		if err := template.ResolveInPlace(wrapper, flatContext, opts.Filters, label, false); err != nil {
 			// A field's own '${{ }}' expression can throw for reasons
 			// that only show up at run time (e.g. a script filter whose
@@ -480,7 +494,7 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 	exec := ExecResult{StdoutLines: []string{}, StderrLines: []string{}}
 	if action == ActionSkip {
 		if verbose {
-			Info("%s", ui.Dim(fmt.Sprintf("%s · skip   [%s] %s (already %s)", emoji, module, displayLabel, state)))
+			Info("%s", ui.Dim(fmt.Sprintf("%s ⏭️ skip   [%s] %s (already %s)", emoji, module, displayLabel, state)))
 		}
 	} else {
 		description, err := handler.Describe(item, action, ctx)

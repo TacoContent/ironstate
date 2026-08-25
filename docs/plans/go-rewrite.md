@@ -246,12 +246,12 @@ not map key order within a single leaf). Use `gopkg.in/yaml.v3` (`yaml.Node` or 
 
 - Untyped nested structures decode into a generic `Value` type (`map[string]any` /
   `[]any` / scalars) mirroring PowerShell's `[ordered]` hashtable + `IList` duck-typing,
-  since the schema is intentionally loose (see `site.schema.json`) and a strict Go struct
+  since the schema is intentionally loose (see `ironstate.schema.json`) and a strict Go struct
   per module would fight the dynamic `${{ }}`/`when` substitution model.
 - A thin typed `Leaf`/`Task` view is derived *after* flattening (module name, item map,
   tags, when, id, failed_when, continue_on_error, looped, package vars/inputs/package),
   matching `Tasks.psm1`'s `Expand-TaskTree` output shape.
-- `site.schema.json` is treated as **documentation to reconcile, not an assumed source of
+- `ironstate.schema.json` is treated as **documentation to reconcile, not an assumed source of
   truth** — it is already out of sync with runtime behavior today (e.g. it has no `gem`
   entry despite `ironstate.ps1` registering a working `gem` handler used by
   `roles/languages/ruby/main.yml`). Phase 1 includes an explicit schema-vs-`ironstate.ps1`
@@ -509,7 +509,7 @@ driven by whole fixture documents rather than isolated calls.
 
 ## 5. Compatibility strategy
 
-1. **Schema is reconciled, then frozen.** Per §4.2, `site.schema.json` is first audited
+1. **Schema is reconciled, then frozen.** Per §4.2, `ironstate.schema.json` is first audited
    against actual `ironstate.ps1` behavior (fixing any drift, e.g. the missing `gem`
    entry) before it's trusted as a Go-loader validation input; once reconciled, it does
    not change further without an explicit decision.
@@ -543,7 +543,7 @@ driven by whole fixture documents rather than isolated calls.
 | Unit | `go test` + table-driven cases | `internal/expr`, `internal/template`, `internal/filters` (incl. golden-vs-PowerShell fixtures, except `lookup`/`json_query` which use hand-written mocked tests — see §4.5), `internal/tasks`, `internal/packages`, per-handler `Test`/`Describe`/argv-building logic via fake `Runner` |
 | Fuzz | `go test -fuzz` | `internal/expr` tokenizer/parser (string-literal escaping, unterminated `${{`/`}}` spans) — cheap given the grammar's small size, added from Phase 1 |
 | Race | `go test -race` | Required specifically for `internal/filters` (persistent worker pool, §4.5) — the one package with real concurrency |
-| Schema | `go test` against `site.schema.json` | Every fixture + real repo YAML files validate cleanly, after the Phase 1 schema-vs-runtime reconciliation (§4.2/§5.1) |
+| Schema | `go test` against `ironstate.schema.json` | Every fixture + real repo YAML files validate cleanly, after the Phase 1 schema-vs-runtime reconciliation (§4.2/§5.1) |
 | Integration | `go test` at `internal/engine` level | Whole fixture documents through the real dispatch loop (facts pass ordering, registry threading, loop `.results[]`, `failed_when`/`continue_on_error`, `--tags` filtering, the two dry-run-forces-execution exceptions, missing-handler row absence) with faked handlers/runner — no real installs |
 | End-to-end (built binary) | `go test` invoking the compiled binary as a subprocess, or a small `bats`/PowerShell Pester script in CI | `--file`/`--apply`/`--tags` flag parsing, exit codes (per the decision recorded in §2/§11), `--output json` shape, `filters list`, `doctor` |
 | Compatibility harness | GitHub Actions job on `windows-latest` | PS-vs-Go dry-run diff across `testdata/` fixtures (§5.2) |
@@ -599,7 +599,7 @@ as the project matures.
     unsupported-OS error rather than being compiled out, so the binary still runs and
     reports sensibly against a cross-platform subset of `site.yml`).
   - Archives: `.zip` for Windows, `.tar.gz` for Unix-likes; embed `README.md`,
-    `LICENSE`, `site.schema.json`.
+    `LICENSE`, `ironstate.schema.json`.
   - Checksums file (`checksums.txt`, SHA256) signed with **cosign** (keyless/OIDC via
     GitHub Actions identity) for supply-chain verification — stretch but low-cost given
     GoReleaser has a built-in `signs:` block.
@@ -647,7 +647,7 @@ green specifically for PRs touching the path-filtered directories above.
 | Phase | Scope | Exit criteria |
 | --- | --- | --- |
 | 0 — Scaffolding | `go.mod`, `cmd/ironstate`, cobra/viper wiring, CI skeleton (`ci.yml` running lint+vet+empty test suite), `.goreleaser.yaml` snapshot build | `ironstate version` builds and runs in CI on all target platforms |
-| 1 — Core engine, no I/O | `internal/expr`, `internal/template`, `internal/filters` (built-ins only), `internal/model`, **schema-vs-`ironstate.ps1` reconciliation audit** (fix drift, e.g. missing `gem` entry, before trusting `site.schema.json` as a validator input), schema validation test | Expression/template unit tests green (incl. fuzz targets); parity fixtures ported from README grammar examples; schema audit findings resolved or explicitly tracked |
+| 1 — Core engine, no I/O | `internal/expr`, `internal/template`, `internal/filters` (built-ins only), `internal/model`, **schema-vs-`ironstate.ps1` reconciliation audit** (fix drift, e.g. missing `gem` entry, before trusting `ironstate.schema.json` as a validator input), schema validation test | Expression/template unit tests green (incl. fuzz targets); parity fixtures ported from README grammar examples; schema audit findings resolved or explicitly tracked |
 | 2 — Document loading & flattening | `internal/packages`, `internal/tasks`, `internal/facts` | Real `site.yml` + all `hosts/`/`variables/` overlays (including `hosts/`-rooted and `roles/`-rooted `include`s) load, merge, and flatten to the expected leaf list (fixture-asserted) |
 | 3 — Engine + no-op/low-risk handlers | `internal/engine` (incl. dry-run execution exceptions for embedded-shell `fact`/`assert`, missing-handler row absence), handlers: `log`, `path`, `fact`, `assert`, `file`, `copy`, `blockinfile`, `ssh_host_block`, `symlinks`, `zip` | Full dry-run of real `site.yml` across all hosts produces a stable, reviewed plan; §4.8's `shell.host: pwsh` audit re-confirmed against current repo state; `.env`/`.secrets` resolution behavior decided (§2/§11) |
 | 4 — Package-manager handlers + `shell` + template engines | `winget`, `chocolatey`, `pipx`, `npm`, `cargo`, `go`, `gem`, `eget`, `registry`, `scheduled_task`, `shell` (incl. per-state fallback rules), `template` module w/ `jinja` (build-vs-buy spike first) and new `gotemplate` (Go stdlib `text/template`) | Dry-run parity harness (§5.2) green across all fixtures; any (currently nonexistent) real `eps`/`herestring` usage discovered late is migrated to `jinja`/`gotemplate` before this phase exits |
@@ -695,7 +695,7 @@ keeps review tractable and gives natural checkpoints to re-run the rubber-duck r
   (`registry` module's multi-value writes, `scheduled_task`'s update-vs-recreate logic) —
   treat as a dedicated Phase 4 sub-task with its own fixture tests, not an afterthought.
 - **Schema drift is a pre-existing condition, not something the rewrite introduces**:
-  `site.schema.json` is missing at least the `gem` module today. Treat the Phase 1
+  `ironstate.schema.json` is missing at least the `gem` module today. Treat the Phase 1
   reconciliation audit (§4.2/§10) as mandatory before the schema is used as a validation
   source of truth for the Go loader — otherwise the rewrite silently inherits and
   possibly amplifies an existing documentation gap.
@@ -736,7 +736,7 @@ keeps review tractable and gives natural checkpoints to re-run the rubber-duck r
     resolver (verified against `Packages.psm1`/`ironstate.ps1` and real `hosts/`/`roles/`
     includes in this repo), not a packages-vs-roles special case.
   - Added the missing `gem`/RubyGem handler everywhere the module list appears, and
-    flagged that `site.schema.json` is already out of sync with runtime behavior (missing
+    flagged that `ironstate.schema.json` is already out of sync with runtime behavior (missing
     `gem`) — added an explicit Phase 1 schema-reconciliation task rather than assuming the
     schema is a safe source of truth as-is.
   - Documented previously-omitted subtleties required for real compatibility: the two

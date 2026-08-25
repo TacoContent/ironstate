@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/ryanmconrad/ansible-systems/main/install/windows/site.schema.json",
+  "$id": "https://raw.githubusercontent.com/TacoContent/ironstate/develop/ironstate.schema.json",
   "title": "IronState Configuration",
   "description": "Schema for install/windows/site.yml and its per-machine (hosts/<COMPUTERNAME>.yml) and per-user (variables/<USERNAME>.yml) overlay files. A document is either the explicit mapping form ('tasks'/'vars') or, when 'vars' isn't needed, a bare list of tasks/actions directly. Overlays use the explicit mapping form so they can merge by key into the base file (see install/windows/README.md): 'tasks' appends, 'vars' deep-merges key-by-key.",
   "oneOf": [
@@ -8,6 +8,11 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "version": {
+          "type": "string",
+          "default": "1",
+          "description": "Schema version. Currently '1'."
+        },
         "tasks": {
           "type": "array",
           "description": "Task/action list, executed in the order written. See README.md for the task/action model.",
@@ -111,8 +116,10 @@
         "template": { "$ref": "#/$defs/templateItem" },
         "shell": { "$ref": "#/$defs/shellItem" },
         "blockinfile": { "$ref": "#/$defs/blockInFileItem" },
+        "lineinfile": { "$ref": "#/$defs/lineInFileItem" },
         "ssh_host_block": { "$ref": "#/$defs/sshHostBlockItem" },
         "log": { "$ref": "#/$defs/logItem" },
+        "fail": { "$ref": "#/$defs/failItem" },
         "path": { "$ref": "#/$defs/pathItem" },
         "fact": { "$ref": "#/$defs/factItem" },
         "assert": { "$ref": "#/$defs/assertItem" },
@@ -440,6 +447,81 @@
         "state": { "$ref": "#/$defs/state" }
       }
     },
+    "lineInFileItem": {
+      "type": "object",
+      "description": "Manages one line in a text file, modeled on Ansible's lineinfile module.",
+      "additionalProperties": false,
+      "anyOf": [
+        { "required": ["path"] },
+        { "required": ["dest"] },
+        { "required": ["destfile"] },
+        { "required": ["name"] }
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Primary path field for the file to manage. '~' expansion is supported."
+        },
+        "dest": {
+          "type": "string",
+          "description": "Alias for 'path'."
+        },
+        "destfile": {
+          "type": "string",
+          "description": "Alias for 'path'."
+        },
+        "name": {
+          "type": "string",
+          "description": "Alias for 'path'."
+        },
+        "line": {
+          "type": "string",
+          "description": "Line to ensure exists (or replacement text when 'regexp'/'search_string' matches). Required for state present/latest. Supports regex capture replacements when used with 'regexp'+'backrefs' (e.g. '$1'/'\\1'/'\\g<name>'). Also supports inline templating: '${{ ... }}' (ironstate syntax), Go template '{{ .Key }}', and Jinja '{{ key }}'."
+        },
+        "regexp": {
+          "type": "string",
+          "description": "Regex to match target line(s). For present/latest, the last matching line is replaced. For absent, all matching lines are removed."
+        },
+        "search_string": {
+          "type": "string",
+          "description": "Literal substring match alternative to 'regexp'. Mutually exclusive with 'regexp'."
+        },
+        "backrefs": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true (requires 'regexp'), 'line' may contain regex backrefs (e.g. '\\1', '\\g<name>'). If 'regexp' has no match, the file is left unchanged."
+        },
+        "with": {
+          "type": "object",
+          "description": "Optional context values for templated 'line' rendering. Keys are available as top-level names and under 'with' and 'input' namespaces for '${{ ... }}' (for example '${{ input.Version }}')."
+        },
+        "insertafter": {
+          "type": "string",
+          "default": "EOF",
+          "description": "Insertion location for present/latest when no match is found: 'EOF' (default), 'BOF', or a regex. Regex mode inserts after the last matching line unless 'firstmatch' is true."
+        },
+        "insertbefore": {
+          "type": "string",
+          "description": "Insertion location for present/latest when no match is found: 'BOF' or a regex. Regex mode inserts before the last matching line unless 'firstmatch' is true. Mutually exclusive with 'insertafter'."
+        },
+        "firstmatch": {
+          "type": "boolean",
+          "default": false,
+          "description": "With regex insertbefore/insertafter, use the first matching line instead of the last."
+        },
+        "create": {
+          "type": "boolean",
+          "default": false,
+          "description": "Create the target file (and parent directory) when missing for state present/latest."
+        },
+        "backup": {
+          "type": "boolean",
+          "default": false,
+          "description": "Write a timestamped backup copy (path.<yyyyMMddHHmmss>.bak) before changing the file."
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
     "sshHostEntryItem": {
       "type": "object",
       "description": "One ssh_config 'Host' entry. Field names may be snake_case/camelCase/PascalCase - normalized to the PascalCase OpenSSH expects (e.g. 'host_name'/'hostName'/'HostName' all become 'HostName'). Not validated against real OpenSSH keywords - the caller is trusted to know what they're configuring.",
@@ -556,6 +638,33 @@
         "level": { "$ref": "#/$defs/logLevel" },
         "install": { "$ref": "#/$defs/logPhase" },
         "uninstall": { "$ref": "#/$defs/logPhase" },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "failPhase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message"],
+      "properties": {
+        "message": { "type": "string" }
+      }
+    },
+    "failItem": {
+      "type": "object",
+      "description": "Unconditionally fails this leaf (non-zero 'rc') with a message - guard with 'when' to fail only under a specific condition, like Ansible's 'fail' module. Reuses the present/absent state machine like 'log': 'state: present' (default) or 'latest' fails with the 'install' message; 'state: absent' fails with the 'uninstall' message. Either give 'message' directly (shorthand for the 'install' phase) or nest 'install'/'uninstall' phase-specific blocks.",
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Shorthand for install.message - mutually exclusive with 'install'/'uninstall'."
+        },
+        "exit_code": {
+          "type": "integer",
+          "default": 1,
+          "description": "The 'rc' this leaf reports - applies to whichever phase actually runs."
+        },
+        "install": { "$ref": "#/$defs/failPhase" },
+        "uninstall": { "$ref": "#/$defs/failPhase" },
         "state": { "$ref": "#/$defs/state" }
       }
     },

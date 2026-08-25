@@ -153,7 +153,7 @@ root layout is unchanged (`site.yml`, `hosts/`, `packages/`, `roles/`, `variable
   conventions, not distinct code paths. `PackagesRoot` passed to `Expand-TaskTree` is
   `$PSScriptRoot` (repo root), not `packages/`.
 - `ironstate.ps1`'s `Get-PackageManagerHandlers` includes `gem` (`RubyGem.psm1`) — but
-  `site.schema.json` has NO `gem` entry, and the README's module table omits it too.
+  `ironstate.schema.json` has NO `gem` entry, and the README's module table omits it too.
   Real usage exists (`roles/languages/ruby/main.yml`). This is a pre-existing drift bug
   in the original repo (schema/docs vs. code) — audit and fix the schema in Phase 1's
   reconciliation task, don't just silently copy the gap into the Go port's docs.

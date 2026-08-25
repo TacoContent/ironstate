@@ -1,0 +1,27 @@
+---
+
+tasks:
+
+  - name: Read GITHUB_TOKEN from environment
+    fact:
+      name: $github_token
+      value: ${{ lookup('env', 'GITHUB_TOKEN2') }}
+
+  - name: GitHub Call Headers
+    when: github_token is defined
+    fact:
+      name: $github_url_headers
+      value:
+        - Authorization: ${{ facts.github_token | prefix('Bearer') }}
+
+  - name: GitHub Call Headers (no token)
+    when: github_token is not defined
+    fact:
+      name: $github_url_headers
+      value: null
+
+  - name: Output Check
+    when: false
+    log:
+      message: |
+        ${{ lookup('url', 'https://api.github.com/meta', facts.github_url_headers) | from_json | json_query('.ssh_keys') | concat("\n") }}

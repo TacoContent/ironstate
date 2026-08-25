@@ -1,11 +1,6 @@
 {
   "yaml.schemas": {
-    "file:///d:/Development/projects/ironstate/site.schema.json": [
-      "file:///d%3A/Development/projects/ironstate/*.yml",
-      "file:///d%3A/Development/projects/ironstate/*.yaml",
-      "file:///d%3A/Development/projects/ironstate/**/*.yml",
-      "file:///d%3A/Development/projects/ironstate/**/*.yaml"
-    ]
+    
   },
   "yaml.disableSchemaDetection": [
     "**/.github/workflows/*.yml",

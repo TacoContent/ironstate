@@ -1,84 +1,22 @@
 ---
+version: '1'
 vars: {}
 tasks:
-  - name: Read GITHUB_TOKEN from environment
-    fact:
-      name: $github_token
-      value: ${{ lookup('env', 'GITHUB_TOKEN2') }}
 
-  - name: GitHub Call Headers
-    when: github_token is defined
-    fact:
-      name: $github_url_headers
-      value:
-        - Authorization: ${{ facts.github_token | prefix('Bearer') }}
+  - name: Include Fail-Checks Role
+    include:
+      name: roles/fail-checks
 
-  - name: GitHub Call Headers (no token)
-    when: github_token is not defined
-    fact:
-      name: $github_url_headers
-      value: null
+  - name: Include GitHub-Meta Role
+    include:
+      name: roles/github-meta
 
-  - name: Output Check
-    when: false
-    log:
-      message: |
-        ${{ lookup('url', 'https://api.github.com/meta', facts.github_url_headers) | from_json | json_query('.ssh_keys') | concat("\n") }}
+  - name: Include Filter-Checks Role
+    include:
+      name: roles/filter-checks
 
-  - name: Leet Filter Test
-    log:
-      message: ${{ 'The quick brown fox jumps over the lazy dog.' | leet }}
-
-  - name: Shell Availability Facts
-    log:
-      message: |
-        pwsh: ${{ facts.shell_pwsh }} (${{ facts.pwsh_version }})
-        bash: ${{ facts.shell_bash }} (${{ facts.bash_version }})
-        zsh:  ${{ facts.shell_zsh }} (${{ facts.zsh_version }})
-        fish: ${{ facts.shell_fish }} (${{ facts.fish_version }})
-        nu:   ${{ facts.shell_nu }} (${{ facts.nu_version }})
-
-  - name: PowerShell Filter Test
-    when: shell_pwsh
-    log:
-      message: ${{ 'hello from pwsh' | pwsh_shout }}
-
-  - name: Bash Filter Test
-    when: shell_bash
-    log:
-      message: ${{ 'hello from bash' | buffalo }}
-
-  - name: Zsh Filter Test
-    when: shell_zsh
-    log:
-      message: ${{ 'hello from zsh' | zsh_shout }}
-
-  - name: Fish Filter Test
-    when: shell_fish
-    log:
-      message: ${{ 'hello from fish' | fish_shout }}
-
-  - name: Nu Filter Test
-    when: shell_nu
-    log:
-      message: ${{ 'hello from nu' | nu_shout }}
-
-  - name: Nu Filter Test (unguarded)
-    continue_on_error: true
-    log:
-      message: ${{ 'hello from nu, unguarded' | nu_shout }}
-
-  - name: Fish Filter Test (unguarded)
-    continue_on_error: true
-    log:
-      message: ${{ 'hello from fish, unguarded' | fish_shout }}
-
-  - name: Bash Filter Test (unguarded)
-    continue_on_error: true
-    log:
-      message: ${{ 'hello from bash, unguarded' | buffalo }}
-
-  - name: Pwsh Filter Test (unguarded)
-    continue_on_error: true
-    log:
-      message: ${{ 'hello from pwsh, unguarded' | pwsh_shout }}
+  - name: Include Line in file Role
+    include:
+      name: roles/lineinfile
+    with:
+      Version: "1.2.5"

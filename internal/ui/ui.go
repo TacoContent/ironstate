@@ -77,6 +77,7 @@ func Gray(s string) string    { return style(codeGray, s) }
 // request: "changed" state should read brighter than "unchanged").
 func BoldRed(s string) string    { return style(codeBold+codeBrightRed, s) }
 func BoldGreen(s string) string  { return style(codeBold+codeBrightGreen, s) }
+func BoldYellow(s string) string { return style(codeBold+codeYellow, s) }
 func BrightCyan(s string) string { return style(codeBrightCyan, s) }
 
 // moduleEmoji maps a leaf's module name to a single representative glyph
@@ -97,8 +98,10 @@ var moduleEmoji = map[string]string{
 	"template":       "📝",
 	"shell":          "💻",
 	"blockinfile":    "🧩",
+	"lineinfile":     "📏",
 	"ssh_host_block": "🔐",
 	"log":            "📢",
+	"fail":           "❌",
 	"path":           "🧭",
 	"fact":           "🔎",
 	"registry":       "🗃️",
@@ -112,7 +115,7 @@ func ModuleEmoji(module string) string {
 	if e, ok := moduleEmoji[module]; ok {
 		return e
 	}
-	return "•"
+	return "🏷️"
 }
 
 // PrintFacts renders a small "modern CLI" panel of gathered host facts on

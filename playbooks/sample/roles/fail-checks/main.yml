@@ -1,0 +1,29 @@
+---
+
+tasks:
+  - name: Fail Test (no-op)
+    when: false
+    fail:
+      state: latest
+      message: "This is a test of the fail module."
+
+  - name: Fail Test (with message)
+    continue_on_error: true
+    id: fail_test_with_message
+    fail:
+      message: "This is a test of the fail module with a message."
+      exit_code: 42
+
+  - name: Fail Test (install)
+    continue_on_error: true
+    when: fail_test_with_message.rc == 42
+    fail:
+      state: present
+      install:
+        message: "This is a test of the fail module with an install phase."
+  - name: Fail Test (uninstall)
+    continue_on_error: true
+    fail:
+      state: absent
+      uninstall:
+        message: "This is a test of the fail module with an uninstall phase."

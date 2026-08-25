@@ -307,6 +307,178 @@ func TestBlockInFileInsertsAndUpdatesBlock(t *testing.T) {
 	}
 }
 
+func TestLineInFileReplaceAndRemove(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "config.txt")
+	if err := os.WriteFile(dest, []byte("A=1\nB=2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	h := lineInFileHandler{}
+	item := map[string]any{
+		"path":   dest,
+		"regexp": "^B=",
+		"line":   "B=3",
+	}
+
+	installed, err := h.Test(item, "", testCtx())
+	if err != nil || installed {
+		t.Fatalf("installed=%v err=%v, want false before replacement", installed, err)
+	}
+
+	if _, err := h.Install(item, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+
+	data, _ := os.ReadFile(dest) //nolint:gosec // dest is a t.TempDir()-derived path this same test just wrote, not user input
+	if string(data) != "A=1\nB=3\n" {
+		t.Fatalf("unexpected content after replace: %q", string(data))
+	}
+
+	installed, err = h.Test(item, "", testCtx())
+	if err != nil || !installed {
+		t.Fatalf("installed=%v err=%v, want true after replacement", installed, err)
+	}
+
+	remove := map[string]any{"path": dest, "state": "absent", "regexp": "^B="}
+	if _, err := h.Uninstall(remove, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+
+	data, _ = os.ReadFile(dest) //nolint:gosec // dest is a t.TempDir()-derived path this same test just wrote, not user input
+	if string(data) != "A=1\n" {
+		t.Fatalf("unexpected content after absent/remove: %q", string(data))
+	}
+}
+
+func TestLineInFileInsertBeforeAndAfter(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "profile.txt")
+	if err := os.WriteFile(dest, []byte("one\nneedle\ntwo\nneedle\nthree\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	h := lineInFileHandler{}
+
+	if _, err := h.Install(map[string]any{
+		"path":        dest,
+		"line":        "inserted-after",
+		"insertafter": "needle",
+	}, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := h.Install(map[string]any{
+		"path":         dest,
+		"line":         "inserted-before",
+		"insertbefore": "needle",
+		"firstmatch":   true,
+	}, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+
+	data, _ := os.ReadFile(dest) //nolint:gosec // dest is a t.TempDir()-derived path this same test just wrote, not user input
+	got := string(data)
+	if !strings.Contains(got, "inserted-before\nneedle") {
+		t.Fatalf("expected first-match insertbefore placement, content=%q", got)
+	}
+	if !strings.Contains(got, "needle\ninserted-after\nthree") {
+		t.Fatalf("expected last-match insertafter placement, content=%q", got)
+	}
+}
+
+func TestLineInFileBackrefs(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "service.conf")
+	if err := os.WriteFile(dest, []byte("listen=127.0.0.1:8080\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	h := lineInFileHandler{}
+	if _, err := h.Install(map[string]any{
+		"path":     dest,
+		"regexp":   "^(listen=).*$",
+		"line":     "\\1localhost:9090",
+		"backrefs": true,
+	}, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+
+	data, _ := os.ReadFile(dest) //nolint:gosec // dest is a t.TempDir()-derived path this same test just wrote, not user input
+	if string(data) != "listen=localhost:9090\n" {
+		t.Fatalf("unexpected backref content: %q", string(data))
+	}
+}
+
+func TestLineInFileBackrefsDollarSyntax(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "service.conf")
+	if err := os.WriteFile(dest, []byte("version: 0.1.0\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	h := lineInFileHandler{}
+	if _, err := h.Install(map[string]any{
+		"path":     dest,
+		"regexp":   "^([Vv]ersion):\\s+.*$",
+		"line":     "$1: 1.2.5",
+		"backrefs": true,
+	}, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+
+	data, _ := os.ReadFile(dest) //nolint:gosec // dest is a t.TempDir()-derived path this same test just wrote, not user input
+	if string(data) != "version: 1.2.5\n" {
+		t.Fatalf("unexpected $1 backref content: %q", string(data))
+	}
+}
+
+func TestLineInFileTemplateWithGoTemplate(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "version.txt")
+	if err := os.WriteFile(dest, []byte("version: 0.1.0\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	h := lineInFileHandler{}
+	if _, err := h.Install(map[string]any{
+		"path":   dest,
+		"regexp": "^version:",
+		"line":   "Version: {{ .Version }}",
+		"with":   map[string]any{"Version": "1.2.5"},
+	}, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+
+	data, _ := os.ReadFile(dest) //nolint:gosec // dest is a t.TempDir()-derived path this same test just wrote, not user input
+	if string(data) != "Version: 1.2.5\n" {
+		t.Fatalf("unexpected gotemplate replacement content: %q", string(data))
+	}
+}
+
+func TestLineInFileTemplateWithTemplateSyntax(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "version.txt")
+	if err := os.WriteFile(dest, []byte("version: old\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	h := lineInFileHandler{}
+	if _, err := h.Install(map[string]any{
+		"path":   dest,
+		"regexp": "^version:",
+		"line":   "Version: ${{ input.Version }}",
+		"with":   map[string]any{"Version": "1.2.5"},
+	}, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+
+	data, _ := os.ReadFile(dest) //nolint:gosec // dest is a t.TempDir()-derived path this same test just wrote, not user input
+	if string(data) != "Version: 1.2.5\n" {
+		t.Fatalf("unexpected ${{ }} replacement content: %q", string(data))
+	}
+}
+
 func TestSshHostBlockRendersHostEntry(t *testing.T) {
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "config")

@@ -2,12 +2,79 @@
 
 `ironstate` is a declarative, Ansible-style task runner driven by YAML: it reconciles each leaf action's desired `state` against what's currently installed, printing what it would do by default (dry-run) and only making changes when `--apply` is passed. It ships as a single cross-platform binary (Windows/Linux/macOS - see `.goreleaser.yaml`); `cmd/ironstate` is the entrypoint, with the engine/handlers/filters/template code living under `internal/` (see [Architecture](#architecture)).
 
+## Installation
+
+### Install script (recommended)
+
+Downloads the release archive matching your OS/architecture from [GitHub Releases](https://github.com/TacoContent/ironstate/releases), verifies its checksum, and installs the `ironstate` binary to `~/.local/bin` by default. Every OS/architecture combination this project ships is built (Windows/Linux/macOS, each on `amd64`/`x86_64` and `arm64`) - macOS covers both Intel (`amd64`) and Apple Silicon (`arm64`).
+
+**Linux/macOS:**
+
+```shell
+curl -fsSL https://raw.githubusercontent.com/TacoContent/ironstate/develop/install/install.sh | bash
+```
+
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/TacoContent/ironstate/develop/install/install.ps1 | iex
+```
+
+Both scripts accept an install directory and a specific version to pin instead of latest:
+
+```shell
+./install.sh --dir /usr/local/bin --version v0.1.0
+```
+
+```powershell
+./install.ps1 -InstallDir C:\tools\bin -Version v0.1.0
+```
+
+If no release exists for your OS/architecture, the script exits with an error, a link to open an issue on this repo, and a block of diagnostic text (OS, architecture, script name, the release tag/asset it tried) to paste directly into the issue - see `install/install.sh`/`install/install.ps1`.
+
+### Manual download
+
+1. Download the archive for your OS/architecture from the [latest release](https://github.com/TacoContent/ironstate/releases/latest) - `ironstate_<version>_<os>_<arch>.zip` (Windows) or `ironstate_<version>_<os>_<arch>.tar.gz` (Linux/macOS). `<arch>` is Go's naming: `amd64` (x86_64/Intel) or `arm64` (Apple Silicon/ARM64) - e.g. an Intel Mac (`uname -m` prints `x86_64`) wants `ironstate_<version>_darwin_amd64.tar.gz`.
+2. (optional) Verify it against that release's `checksums.txt` (e.g. `sha256sum -c checksums.txt` or `Get-FileHash -Algorithm SHA256`). `checksums.txt` is itself keyless-signed with [cosign](https://github.com/sigstore/cosign): `cosign verify-blob --bundle checksums.txt.sigstore.json checksums.txt --certificate-identity-regexp "https://github.com/TacoContent/ironstate/.github/workflows/release.yml@.*" --certificate-oidc-issuer https://token.actions.githubusercontent.com`.
+3. Extract the archive and put the `ironstate`/`ironstate.exe` binary somewhere on your `PATH`.
+
+### `go install`
+
+`ironstate` is a public Go module, so the Go toolchain (1.26+, see `go.mod`) can build and install it directly from source, no release archive needed:
+
+```shell
+go install github.com/TacoContent/ironstate/cmd/ironstate@latest
+```
+
+This installs to `$(go env GOPATH)/bin` (make sure it's on `PATH`). Since this skips the release build's `-ldflags`, `ironstate version` reports `dev`/`none`/`unknown` instead of a real version/commit/date - functionally identical otherwise.
+
+### Using [zyedidia/eget](https://github.com/zyedidia/eget)
+
+`eget` is a small, cross-platform Go binary that downloads and installs a release from GitHub Releases. It can be used to install `ironstate` without a shell script:
+
+#### linux/macOS
+
+```shell
+eget TacoContent/ironstate --to=~/.local/bin
+```
+
+#### Windows (PowerShell)
+
+```powershell
+eget TacoContent/ironstate --to=$env:USERPROFILE\.local\bin
+```
+
+### Build from source
+
+```shell
+git clone https://github.com/TacoContent/ironstate.git
+cd ironstate
+go build -o bin/ironstate ./cmd/ironstate     # bin/ironstate.exe on Windows
+```
+
 ## Getting started
 
 ```shell
-# Build
-go build -o bin/ironstate ./cmd/ironstate     # bin/ironstate.exe on Windows
-
 # Scaffold a new playbook (see Playbooks below)
 ./bin/ironstate init my-playbook
 
@@ -228,14 +295,14 @@ internal/
 ├── engine/                 ← dispatch loop (fact-first two-phase run, registry/facts/
 │                            command-availability threading, table/JSON/summary output)
 ├── handlers/               ← one file per module: winget, chocolatey, pipx, npm, cargo, go,
-│                            gem, eget, zip, symlinks, file, copy, shell, blockinfile,
-│                            ssh_host_block, log, path, fact, assert, registry,
+│                            gem, eget, zip, symlinks, file, copy, shell, blockinfile, lineinfile,
+│                            ssh_host_block, log, fail, path, fact, assert, registry,
 │                            scheduled_task, template
 ├── ui/                     ← terminal color/emoji output styling
 └── exec/                   ← external-process Runner abstraction handlers shell out through
 ```
 
-Each `internal/handlers/*.go` file implements the shared `Handler` interface (`Test`/`Describe`/`Install`/`Uninstall` - see `internal/engine/engine.go`). To add a new module, add a handler and register it in `internal/handlers/handlers.go`'s `All()`, and add it to `engine.DefaultNoCommandCheckModules` if it isn't backed by an external CLI.
+Each `internal/handlers/*.go` file implements the shared `Handler` interface (`Test`/`Describe`/`Install`/`Uninstall` - see `internal/engine/engine.go`). To add a new module: register a handler in `internal/handlers/handlers.go`'s `All()`; add its name to `handlers.AllModuleNames` (task-tree flattening won't recognize the module key in a YAML task at all otherwise - see `internal/tasks.Options.ModuleNames`/`firstModuleKey`); add it to `engine.DefaultNoCommandCheckModules` if it isn't backed by an external CLI; and, for parity, add it to `internal/tasks/realfixture_test.go`'s `realModuleNames`. Optionally add a matching `$defs` entry to `ironstate.schema.json` for editor validation/autocomplete on the new module's fields.
 
 ### Custom filters
 
@@ -650,6 +717,7 @@ tasks:
 | `copy` | Copy a local file into place (no external tool) |
 | `shell` | Run an inline PowerShell command or script file (no external tool) |
 | `blockinfile` | Insert/update/remove a marker-delimited block of text in a file (no external tool, modeled on Ansible's `blockinfile`) |
+| `lineinfile` | Ensure/replace/remove line(s) in a text file (no external tool, modeled on Ansible's `lineinfile`) |
 | `log` | Print a message at a chosen level (no external tool) |
 | `path` | Add/remove directories on the current user's `PATH` (no external tool) |
 | `fact` | Set an arbitrary named value for later tasks to reference (no external tool) |
@@ -887,6 +955,89 @@ tasks:
           autocrlf = false
 ```
 
+### `lineinfile`
+
+Modeled on Ansible's [`lineinfile`](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/lineinfile_module.html): ensures a single line is present (or absent), optionally replacing by regex or literal search.
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `path` | one of `path`/`dest`/`destfile`/`name` | File to manage (`~` expansion supported). `dest`, `destfile`, and `name` are aliases |
+| `line` | yes for `state: present`/`latest` | Desired line content |
+| `regexp` | no | Regex to match lines. For `present`/`latest`, the last match is replaced. For `absent`, all matches are removed |
+| `search_string` | no | Literal substring match alternative to `regexp` (mutually exclusive with `regexp`) |
+| `backrefs` | no | `true` lets `line` use backrefs (`\1`, `\g<name>`) from `regexp` matches. If no regex match is found, no insertion occurs |
+| `with` | no | Optional replacement-template context. Keys are available as top-level names and under `with`/`input` for `${{ }}` (for example `${{ input.Version }}`) |
+| `insertafter` | no | Insertion point (when no match is found): `EOF` (default), `BOF`, or regex. Regex mode inserts after the last match unless `firstmatch: true` |
+| `insertbefore` | no | Insertion point alternative to `insertafter`: `BOF` or regex. Regex mode inserts before the last match unless `firstmatch: true` |
+| `firstmatch` | no | With regex `insertbefore`/`insertafter`, use the first match instead of the last |
+| `create` | no | Create the file (and parent directory) when missing for `present`/`latest`. Default `false` |
+| `backup` | no | Write a timestamped backup (`<path>.<yyyyMMddHHmmss>.bak`) before changing. Default `false` |
+
+`present`/`latest` behavior:
+
+- If `regexp` or `search_string` matches, the last matching line is replaced.
+- If no match is found, `line` is inserted at `insertafter`/`insertbefore` (default end-of-file).
+- With `backrefs: true`, `regexp` is required and no insertion is done when there is no match.
+
+Replacement string syntax in `line`:
+
+- Regex capture groups (with `backrefs: true`): supports `$1`, `\1`, and `\g<name>`.
+- `${{ ... }}` syntax (ironstate expression engine), including `with`/`input` context aliases.
+- Go template syntax (`{{ .Version }}` style).
+- Jinja-style syntax (`{{ version }}` style).
+
+When both regex captures and templates are used, templates render first, then regex capture replacement is applied.
+
+`absent` behavior:
+
+- Removes all lines matching `regexp` (or containing `search_string`, or exactly equal to `line` when neither matcher is provided).
+
+```yaml
+tasks:
+  - name: ensure bell is disabled in bash exports
+    lineinfile:
+      path: ~/.bash/custom/exports/default.bash
+      regexp: '^bind .set bell-style none'
+      line: "bind 'set bell-style none' 2>/dev/null"
+      insertafter: EOF
+
+  - name: rewrite listen directive with regex backrefs
+    lineinfile:
+      path: ~/.config/myapp.conf
+      regexp: '^(listen=).*$'
+      line: '\1localhost:9090'
+      backrefs: true
+
+  - name: rewrite version using $1 capture syntax
+    lineinfile:
+      path: ~/.config/myapp.conf
+      regexp: '^([Vv]ersion):\s+.*$'
+      line: '$1: 1.2.5'
+      backrefs: true
+
+  - name: replacement using go template + with context
+    lineinfile:
+      path: ~/.config/myapp.conf
+      regexp: '^Version:'
+      line: 'Version: {{ .Version }}'
+      with:
+        Version: '1.2.5'
+
+  - name: replacement using ${{ }} + input alias
+    lineinfile:
+      path: ~/.config/myapp.conf
+      regexp: '^Version:'
+      line: 'Version: ${{ input.Version }}'
+      with:
+        Version: '1.2.5'
+
+  - name: remove legacy directive lines
+    lineinfile:
+      path: ~/.config/myapp.conf
+      state: absent
+      regexp: '^legacy_'
+```
+
 ### `log`
 
 Reuses the present/absent state machine instead of being a special "always run" module kind: `state: present` (default) or `latest` always print the `install` message; `state: absent` always prints the `uninstall` message. Log has no real idempotent "already applied" concept - it always fires when reached; `state` only selects which phase's message prints.
@@ -913,6 +1064,25 @@ tasks:
         message: The package is being uninstalled.
         level: warning
     state: absent   # -> prints the 'uninstall' message
+```
+
+### `fail`
+
+Unconditionally fails this leaf (non-zero `rc`) with a message - guard it with `when` to fail only under a specific condition, like Ansible's `fail` module. Reuses the present/absent state machine like `log`: `state: present` (default) or `latest` fails with the `install` message; `state: absent` fails with the `uninstall` message.
+
+| Field | Description |
+| --- | --- |
+| `message` | Shorthand for `install.message` |
+| `exit_code` | The `rc` this leaf reports (default `1`) - applies to whichever phase actually runs |
+| `install.message` / `uninstall.message` | Nested form: message used when this resolves to `Install`/`Uninstall` (`state: absent`) |
+
+```yaml
+tasks:
+  - name: stop the run if a required var is missing
+    when: required_setting is not defined
+    fail:
+      message: "required_setting must be set"
+      exit_code: 2
 ```
 
 ### `path`

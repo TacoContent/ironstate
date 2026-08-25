@@ -1,0 +1,48 @@
+---
+# schema: https://raw.githubusercontent.com/TacoContent/ironstate/refs/heads/develop/ironstate.schema.json
+tasks:
+  - name: Create Temporary File
+    file:
+      type: file
+      state: present
+      path: "~/.ironstate/testfile.txt"
+
+  - name: Write to Temporary File with static line
+    lineinfile:
+      path: "~/.ironstate/testfile.txt"
+      regexp: 'Static ([Vv]ersion):\s+(.*)$'
+      line: "Static Version: 1.0.0"
+
+  - name: Write to Temporary File with regex capture group replacement ($1)
+    lineinfile:
+      path: "~/.ironstate/testfile.txt"
+      regexp: '(Regex [Vv]ersion):\s+(.*)$'
+      line: "$1: 2.0.0"
+      backrefs: true
+
+  - name: Write to Temporary File with Go template replacement
+    lineinfile:
+      path: "~/.ironstate/testfile.txt"
+      regexp: '(Go [Vv]ersion):\s+(.*)$'
+      line: "{{ .Label }}: {{ .Version }}"
+      with:
+        Label: "Go Version"
+        Version: "3.0.0"
+
+  - name: Write to Temporary File with jinja replacement
+    lineinfile:
+      path: "~/.ironstate/testfile.txt"
+      regexp: 'Jinja ([Vv]ersion):\s+(.*)$'
+      line: "{{ label }}: {{ version }}"
+      with:
+        label: "Jinja Version"
+        version: "4.0.0"
+
+  - name: Write to Temporary File with IronState Expression replacement
+    lineinfile:
+      path: "~/.ironstate/testfile.txt"
+      regexp: 'Expression ([Vv]ersion):\s+(.*)$'
+      line: "${{ input.Label }}: ${{ input.Version }}"
+      with:
+        Label: "Expression Version"
+        Version: "5.0.0"

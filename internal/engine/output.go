@@ -26,7 +26,7 @@ func statusCell(r Result) (string, func(string) string) {
 	case r.Failed:
 		return "✖ failed", ui.BoldRed
 	case r.Action == ActionSkip:
-		return "· skip", ui.Dim
+		return "⏭️ skip", ui.Dim
 	case r.Apply:
 		return "✔ " + verb + "ed", ui.BoldGreen
 	default:
@@ -118,8 +118,8 @@ func PrintSummary(w io.Writer, stats Stats, elapsed time.Duration) error {
 		ui.Bold("✨ Summary"),
 		rule,
 		statLine(ui.BoldGreen, "✔", "Installed", stats.Installed),
-		statLine(ui.BoldGreen, "✔", "Uninstalled", stats.Uninstalled),
-		statLine(ui.Dim, "·", "Skipped", stats.Skipped),
+		statLine(ui.BoldYellow, "✔", "Uninstalled", stats.Uninstalled),
+		statLine(ui.Dim, "⏭️", "Skipped", stats.Skipped),
 		statLine(failedColor, "✖", "Failed", stats.Failed),
 		rule,
 		fmt.Sprintf("  Total: %d task(s) in %s", stats.Total, elapsed.Round(time.Millisecond)),

@@ -40,7 +40,7 @@ func TestModuleEmoji(t *testing.T) {
 	if e := ModuleEmoji("winget"); e == "" {
 		t.Fatal("ModuleEmoji(\"winget\") returned empty")
 	}
-	if e := ModuleEmoji("totally-unknown-module"); e != "•" {
+	if e := ModuleEmoji("totally-unknown-module"); e != "🏷️" {
 		t.Fatalf("ModuleEmoji(unknown) = %q, want bullet", e)
 	}
 }
