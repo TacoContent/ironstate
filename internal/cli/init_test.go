@@ -36,11 +36,13 @@ func TestRunInitCreatesScaffold(t *testing.T) {
 
 	hostsDir := filepath.Join(playbook, "hosts")
 	entries, err := os.ReadDir(hostsDir)
-	if err != nil || len(entries) != 1 {
-		t.Fatalf("expected exactly one host overlay file, got %v (err=%v)", entries, err)
+	if err != nil || len(entries) != 2 {
+		t.Fatalf("expected exactly two host overlay files, got %v (err=%v)", entries, err)
 	}
-	if entries[0].Name() != strings.ToLower(entries[0].Name()) {
-		t.Fatalf("host overlay file name %q is not lowercase", entries[0].Name())
+	for _, entry := range entries {
+		if entry.Name() != strings.ToLower(entry.Name()) {
+			t.Fatalf("host overlay file name %q is not lowercase", entry.Name())
+		}
 	}
 }
 

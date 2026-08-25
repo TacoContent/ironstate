@@ -57,6 +57,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	hostFacts := facts.Gather()
 	machineName := factString(hostFacts, "computer_name", "host")
+	osFamily := factString(hostFacts, "os_family", "linux")
 	userName := factString(hostFacts, "user_name", "user")
 
 	dirs := []string{
@@ -77,6 +78,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	files := []initScaffoldFile{
 		{filepath.Join(root, "site.yml"), minimalDocument},
 		{filepath.Join(root, "hosts", machineName+".yml"), minimalDocument},
+		{filepath.Join(root, "hosts", osFamily+".yml"), minimalDocument},
 		{filepath.Join(root, "variables", userName+".yml"), minimalDocument},
 		{filepath.Join(root, "roles", ".gitkeep"), ""},
 		{filepath.Join(root, "filters", ".gitkeep"), ""},
