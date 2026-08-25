@@ -23,7 +23,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # goreleaser's changelog needs full history
-          persist-credentials: false # avoid exposing GITHUB_TOKEN to submodules
 
       - uses: actions/setup-go@v7
         with:
