@@ -22,14 +22,13 @@ import (
 // Merge-FlatContext). Numbers use float64, matching internal/expr's
 // numeric convention.
 func Gather() map[string]any {
-	major, minor, build := osVersion()
 	shells := gatherShellVersions()
 	return map[string]any{
 		"computer_name": computerName(),
 		"user_name":     userName(),
 		"home":          homeDir(),
-		"os_version":    formatVersion(major, minor, build),
-		"os_build":      float64(build),
+		"os_version":    osVersion(),
+		"os_build":      float64(osBuildNumber()),
 		"is_admin":      isAdmin(),
 		"shell_pwsh":    shells.pwsh != "",
 		"pwsh_version":  stringOrNil(shells.pwsh),
@@ -76,18 +75,19 @@ func gatherShellVersions() shellVersionFacts {
 	return v
 }
 
-// osFamily groups a Go GOOS value into a broader category useful for
-// 'when' branching that only cares "Windows or POSIX-like", not the
-// exact OS - distinct from 'platform', which is the precise GOOS value.
+// osFamily identifies the host's OS for 'when' branching and chained
+// override filenames (e.g. '<username>.ubuntu.yml', '<hostname>.archlinux.yml'):
+// "windows"/"darwin" as-is, but on Linux it resolves to the specific
+// distribution ID from distro() (e.g. "ubuntu", "archlinux") when
+// detectable, falling back to the raw GOOS otherwise - distinct from
+// 'platform', which always stays the plain GOOS value.
 func osFamily(goos string) string {
-	switch goos {
-	case "windows":
-		return "windows"
-	case "linux", "darwin", "freebsd", "openbsd", "netbsd", "dragonfly", "solaris", "aix":
-		return "unix"
-	default:
-		return goos
+	if goos == "linux" {
+		if d := distro(); d != "" {
+			return d
+		}
 	}
+	return goos
 }
 
 func computerName() string {
@@ -115,10 +115,6 @@ func homeDir() string {
 		return h
 	}
 	return ""
-}
-
-func formatVersion(major, minor, build uint32) string {
-	return itoa(major) + "." + itoa(minor) + "." + itoa(build)
 }
 
 func itoa(v uint32) string {

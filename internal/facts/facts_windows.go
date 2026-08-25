@@ -13,8 +13,17 @@ func isAdmin() bool {
 
 // osVersion mirrors [System.Environment]::OSVersion.Version via
 // RtlGetVersion (the documented way to get the real OS version on modern
-// Windows, since GetVersionEx is subject to app-compat shimming).
-func osVersion() (major, minor, build uint32) {
+// Windows, since GetVersionEx is subject to app-compat shimming), as
+// "major.minor.build" - Windows has no single native version string, so
+// this is assembled rather than reported verbatim like the other
+// platforms.
+func osVersion() string {
 	info := windows.RtlGetVersion()
-	return info.MajorVersion, info.MinorVersion, info.BuildNumber
+	return itoa(info.MajorVersion) + "." + itoa(info.MinorVersion) + "." + itoa(info.BuildNumber)
+}
+
+// osBuildNumber mirrors os_build - only meaningful on Windows, where
+// RtlGetVersion reports a real build number.
+func osBuildNumber() uint32 {
+	return windows.RtlGetVersion().BuildNumber
 }

@@ -4,7 +4,23 @@ tasks:
   - name: Install Golang
     tags: 
       - languages
-      - golang
+      - languages.golang
     winget:
       package: "GoLang.Go"
-      state: present
+      state: ${{ languages.golang | enabled() | ternary('present', 'absent') }}
+
+  - name: Install Golangci-lint
+    tags: 
+      - languages
+      - languages.golang
+    winget:
+      package: "GolangCI.golangci-lint"
+      state: ${{ languages.golang | enabled() | ternary('present', 'absent') }}
+
+  - name: Install GoReleaser
+    tags: 
+      - languages
+      - languages.golang
+    winget:
+      package: "GoReleaser.GoReleaser"
+      state: ${{ languages.golang | enabled() | ternary('present', 'absent') }}

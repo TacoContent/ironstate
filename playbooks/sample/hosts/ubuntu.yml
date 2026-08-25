@@ -1,0 +1,6 @@
+---
+
+tasks:
+  - name: Some Ubuntu Only Task (hosts/)
+    shell:
+      command: echo "This is a Ubuntu only task (hosts/)"

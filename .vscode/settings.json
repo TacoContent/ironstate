@@ -13,7 +13,8 @@
     "**/.gitea/workflows/*.yml",
     "**/.gitea/workflows/*.yaml",
     "**/.forgejo/workflows/*.yml",
-    "**/.forgejo/workflows/*.yaml"
+    "**/.forgejo/workflows/*.yaml",
+    "file:///d%3A/Development/projects/ironstate/TaskFile.yml"
   ],
   "cSpell.words": [
     "blockinfile",

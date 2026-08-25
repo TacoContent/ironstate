@@ -1,0 +1,6 @@
+---
+
+tasks:
+  - name: Some Debian Only Task (hosts/)
+    shell:
+      command: echo "This is a Debian only task (hosts/)"

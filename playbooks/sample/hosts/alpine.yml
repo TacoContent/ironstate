@@ -1,0 +1,6 @@
+---
+
+tasks:
+  - name: Some Alpine Only Task (hosts/)
+    shell:
+      command: echo "This is a Alpine only task (hosts/)"

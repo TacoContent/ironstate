@@ -47,8 +47,7 @@ func TestGatherShape(t *testing.T) {
 func TestOSFamily(t *testing.T) {
 	cases := map[string]string{
 		"windows": "windows",
-		"linux":   "unix",
-		"darwin":  "unix",
+		"darwin":  "darwin",
 		"plan9":   "plan9",
 	}
 	for goos, want := range cases {

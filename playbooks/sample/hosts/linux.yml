@@ -1,6 +1,12 @@
 ---
 
 tasks:
-  - name: Some Linux Only Task (hosts/)
+  - name: Some Linux Only Task (hosts/) ${{ facts.os_family }}
     shell:
-      command: echo "This is a Linux only task (hosts/)"
+      command: echo "This is a Linux only task (hosts/) ${{ facts.os_family }}"
+
+
+  - name: Task (hosts/) ${{ facts.os_family }} ${{ facts.os_version }}
+    when: facts.os_family in ["kali", "debian", "ubuntu", "archlinux", "alpine"]
+    shell:
+      command: echo "This is a Linux only task (hosts/) ${{ facts.os_family }} ${{ facts.os_version }}"

@@ -1,0 +1,6 @@
+---
+
+tasks:
+  - name: Some KaliLinux Only Task (hosts/)
+    shell:
+      command: echo "This is a KaliLinux only task (hosts/)"

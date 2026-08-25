@@ -35,12 +35,12 @@ tasks:
   - name: Install Golang
     tags: 
       - languages
-      - golang
+      - languages.golang
     include:
       name: roles/languages/golang
-      state: present
+      state: ${{ languages.golang | enabled() | ternary('present', 'absent') }}
     when:
-      - (languages is mapping and languages.golang) or (languages is boolean and languages)
+      - languages | enabled('golang')
 
   - name: Install Java
     tags: 

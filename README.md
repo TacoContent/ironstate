@@ -82,19 +82,20 @@ Files are loaded and merged in this order. Each subsequent file's `tasks` list i
     └── <USERNAME>.yml                    ← legacy per-user overlay, merged last
 ```
 
-The **chained overlay** filenames are built from this machine's own facts (see [Facts](#facts)): `hostname`, `os_family`, `platform`, `arch`. Use **any N of them**, joined by `.`, **in any order you like** - so a bare single-characteristic name like `windows.yml` (matching `os_family`/`platform`) or `amd64.yml` (matching `arch`) works, and so does `amd64.krayt.yml` written arch-before-hostname instead of `krayt.amd64.yml`:
+The **chained overlay** filenames are built from this machine's own facts (see [Facts](#facts)): `hostname`, `os_family`, `platform`, `arch`. Use **any N of them**, joined by `.`, **in any order you like** - so a bare single-characteristic name like `windows.yml`/`ubuntu.yml`/`archlinux.yml` (matching `os_family`) or `amd64.yml` (matching `arch`) works, and so does `amd64.krayt.yml` written arch-before-hostname instead of `krayt.amd64.yml`:
 
 ```
-windows.yml                     # any host where os_family or platform == "windows"
+windows.yml                     # any host where os_family == "windows"
+ubuntu.yml                      # any Linux host whose distro ID is "ubuntu"
 amd64.yml                       # any host where arch == "amd64"
-amd64.windows.yml                # arch == "amd64" AND os_family/platform == "windows"
+amd64.windows.yml                # arch == "amd64" AND os_family == "windows"
 krayt.yml                       # this specific host, any arch/os
 krayt.amd64.yml                 # same as amd64.krayt.yml - order doesn't matter
 krayt.amd64.windows.yml
-krayt.amd64.windows.windows.yml # the fully-qualified chain (os_family and platform both listed)
+krayt.amd64.windows.linux.yml    # the fully-qualified chain (os_family and platform both listed)
 ```
 
-`ironstate` merges every one of these that exists, broadest first, most specific last. Precedence is a weighted priority - hostname (8) > os_family (4) > platform (2) > arch (1) - so a name's "specificity" is the sum of the characteristics it names: any hostname-containing name always outranks any name without one (8 alone beats 4+2+1=7 combined), and within that, adding more/higher-priority characteristics always ranks higher still. So `hosts/windows.yml` applies to any Windows machine, `hosts/krayt.yml` layers a `krayt`-only override on top of it, and `hosts/krayt.amd64.yml` layers on top of that again. This same `main.yml` + chained-overlay mechanism also applies to **every** `include:` (`roles/`, `packages/`, `hosts/<name>/`, etc. - see [Architecture](#architecture)): a package can ship e.g. `roles/foo/windows.yml` or `roles/foo/krayt.yml` right next to its `roles/foo/main.yml` to override/extend it for a class of hosts or one specific host.
+`ironstate` merges every one of these that exists, broadest first, most specific last. Precedence is a weighted priority - hostname (8) > os_family (4) > platform (2) > arch (1) - so a name's "specificity" is the sum of the characteristics it names: any hostname-containing name always outranks any name without one (8 alone beats 4+2+1=7 combined), and within that, adding more/higher-priority characteristics always ranks higher still. So `hosts/windows.yml`/`hosts/ubuntu.yml` applies to any matching machine, `hosts/krayt.yml` layers a `krayt`-only override on top of it, and `hosts/krayt.amd64.yml` layers on top of that again. This same `main.yml` + chained-overlay mechanism also applies to **every** `include:` (`roles/`, `packages/`, `hosts/<name>/`, etc. - see [Architecture](#architecture)): a package can ship e.g. `roles/foo/windows.yml` or `roles/foo/krayt.yml` right next to its `roles/foo/main.yml` to override/extend it for a class of hosts or one specific host.
 
 `--vars-file <path>` (repeatable) merges one or more additional documents on top of everything above, in the order given (a later `--vars-file` wins over an earlier one on overlapping keys) - highest precedence short of `--var` - handy for a CI-only or one-off vars file that isn't part of the playbook's own hierarchy:
 
@@ -154,7 +155,7 @@ A few safeguards are deliberate:
 
 ### Machine-specific overrides — `hosts/`
 
-Create a file named after the machine's hostname to add or change tasks for that machine only (the same `computer_name` fact - see [Facts](#facts) - falls back to the OS hostname on Linux/macOS). You can also chain on `.arch`/`.os_family`/`.platform` for a narrower override (e.g. `KRAYT.amd64.windows.yml`), use a bare characteristic name with no hostname at all for a broader one (e.g. `windows.yml` for every Windows machine), or drop in a `hosts/main.yml` as a default applied to every machine before any of these - see [File hierarchy](#file-hierarchy).
+Create a file named after the machine's hostname to add or change tasks for that machine only (the same `computer_name` fact - see [Facts](#facts) - falls back to the OS hostname on Linux/macOS). You can also chain on `.arch`/`.os_family`/`.platform` for a narrower override (e.g. `KRAYT.amd64.windows.yml`, or `KRAYT.amd64.ubuntu.yml` on Linux), use a bare characteristic name with no hostname at all for a broader one (e.g. `windows.yml` for every Windows machine, or `ubuntu.yml` for every Ubuntu machine), or drop in a `hosts/main.yml` as a default applied to every machine before any of these - see [File hierarchy](#file-hierarchy).
 
 ```powershell
 # Find your hostname
@@ -182,7 +183,7 @@ tasks:
 
 ### User-specific overrides — `variables/`
 
-Create a file named after the username to add tasks or vars for a specific user account on any machine. This same directory also accepts the chained hostname/arch/os_family/platform overlays (including bare characteristic names like `windows.yml`) and a `variables/main.yml` default described in [File hierarchy](#file-hierarchy) - the username file always merges last (highest precedence of the auto-detected files, before `--vars-file`/`--var`).
+Create a file named after the username to add tasks or vars for a specific user account on any machine. This same directory also accepts the chained hostname/arch/os_family/platform overlays (including bare characteristic names like `windows.yml` or `ubuntu.yml`) and a `variables/main.yml` default described in [File hierarchy](#file-hierarchy) - the username file always merges last (highest precedence of the auto-detected files, before `--vars-file`/`--var`).
 
 ```powershell
 # Find your username
@@ -491,8 +492,8 @@ Gathered fresh every run; a deliberately small, easy-to-extend starter set (see 
 | `computer_name` | The machine's hostname (`$env:COMPUTERNAME` on Windows, OS hostname elsewhere) |
 | `user_name` | The current user's name (`$env:USERNAME` on Windows, the OS user record/`$USER` elsewhere) |
 | `home` | The current user's home directory |
-| `os_version` | OS version, as `major.minor.build` |
-| `os_build` | OS build number |
+| `os_version` | OS version, reported as-is (not reformatted/reparsed): `major.minor.build` on Windows (its real OS version), macOS's product version verbatim (`sw_vers -productVersion`, e.g. `14.5`), or on Linux the distro's `/etc/os-release` `VERSION_ID` verbatim (e.g. Ubuntu `22.04`, Debian `13`), falling back to the kernel release verbatim (`uname -r`, e.g. `6.8.0-31-generic`) for rolling releases with no `VERSION_ID` (e.g. Arch Linux) |
+| `os_build` | OS build number (Windows only - always `0` on Linux/macOS, where there's no equivalent single number) |
 | `is_admin` | Whether the current process is running elevated |
 | `shell_pwsh` | Whether `pwsh` is on `PATH` |
 | `pwsh_version` | Output of `pwsh --version` if `pwsh` is on `PATH`, else `null` |
@@ -506,7 +507,7 @@ Gathered fresh every run; a deliberately small, easy-to-extend starter set (see 
 | `nu_version` | Output of `nu --version` if `nu` is on `PATH`, else `null` |
 | `platform` | Go's `GOOS` - `windows`, `linux`, or `darwin` |
 | `arch` | Go's `GOARCH` - `amd64`, `arm64`, ... |
-| `os_family` | A coarser grouping of `platform`: `windows` or `unix` |
+| `os_family` | `windows`/`darwin` as-is; on Linux, the distribution ID from `/etc/os-release` (e.g. `ubuntu`, `debian`, `archlinux`, `alpine`, `redhat`, `fedora`) if detectable, else `linux` |
 
 ### Vars
 

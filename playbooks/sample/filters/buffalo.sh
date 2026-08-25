@@ -13,6 +13,11 @@
 # $1 is the value to filter
 # $2..$n are the arguments to the filter
 
+# Force the C locale: under some locales, bash's [A-Z]/[0-9] bracket
+# ranges are collation-order-dependent and can match unexpected
+# characters (e.g. lowercase letters) - see POSIX's locale-dependent
+# range expressions. Pin to C so [A-Z]/[0-9] mean exactly what they say.
+export LC_ALL=C
 
 # this filter replaces every word with "buffalo" (or "Buffalo" if the word is capitalized) and leaves punctuation alone. It is a silly example, but it shows how to write a filter in bash.
 if [ -z "$1" ]; then

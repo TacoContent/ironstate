@@ -1,0 +1,6 @@
+---
+
+tasks:
+  - name: Some Darwin Only Task (hosts/)
+    shell:
+      command: echo "This is a Darwin only task (hosts/)"

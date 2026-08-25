@@ -34,8 +34,14 @@ func Load(flags *pflag.FlagSet) (*Config, error) {
 	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	v.AutomaticEnv()
 
+	// Deliberately no SetConfigType: viper's searchInPath also matches a
+	// bare, extension-less "ironstate" file whenever a config type is
+	// explicitly set (see viper's file.go) - and the compiled binary
+	// itself is named exactly "ironstate" on Linux/macOS, so running
+	// './ironstate' from its own directory would make viper try to parse
+	// that ELF binary as YAML ("control characters are not allowed").
+	// Extension-based matching (ironstate.yaml/.yml/etc.) alone is enough.
 	v.SetConfigName("ironstate")
-	v.SetConfigType("yaml")
 	v.AddConfigPath(".")
 	if err := v.ReadInConfig(); err != nil {
 		if _, notFound := err.(viper.ConfigFileNotFoundError); !notFound {

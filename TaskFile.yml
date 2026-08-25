@@ -10,7 +10,8 @@ tasks:
       - mkdir -p bin
       - go mod tidy
       - golangci-lint run ./...
-      - go build -o bin/ironstate.exe ./cmd/ironstate
+      # - go build -o bin/ironstate.exe ./cmd/ironstate
+      - goreleaser build --snapshot --clean
       - go vet ./cmd/ironstate
       - gofmt -l .
       - go test ./...

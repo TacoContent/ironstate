@@ -33,10 +33,10 @@ archives:
         formats: [tar.gz]
       - goos: darwin
         formats: [tar.gz]
-    files:
-      - README.md
-      - LICENSE*
-      - site.schema.json
+    # files:
+    #   - README.md
+    #   - LICENSE*
+    #   - site.schema.json
 
 checksum:
   name_template: checksums.txt

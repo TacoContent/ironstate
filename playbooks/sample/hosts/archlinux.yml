@@ -1,0 +1,6 @@
+---
+
+tasks:
+  - name: Some ArchLinux Only Task (hosts/)
+    shell:
+      command: echo "This is a ArchLinux only task (hosts/)"
