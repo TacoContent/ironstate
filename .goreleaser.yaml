@@ -46,16 +46,20 @@ checksum:
 # §8. Requires `cosign` on the runner (installed by
 # sigstore/cosign-installer in .github/workflows/release.yml) and
 # `id-token: write` permission on the workflow.
+#
+# cosign v3's 'sign-blob' dropped '--output-signature'/'--output-certificate'
+# (deprecated, silently ignored) in favor of a single '--bundle' file
+# combining both - matches goreleaser's own documented cosign recipe
+# (https://goreleaser.com/customization/sign/sign/#signing-with-cosign).
+# Verify with: cosign verify-blob --bundle checksums.txt.sigstore.json checksums.txt
 signs:
   - cmd: cosign
-    signature: "${artifact}.sig"
-    certificate: "${artifact}.pem"
+    signature: "${artifact}.sigstore.json"
     args:
       - sign-blob
-      - "--yes"
-      - "--output-signature=${artifact}.sig"
-      - "--output-certificate=${artifact}.pem"
+      - "--bundle=${signature}"
       - "${artifact}"
+      - "--yes"
     artifacts: checksum
     output: true
 
