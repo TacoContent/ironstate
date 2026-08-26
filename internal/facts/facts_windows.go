@@ -27,3 +27,17 @@ func osVersion() string {
 func osBuildNumber() uint32 {
 	return windows.RtlGetVersion().BuildNumber
 }
+
+func itoa(v uint32) string {
+	if v == 0 {
+		return "0"
+	}
+	var digits [10]byte
+	i := len(digits)
+	for v > 0 {
+		i--
+		digits[i] = byte('0' + v%10)
+		v /= 10
+	}
+	return string(digits[i:])
+}
