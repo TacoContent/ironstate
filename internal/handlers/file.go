@@ -117,10 +117,16 @@ func installFileItem(item map[string]any) error {
 			if err != nil {
 				return err
 			}
-			return f.Close()
+			if err := f.Close(); err != nil {
+				return err
+			}
+			return applyPathMetadata(path, item)
 		}
 		now := time.Now()
-		return os.Chtimes(path, now, now)
+		if err := os.Chtimes(path, now, now); err != nil {
+			return err
+		}
+		return applyPathMetadata(path, item)
 	}
 
 	var src string
@@ -149,17 +155,29 @@ func installFileItem(item map[string]any) error {
 
 	switch fileType {
 	case "directory":
-		return os.MkdirAll(path, 0o755) //nolint:gosec // matches ironstate.ps1's own directories, no tighter mode intended
+		if err := os.MkdirAll(path, 0o755); err != nil { //nolint:gosec // matches ironstate.ps1's own directories, no tighter mode intended
+			return err
+		}
+		return applyPathMetadata(path, item)
 	case "link":
-		return os.Symlink(src, path)
+		if err := os.Symlink(src, path); err != nil {
+			return err
+		}
+		return applyPathMetadata(path, item)
 	case "hard":
-		return os.Link(src, path)
+		if err := os.Link(src, path); err != nil {
+			return err
+		}
+		return applyPathMetadata(path, item)
 	default:
 		f, err := os.Create(path) //nolint:gosec // path is authored YAML content, same trust boundary as the rest of this tool
 		if err != nil {
 			return err
 		}
-		return f.Close()
+		if err := f.Close(); err != nil {
+			return err
+		}
+		return applyPathMetadata(path, item)
 	}
 }
 
@@ -172,6 +190,9 @@ func uninstallFileItem(item map[string]any) error {
 }
 
 func (fileHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
+	if itemState(item) != "absent" && hasPathMetadataDirective(item) {
+		return false, nil
+	}
 	return testFileItemPresent(item), nil
 }
 

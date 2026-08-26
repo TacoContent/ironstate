@@ -714,6 +714,9 @@ tasks:
 | `go` | Go binaries (`go install`) |
 | `eget` | GitHub release binaries (`eget`) |
 | `git` | Manage git checkouts (`git`) - see [docs/handlers/git.md](docs/handlers/git.md) |
+| `cron` | Cross-platform cron wrapper (Unix cron or Windows scheduled tasks) - see [docs/handlers/cron.md](docs/handlers/cron.md) |
+| `cron_unix` | Manage Unix cron entries via `crontab` - see [docs/handlers/cron_unix.md](docs/handlers/cron_unix.md) |
+| `cron_file` | Manage system cron-file entries (cron.d style) - see [docs/handlers/cron_file.md](docs/handlers/cron_file.md) |
 | `iptables` | Manage iptables/ip6tables rules (`iptables`) - see [docs/handlers/iptables.md](docs/handlers/iptables.md) |
 | `ufw` | Manage rules through UFW (`ufw`) - see [docs/handlers/ufw.md](docs/handlers/ufw.md) |
 | `advfirewall` | Manage Windows Firewall rules (`netsh advfirewall`) - see [docs/handlers/advfirewall.md](docs/handlers/advfirewall.md) |
@@ -731,6 +734,8 @@ tasks:
 | `wait_for` | Wait for an async job (or a condition) to complete/become true, with a timeout (no external tool) |
 | `registry` | Write one or more named values under a registry key (no external tool) |
 | `scheduled_task` | Register/update/remove a Windows Task Scheduler task (`ScheduledTasks` module) |
+| `group` | Manage local groups on Windows/Linux/macOS |
+| `user` | Manage local users on Windows/Linux/macOS |
 | `include` | Pull in another document's tasks from `packages/<name>/main.yml` (no external tool) |
 
 Every leaf shares these envelope fields, which sit *beside* its module key, not inside it:
@@ -750,6 +755,18 @@ Each module's own fields (documented inline in `site.yml`) still include `state`
 ### `git`
 
 Detailed handler docs and examples: [docs/handlers/git.md](docs/handlers/git.md).
+
+### `cron`
+
+Detailed handler docs and examples: [docs/handlers/cron.md](docs/handlers/cron.md).
+
+### `cron_unix`
+
+Detailed handler docs and examples: [docs/handlers/cron_unix.md](docs/handlers/cron_unix.md).
+
+### `cron_file`
+
+Detailed handler docs and examples: [docs/handlers/cron_file.md](docs/handlers/cron_file.md).
 
 ### `iptables`
 
@@ -777,6 +794,8 @@ Detailed handler docs and examples: [docs/handlers/firewall.md](docs/handlers/fi
 | `include` | no | Filename patterns to extract (whitelist) |
 | `exclude` | no | Filename patterns to skip (blacklist) |
 | `sha256.cache` | no | Path to cache the downloaded archive's SHA256 hash; used by `state: latest` to skip unchanged archives |
+| `owner` / `group` | no | Ownership metadata applied to extracted files |
+| `mode` | no | Mode bits applied to extracted files |
 
 ### `symlinks`
 
@@ -787,6 +806,8 @@ A thin wrapper over `file` (`type: link`) - see below. Kept as its own module fo
 | `src` | yes | Link target (`~` expansion supported) |
 | `dest` | yes | Link path (`~` expansion supported) |
 | `force` | no | Replace whatever already exists at `dest` if it isn't already the right symlink. Default `true` - unlike `file`'s own `force` (default `false`), this preserves the original always-replace behavior. Set `false` to warn and skip instead |
+| `owner` / `group` | no | Ownership metadata applied after link creation |
+| `mode` | no | Mode bits applied after link creation |
 
 ### `file`
 
@@ -798,6 +819,8 @@ Modeled on Ansible's [`file`](https://docs.ansible.com/projects/ansible/latest/c
 | `type` | no | `file` (default, creates an empty file if missing, no-op otherwise), `directory` (creates it and any missing parents), `link` (symlink to `src`), `hard` (hard link to `src`), `touch` (always updates the timestamp, creating an empty file first if missing - like Unix `touch`) |
 | `src` | one of `type: link`/`type: hard` | Existing path the link points to |
 | `force` | no | When `path` already exists as something other than `type`, replace it. Default `false` - warns and skips instead |
+| `owner` / `group` | no | Ownership metadata applied after create/touch/link operations |
+| `mode` | no | Mode bits applied after create/touch/link operations |
 
 **Note:** `state` here is this codebase's usual `present`/`absent`/`latest` (see [Task/action model](#taskaction-model)) - unlike Ansible's own `file` module, which overloads `state` to also mean the target kind (`file`/`directory`/`link`/`hard`/`touch`) plus `absent`. That's what `type` is for instead, so this module's dispatch stays consistent with every other handler. `absent` removes whatever is at `path` - recursively for a real directory, but a link/hard link is only ever unlinked, never recursed into, so removing a directory symlink can't delete the target's contents.
 
@@ -821,6 +844,8 @@ tasks:
 | --- | --- | --- |
 | `src` | yes | Source file or directory. Resolved relative to the playbook's own root directory (the directory containing its `site.yml`), or the owning package's own directory — see [Includes](#includes) — unless it's absolute or `~`-prefixed |
 | `dest` | yes | Destination path (`~` expansion supported) - a directory when `src` is a directory |
+| `owner` / `group` | no | Ownership metadata applied to copied file(s) |
+| `mode` | no | Mode bits applied to copied file(s) |
 
 `present`/`latest` copy `src` over `dest` whenever their SHA256 hashes differ; `absent` removes `dest`.
 
@@ -843,6 +868,8 @@ tasks:
 | `dest` | yes | Destination path for the rendered output (`~` expansion supported) |
 | `engine` | yes | Which template engine renders `src`: `jinja` or `gotemplate` (see below) |
 | `vars` | no | Extra key/value pairs layered on top of facts/vars/registry for this render only (last-write-wins, shallow merge) |
+| `owner` / `group` | no | Ownership metadata applied to `dest` after write |
+| `mode` | no | Mode bits applied to `dest` after write |
 
 `present`/`latest` render `src` and write it to `dest` whenever the freshly-rendered content differs from what's already there (a plain string compare - the template equivalent of `copy`'s SHA256 hash compare); `absent` removes `dest`. The render context is the same facts/vars/id-registry context `when`/`${{ }}` already resolve against, with this task's own `vars` layered on top.
 
@@ -939,6 +966,8 @@ Modeled on Ansible's [`blockinfile`](https://docs.ansible.com/projects/ansible/l
 | `insertbefore` | no | Like `insertafter`, but inserts before the first matching line (`BOF` for beginning of file). Takes precedence over `insertafter` when both are set |
 | `create` | no | Create `dest` (and its parent directory) if missing. Default `false` - if `dest` doesn't exist and this is `false`, the item is skipped with a warning |
 | `backup` | no | Write a timestamped copy of `dest` (`dest.<yyyyMMddHHmmss>.bak`) before changing it. Default `false` |
+| `owner` / `group` | no | Ownership metadata applied to `dest` after write |
+| `mode` | no | Mode bits applied to `dest` after write |
 
 If the marker lines are already present, the block between them is replaced in place. `present`/`latest` write the block whenever its current content doesn't already match; `absent` removes the marker lines and everything between them.
 
@@ -1000,6 +1029,8 @@ Modeled on Ansible's [`lineinfile`](https://docs.ansible.com/projects/ansible/la
 | `firstmatch` | no | With regex `insertbefore`/`insertafter`, use the first match instead of the last |
 | `create` | no | Create the file (and parent directory) when missing for `present`/`latest`. Default `false` |
 | `backup` | no | Write a timestamped backup (`<path>.<yyyyMMddHHmmss>.bak`) before changing. Default `false` |
+| `owner` / `group` | no | Ownership metadata applied to `path` after write |
+| `mode` | no | Mode bits applied to `path` after write |
 
 `present`/`latest` behavior:
 
@@ -1271,6 +1302,7 @@ Writes one or more named values under a single registry key.
 | --- | --- | --- |
 | `path` | yes | Registry key path. Supports hive shortcuts `HKLM`/`HKCU`/`HKCR`/`HKU`/`HKCC` and their `HKEY_*` full names (e.g. `HKEY_LOCAL_MACHINE\Software\...`), with or without a trailing `:` or forward slashes |
 | `values` | yes | One or more `{ name, type, value }` entries to write under `path` |
+| `owner` / `group` | no | Windows ACL owner/group to apply to the target registry key |
 
 Each entry in `values`:
 
@@ -1302,86 +1334,37 @@ tasks:
 
 ### `scheduled_task`
 
-Registers/updates/removes a Windows Task Scheduler task by generating a Task Scheduler XML definition and shelling out to the built-in `schtasks.exe` (part of Windows itself, not PowerShell). Unlike a rich `Get-ScheduledTask` object model, `schtasks.exe` has no equivalent to diff field-by-field against, so idempotency is intentionally reduced here: `present`/`latest` only check that a task with this `name`/`path` *exists* (plus `enabled`) - a drifted `action`/`trigger`/`principal`/`settings` is **not** detected and re-applied automatically. Use `state: latest` (or delete and let it re-register) to force a fresh registration after changing one of those fields.
+Detailed handler docs and examples: [docs/handlers/scheduled_task.md](docs/handlers/scheduled_task.md).
+
+`scheduled_task` also accepts top-level `owner` / `group` aliases that map to `principal.user_id` / `principal.group_id` when those principal fields are omitted.
+
+### `group`
+
+Manage local groups on Windows/Linux/macOS.
 
 | Field | Required | Description |
 | --- | --- | --- |
-| `name` | yes | Task name |
-| `path` | no | Task folder, e.g. `\MyApps\`. Default `\` (root). Normalized to always start/end with `\` |
-| `description` | no | |
-| `enabled` | no | Default `true`. Applied via `Enable-ScheduledTask`/`Disable-ScheduledTask` after every (re)registration |
-| `actions` | yes, unless `state: absent` | One or more `{ execute, arguments, working_directory }` - programs to run, in order |
-| `triggers` | no | Omit for a manual/on-demand-only task. See below |
-| `principal` | no | Which account the task runs as - omit to run as the current user with standard rights |
-| `settings` | no | Task-level settings - partial-declare like `registry`'s `values` (only listed keys are managed/compared) |
+| `name` | yes | Group name |
+| `gid` | no | Group id on Unix/macOS |
+| `system` | no | Create as a system group where supported |
 
-Each entry in `actions`:
+### `user`
+
+Manage local users on Windows/Linux/macOS.
 
 | Field | Required | Description |
 | --- | --- | --- |
-| `execute` | yes | Path to the executable/script |
-| `arguments` | no | Arguments passed to `execute` |
-| `working_directory` | no | |
-
-Each entry in `triggers` has a `type`, which selects which other fields apply:
-
-| `type` | Fields |
-| --- | --- |
-| `logon` | `user_id?` (omit for any user), `delay?`, `random_delay?` |
-| `startup` | `delay?`, `random_delay?` |
-| `once` | `at` (full date+time), `repetition_interval?`, `repetition_duration?`, `random_delay?` |
-| `daily` | `at` (time-of-day), `days_interval?` (default 1), `repetition_interval?`, `repetition_duration?`, `random_delay?` |
-| `weekly` | `at` (time-of-day), `days_of_week` (required list, e.g. `[Monday, Wednesday]`), `weeks_interval?` (default 1), `repetition_interval?`, `repetition_duration?`, `random_delay?` |
-
-`delay`/`random_delay`/`repetition_interval`/`repetition_duration` accept either an ISO 8601 duration (`PT30S`, `P1D`) or a plain .NET TimeSpan string (`00:00:30`, `1.00:00:00`).
-
-**Registering a task with a `logon` or `startup` trigger requires an elevated (Run as Administrator) session** - verified against both `Register-ScheduledTask` and raw `schtasks.exe`, so it's a genuine Task Scheduler privilege requirement, not a gap either tool can route around. `once`/`daily`/`weekly` triggers, and a task with no triggers at all, register fine as a standard user.
-
-`principal`:
-
-| Field | Description |
-| --- | --- |
-| `user_id` | Account to run as (a username, `SYSTEM`, `NT AUTHORITY\SYSTEM`, ...). Mutually exclusive with `group_id` |
-| `group_id` | Group to run as instead of a single user |
-| `logon_type` | `None`, `Password`, `S4U`, `Interactive`, `Group`, `ServiceAccount`, or `InteractiveOrPassword` |
-| `run_level` | `Limited` (default) or `Highest` (\"Run with highest privileges\") |
-| `password_env` | Name of an environment variable (populated via this repo's own `.env`/`.secrets` loading - see [File hierarchy](#file-hierarchy)) holding the account's password. Only used when `logon_type` is `Password` - never write a plaintext password into YAML |
-
-`logon_type: Password` additionally requires `user_id` and `password_env`. A stored task password can't be read back, so idempotency can't detect a drifted password - only `state: latest` is guaranteed to re-apply one.
-
-`settings` (only declared keys are managed/compared):
-
-| Field | Description |
-| --- | --- |
-| `disallow_start_if_on_batteries` | |
-| `start_when_available` | Run as soon as possible after a scheduled start is missed |
-| `hidden` | |
-| `wake_to_run` | Wake the machine from sleep to run this task |
-| `allow_hard_terminate` | |
-| `run_only_if_network_available` | |
-| `run_only_if_idle` | |
-| `multiple_instances` | `IgnoreNew`, `Parallel`, `Queue`, or `StopExisting` |
-| `restart_count` | Retries on failure - Task Scheduler silently ignores this unless `restart_interval` is also set; declare both together |
-| `execution_time_limit` | Kill the task if it runs longer than this. `PT0S` means no limit |
-| `restart_interval` | Delay between retries when `restart_count` is set |
-| `delete_expired_task_after` | Auto-delete the task this long after its last trigger expires |
-
-Test only checks existence (by `name`/`path`) plus `enabled` - it does **not** diff `actions`/`triggers`/`principal`/`settings` field-by-field the way `registry` compares its `values`, since `schtasks.exe` has no equivalent object model to diff against. `present`/`latest` (re)register the task via `schtasks.exe /Create /XML <generated-definition> /F`; `absent` removes it via `schtasks.exe /Delete /TN <name> /F`.
-
-```yaml
-tasks:
-  - name: kanata autostart
-    scheduled_task:
-      name: kanata
-      description: Starts kanata at logon
-      actions:
-        - execute: ~/.local/bin/kanata-run.bat
-      triggers:
-        - type: logon
-      principal:
-        run_level: Highest   # kanata needs elevation for keyboard remapping
-      state: present         # registering this needs an elevated session - see above
-```
+| `name` | yes | User name |
+| `password` / `password_env` | no | Password value or env-var containing it (platform behavior varies) |
+| `uid` | no | User id on Unix/macOS |
+| `group` / `gid` | no | Primary group (name or gid) |
+| `groups` | no | Supplementary groups |
+| `shell` | no | Login shell |
+| `home` | no | Home directory |
+| `comment` | no | Display/full name/comment |
+| `system` | no | Create as a system account where supported |
+| `create_home` | no | Linux: create home directory (default `true`) |
+| `remove_home` | no | Linux: remove home directory when deleting user |
 
 ## Tags filtering
 

@@ -27,6 +27,14 @@ var registryHiveAliases = map[string]uint32{
 	"HKCC": hive(registry.CURRENT_CONFIG), "HKEY_CURRENT_CONFIG": hive(registry.CURRENT_CONFIG),
 }
 
+var registryHiveCanonical = map[string]string{
+	"HKLM": "HKEY_LOCAL_MACHINE", "HKEY_LOCAL_MACHINE": "HKEY_LOCAL_MACHINE",
+	"HKCU": "HKEY_CURRENT_USER", "HKEY_CURRENT_USER": "HKEY_CURRENT_USER",
+	"HKCR": "HKEY_CLASSES_ROOT", "HKEY_CLASSES_ROOT": "HKEY_CLASSES_ROOT",
+	"HKU": "HKEY_USERS", "HKEY_USERS": "HKEY_USERS",
+	"HKCC": "HKEY_CURRENT_CONFIG", "HKEY_CURRENT_CONFIG": "HKEY_CURRENT_CONFIG",
+}
+
 func hive(k registry.Key) uint32 { return uint32(k) } //nolint:gosec // every registry.*_ROOT/*_USER/etc. constant is a small positive Win32 pseudo-handle (0x80000000-0x80000006), always representable in uint32
 
 var registryValidTypes = map[string]bool{
@@ -52,6 +60,26 @@ func resolveRegistryPath(path string) (registry.Key, string, error) {
 		return 0, "", fmt.Errorf("unknown registry hive '%s' in path '%s' (expected one of: HKLM, HKCU, HKCR, HKU, HKCC, or their HKEY_* full names)", hiveToken, path)
 	}
 	return registry.Key(root), rest, nil
+}
+
+func registryPowerShellPath(path string) (string, error) {
+	normalized := strings.TrimLeft(strings.ReplaceAll(path, "/", `\`), `\`)
+	splitIndex := strings.Index(normalized, `\`)
+	hiveToken := normalized
+	rest := ""
+	if splitIndex >= 0 {
+		hiveToken = normalized[:splitIndex]
+		rest = normalized[splitIndex+1:]
+	}
+	hiveToken = strings.ToUpper(strings.TrimSuffix(hiveToken, ":"))
+	canonical, ok := registryHiveCanonical[hiveToken]
+	if !ok {
+		return "", fmt.Errorf("unknown registry hive '%s' in path '%s'", hiveToken, path)
+	}
+	if rest == "" {
+		return "Registry::" + canonical, nil
+	}
+	return "Registry::" + canonical + `\` + rest, nil
 }
 
 func convertRegistryValueType(t string) (string, error) {
@@ -206,6 +234,11 @@ func readRegistryRawValue(k registry.Key, name string) (any, string, error) {
 }
 
 func (registryHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
+	if itemState(item) != "absent" {
+		if strings.TrimSpace(getString(item, "owner")) != "" || strings.TrimSpace(getString(item, "group")) != "" {
+			return false, nil
+		}
+	}
 	root, sub, err := resolveRegistryPath(getString(item, "path"))
 	if err != nil {
 		return false, err
@@ -276,6 +309,17 @@ func (registryHandler) Install(item map[string]any, name string, ctx engine.Cont
 			return engine.ExecResult{}, err
 		}
 		if err := setRegistryValue(k, getString(spec, "name"), valueType, spec["value"]); err != nil {
+			return engine.ExecResult{}, err
+		}
+	}
+	owner := strings.TrimSpace(getString(item, "owner"))
+	group := strings.TrimSpace(getString(item, "group"))
+	if owner != "" || group != "" {
+		psPath, err := registryPowerShellPath(getString(item, "path"))
+		if err != nil {
+			return engine.ExecResult{}, err
+		}
+		if err := applyOwnerGroup(psPath, owner, group); err != nil {
 			return engine.ExecResult{}, err
 		}
 	}

@@ -160,6 +160,9 @@ func invokeZipDownloadAndExtract(item map[string]any) error {
 		if err := extractZipEntry(entry, destPath); err != nil {
 			return err
 		}
+		if err := applyPathMetadata(destPath, item); err != nil {
+			return err
+		}
 	}
 
 	if err := ensureParentDir(cachePath); err != nil {
@@ -244,6 +247,9 @@ func removeZipCreates(item map[string]any) {
 }
 
 func (zipHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
+	if itemState(item) != "absent" && hasPathMetadataDirective(item) {
+		return false, nil
+	}
 	return testCreatesPresent(asList(item["creates"])), nil
 }
 

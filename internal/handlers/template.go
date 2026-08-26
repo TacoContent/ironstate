@@ -76,6 +76,9 @@ func getTemplateRenderedContent(item map[string]any, ctx engine.Context) (string
 }
 
 func (templateHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
+	if itemState(item) != "absent" && hasPathMetadataDirective(item) {
+		return false, nil
+	}
 	dest := resolvePath(getString(item, "dest"))
 	src := getString(item, "src")
 	if !fileExists(src) {
@@ -124,7 +127,10 @@ func (templateHandler) Install(item map[string]any, name string, ctx engine.Cont
 	if err := ensureParentDir(dest); err != nil {
 		return engine.ExecResult{}, err
 	}
-	return engine.ExecResult{}, os.WriteFile(dest, []byte(rendered), 0o644) //nolint:gosec // matches ironstate.ps1's own file permissions, no tighter mode intended
+	if err := os.WriteFile(dest, []byte(rendered), 0o644); err != nil { //nolint:gosec // matches ironstate.ps1's own file permissions, no tighter mode intended
+		return engine.ExecResult{}, err
+	}
+	return engine.ExecResult{}, applyPathMetadata(dest, item)
 }
 
 func (templateHandler) Uninstall(item map[string]any, name string, ctx engine.Context) (engine.ExecResult, error) {

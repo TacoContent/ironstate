@@ -16,6 +16,9 @@ func toFileLinkItem(item map[string]any) map[string]any {
 		"type":  "link",
 		"src":   getString(item, "src"),
 		"force": getBool(item, "force", true),
+		"owner": getString(item, "owner"),
+		"group": getString(item, "group"),
+		"mode":  item["mode"],
 	}
 }
 

@@ -3,24 +3,32 @@ version: '1'
 vars: {}
 tasks:
 
-  - name: Include Async Role
-    include:
-      name: roles/async
+  # - name: Include Async Role
+  #   include:
+  #     name: roles/async
 
-  - name: Include Fail-Checks Role
-    include:
-      name: roles/fail-checks
+  # - name: Include Fail-Checks Role
+  #   include:
+  #     name: roles/fail-checks
 
-  - name: Include GitHub-Meta Role
-    include:
-      name: roles/github-meta
+  # - name: Include GitHub-Meta Role
+  #   include:
+  #     name: roles/github-meta
 
-  - name: Include Filter-Checks Role
-    include:
-      name: roles/filter-checks
+  # - name: Include Filter-Checks Role
+  #   include:
+  #     name: roles/filter-checks
 
-  - name: Include Line in file Role
-    include:
-      name: roles/lineinfile
-    with:
-      Version: "1.2.5"
+  # - name: Include Line in file Role
+  #   include:
+  #     name: roles/lineinfile
+  #   with:
+  #     Version: "1.2.5"
+
+  - name: Test
+    user:
+      name: rconr
+
+  - name: Kanata KB Mapper
+    cron:
+      name: Kanata KB Mapper

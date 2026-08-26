@@ -163,6 +163,24 @@ func TestFileHandlerDirectory(t *testing.T) {
 	}
 }
 
+func TestFileHandlerMetadataDirectiveForcesReconcile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "afile")
+	if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := fileHandler{}
+	item := map[string]any{"path": path, "type": "file", "owner": "someone"}
+
+	installed, err := h.Test(item, "", testCtx())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if installed {
+		t.Fatal("expected metadata directive to force reconcile")
+	}
+}
+
 func TestFileHandlerSymlink(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "src.txt")
@@ -198,6 +216,82 @@ func TestSymlinksHandlerDelegatesToFile(t *testing.T) {
 	installed, err := h.Test(item, "", testCtx())
 	if err != nil || !installed {
 		t.Fatalf("installed=%v err=%v", installed, err)
+	}
+}
+
+func TestGroupHandlerInstallDispatchesPlatformCommand(t *testing.T) {
+	origRunner := runner
+	defer func() { runner = origRunner }()
+
+	var calls [][]string
+	runner = fakeRunnerFunc(func(exe string, args []string) (ironexec.Result, error) {
+		calls = append(calls, append([]string{exe}, args...))
+		if len(calls) == 1 {
+			return ironexec.Result{RC: 1}, nil // not found
+		}
+		return ironexec.Result{RC: 0}, nil
+	})
+
+	h := groupHandler{}
+	if _, err := h.Install(map[string]any{"name": "irontest-group"}, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) < 2 {
+		t.Fatalf("expected existence check + create call, got %d", len(calls))
+	}
+
+	second := strings.Join(calls[1], " ")
+	switch runtime.GOOS {
+	case "windows":
+		if !strings.Contains(second, "net localgroup irontest-group /add") {
+			t.Fatalf("unexpected command: %q", second)
+		}
+	case "darwin":
+		if !strings.Contains(second, "dseditgroup -o create irontest-group") {
+			t.Fatalf("unexpected command: %q", second)
+		}
+	default:
+		if !strings.Contains(second, "groupadd irontest-group") {
+			t.Fatalf("unexpected command: %q", second)
+		}
+	}
+}
+
+func TestUserHandlerInstallDispatchesPlatformCommand(t *testing.T) {
+	origRunner := runner
+	defer func() { runner = origRunner }()
+
+	var calls [][]string
+	runner = fakeRunnerFunc(func(exe string, args []string) (ironexec.Result, error) {
+		calls = append(calls, append([]string{exe}, args...))
+		if len(calls) == 1 {
+			return ironexec.Result{RC: 1}, nil // not found
+		}
+		return ironexec.Result{RC: 0}, nil
+	})
+
+	h := userHandler{}
+	if _, err := h.Install(map[string]any{"name": "irontest-user", "password": "temp-pass"}, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) < 2 {
+		t.Fatalf("expected existence check + create call, got %d", len(calls))
+	}
+
+	second := strings.Join(calls[1], " ")
+	switch runtime.GOOS {
+	case "windows":
+		if !strings.Contains(second, "net user irontest-user temp-pass /add") {
+			t.Fatalf("unexpected command: %q", second)
+		}
+	case "darwin":
+		if !strings.Contains(second, "sysadminctl -addUser irontest-user -password temp-pass") {
+			t.Fatalf("unexpected command: %q", second)
+		}
+	default:
+		if !strings.Contains(second, "useradd") || !strings.Contains(second, "irontest-user") {
+			t.Fatalf("unexpected command: %q", second)
+		}
 	}
 }
 
@@ -680,6 +774,222 @@ func TestFirewallWrapperRejectsUnknownBackend(t *testing.T) {
 	_, err := h.Install(map[string]any{"backend": "unknown"}, "", testCtx())
 	if err == nil {
 		t.Fatal("expected error for unknown backend")
+	}
+}
+
+func TestCronWrapperUsesScheduledTaskOnWindows(t *testing.T) {
+	backend, err := cronBackend(map[string]any{}, engine.Context{Flat: map[string]any{"platform": "windows"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if backend != "scheduled_task" {
+		t.Fatalf("backend=%q, want scheduled_task", backend)
+	}
+}
+
+func TestCronUnixTranslatesScheduleAndCommand(t *testing.T) {
+	translated := cronToUnix(map[string]any{
+		"minute":  "*/15",
+		"hour":    "*",
+		"day":     "*",
+		"month":   "*",
+		"weekday": "*",
+		"command": "echo hello",
+		"user":    "root",
+		"state":   "present",
+	})
+	if got, ok := translated["schedule"]; !ok || got != "*/15 * * * *" {
+		t.Fatalf("translated schedule=%v, want */15 * * * *", translated["schedule"])
+	}
+	if got, ok := translated["command"]; !ok || got != "echo hello" {
+		t.Fatalf("translated command=%v, want echo hello", translated["command"])
+	}
+	if got, ok := translated["user"]; !ok || got != "root" {
+		t.Fatalf("translated user=%v, want root", translated["user"])
+	}
+}
+
+func TestCronUnixEntryLineSupportsRebootDisabledAndEnvironment(t *testing.T) {
+	line := cronEntryLine(map[string]any{
+		"special_time": "reboot",
+		"command":      "echo hello",
+		"disabled":     true,
+		"environment":  map[string]any{"FOO": "bar", "HOME": "/tmp"},
+	})
+	if !strings.Contains(line, "# @reboot") {
+		t.Fatalf("cron entry line=%q, want disabled reboot entry", line)
+	}
+	if !strings.Contains(line, "echo hello") {
+		t.Fatalf("cron entry line=%q, want command present", line)
+	}
+
+	seq := cronEntryLineSequence(map[string]any{
+		"special_time": "reboot",
+		"command":      "echo hello",
+		"environment":  map[string]any{"FOO": "bar"},
+	})
+	if len(seq) != 2 {
+		t.Fatalf("cronEntryLineSequence len=%d, want 2", len(seq))
+	}
+	if seq[0] != "FOO=bar" {
+		t.Fatalf("first env line=%q, want FOO=bar", seq[0])
+	}
+	if !strings.Contains(seq[1], "@reboot") {
+		t.Fatalf("schedule line=%q, want @reboot", seq[1])
+	}
+}
+
+func TestCronUnixNamedMarkerAndReplacement(t *testing.T) {
+	marker := cronNameMarker("nightly-backup")
+	lines := []string{
+		"PATH=/usr/local/bin",
+		marker,
+		"FOO=old",
+		"0 1 * * * /opt/old-backup.sh",
+		"MAILTO=ops@example.com",
+	}
+
+	filtered := removeNamedCronBlock(lines, "nightly-backup")
+	if len(filtered) != 2 {
+		t.Fatalf("filtered len=%d, want 2", len(filtered))
+	}
+	if filtered[0] != "PATH=/usr/local/bin" || filtered[1] != "MAILTO=ops@example.com" {
+		t.Fatalf("unexpected filtered lines: %#v", filtered)
+	}
+}
+
+func TestCronUnixEnvInsertionAndRemoval(t *testing.T) {
+	lines := []string{
+		"PATH=/usr/local/bin",
+		"MAILTO=ops@example.com",
+		"0 * * * * echo hi",
+	}
+
+	inserted := insertEnvLine(lines, "FOO=bar", "MAILTO", "")
+	if len(inserted) != 4 {
+		t.Fatalf("inserted len=%d, want 4", len(inserted))
+	}
+	if inserted[1] != "FOO=bar" {
+		t.Fatalf("inserted line=%q, want FOO=bar before MAILTO", inserted[1])
+	}
+
+	inserted = insertEnvLine(lines, "FOO=bar", "", "PATH")
+	if inserted[1] != "FOO=bar" {
+		t.Fatalf("inserted line=%q, want FOO=bar after PATH", inserted[1])
+	}
+
+	cleaned := removeEnvByName([]string{"FOO=bar", "# FOO=old", "MAILTO=ops@example.com"}, "FOO")
+	if len(cleaned) != 1 || cleaned[0] != "MAILTO=ops@example.com" {
+		t.Fatalf("unexpected cleaned lines: %#v", cleaned)
+	}
+}
+
+func TestCronToUnixPassesEnvModeFields(t *testing.T) {
+	translated := cronToUnix(map[string]any{
+		"name":         "PATH",
+		"env":          true,
+		"value":        "/usr/local/bin",
+		"insertbefore": "MAILTO",
+		"state":        "present",
+	})
+	if got := translated["env"]; got != true {
+		t.Fatalf("env=%v, want true", got)
+	}
+	if got := translated["value"]; got != "/usr/local/bin" {
+		t.Fatalf("value=%v, want /usr/local/bin", got)
+	}
+	if got := translated["insertbefore"]; got != "MAILTO" {
+		t.Fatalf("insertbefore=%v, want MAILTO", got)
+	}
+}
+
+func TestCronFilePathResolution(t *testing.T) {
+	absInput := filepath.Join(t.TempDir(), "ironstate-cron")
+	abs, err := cronFilePath(map[string]any{"cron_file": absInput})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if abs != absInput {
+		t.Fatalf("absolute path=%q, want %q", abs, absInput)
+	}
+
+	rel, err := cronFilePath(map[string]any{"cron_file": "backup"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(string(filepath.Separator), "etc", "cron.d", "backup")
+	if rel != want {
+		t.Fatalf("relative path=%q, want %q", rel, want)
+	}
+}
+
+func TestCronFileEntryLineIncludesSystemUser(t *testing.T) {
+	line := cronFileEntryLine(map[string]any{
+		"minute":  "5",
+		"hour":    "2",
+		"day":     "*",
+		"month":   "*",
+		"weekday": "*",
+		"user":    "root",
+		"command": "/usr/local/bin/backup.sh",
+	})
+	if line != "5 2 * * * root /usr/local/bin/backup.sh" {
+		t.Fatalf("line=%q, want system cron format", line)
+	}
+}
+
+func TestCronFileNamedBlockReplacement(t *testing.T) {
+	lines := []string{
+		"PATH=/usr/local/bin",
+		cronNameMarker("nightly-backup"),
+		"MAILTO=ops@example.com",
+		"0 1 * * * root /opt/old-backup.sh",
+		"SHELL=/bin/bash",
+	}
+	filtered := removeNamedCronFileBlock(lines, "nightly-backup")
+	if len(filtered) != 2 {
+		t.Fatalf("filtered len=%d, want 2", len(filtered))
+	}
+	if filtered[0] != "PATH=/usr/local/bin" || filtered[1] != "SHELL=/bin/bash" {
+		t.Fatalf("unexpected filtered lines: %#v", filtered)
+	}
+}
+
+func TestParseCronFileMode(t *testing.T) {
+	mode, ok, err := parseCronFileMode("0644")
+	if err != nil || !ok {
+		t.Fatalf("parseCronFileMode string failed: ok=%v err=%v", ok, err)
+	}
+	if mode != 0o644 {
+		t.Fatalf("mode=%#o, want 0644", mode)
+	}
+
+	mode, ok, err = parseCronFileMode(420)
+	if err != nil || !ok {
+		t.Fatalf("parseCronFileMode int failed: ok=%v err=%v", ok, err)
+	}
+	if mode != 0o644 {
+		t.Fatalf("mode=%#o, want 0644", mode)
+	}
+}
+
+func TestApplyCronFileMetadataMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX chmod permission bits are not reliably enforced on Windows")
+	}
+	path := filepath.Join(t.TempDir(), "cronfile")
+	if err := os.WriteFile(path, []byte("MAILTO=ops@example.com\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyCronFileMetadata(path, map[string]any{"mode": "0644"}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Fatalf("perm=%#o, want 0644", got)
 	}
 }
 

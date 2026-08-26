@@ -72,9 +72,12 @@ func testCopyDirectoryPresent(src, destRoot string) bool {
 	return true
 }
 
-func installCopyDirectory(src, destRoot string) error {
+func installCopyDirectory(src, destRoot string, item map[string]any) error {
 	if !fileExists(destRoot) {
 		if err := os.MkdirAll(destRoot, 0o755); err != nil { //nolint:gosec // matches ironstate.ps1's own directories, no tighter mode intended
+			return err
+		}
+		if err := applyPathMetadata(destRoot, item); err != nil {
 			return err
 		}
 	}
@@ -89,6 +92,9 @@ func installCopyDirectory(src, destRoot string) error {
 			return err
 		}
 		if err := copyFileContents(filepath.Join(root, rel), destFile); err != nil {
+			return err
+		}
+		if err := applyPathMetadata(destFile, item); err != nil {
 			return err
 		}
 	}
@@ -147,6 +153,9 @@ func copyFileContents(src, dest string) error {
 }
 
 func (copyHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
+	if itemState(item) != "absent" && hasPathMetadataDirective(item) {
+		return false, nil
+	}
 	dest := resolvePath(getString(item, "dest"))
 	src := getString(item, "src")
 	if !fileExists(src) {
@@ -179,12 +188,15 @@ func (copyHandler) Install(item map[string]any, name string, ctx engine.Context)
 		return engine.ExecResult{}, nil
 	}
 	if copySrcIsDirectory(src) {
-		return engine.ExecResult{}, installCopyDirectory(src, copyDestRoot(src, dest))
+		return engine.ExecResult{}, installCopyDirectory(src, copyDestRoot(src, dest), item)
 	}
 	if err := ensureParentDir(dest); err != nil {
 		return engine.ExecResult{}, err
 	}
-	return engine.ExecResult{}, copyFileContents(src, dest)
+	if err := copyFileContents(src, dest); err != nil {
+		return engine.ExecResult{}, err
+	}
+	return engine.ExecResult{}, applyPathMetadata(dest, item)
 }
 
 func (copyHandler) Uninstall(item map[string]any, name string, ctx engine.Context) (engine.ExecResult, error) {

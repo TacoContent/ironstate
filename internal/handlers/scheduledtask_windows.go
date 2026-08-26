@@ -375,8 +375,30 @@ func asBool(v any) bool {
 
 var taskRunLevelMap = map[string]string{"Highest": "HighestAvailable", "Limited": "LeastPrivilege"}
 
-func buildTaskPrincipalXML(item map[string]any) string {
+func scheduledTaskPrincipal(item map[string]any) map[string]any {
 	principal := getMap(item, "principal")
+	out := map[string]any{}
+	for k, v := range principal {
+		out[k] = v
+	}
+	if owner := strings.TrimSpace(getString(item, "owner")); owner != "" {
+		if getString(out, "user_id") == "" {
+			out["user_id"] = owner
+		}
+	}
+	if group := strings.TrimSpace(getString(item, "group")); group != "" {
+		if getString(out, "group_id") == "" {
+			out["group_id"] = group
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func buildTaskPrincipalXML(item map[string]any) string {
+	principal := scheduledTaskPrincipal(item)
 	var sb strings.Builder
 	sb.WriteString(`<Principals><Principal id="Author">`)
 	if principal != nil {
@@ -538,7 +560,7 @@ func (scheduledTaskHandler) Install(item map[string]any, name string, ctx engine
 	}
 
 	args := []string{"/Create", "/TN", full, "/XML", tempPath, "/F"}
-	if principal := getMap(item, "principal"); principal != nil && getString(principal, "logon_type") == "Password" {
+	if principal := scheduledTaskPrincipal(item); principal != nil && getString(principal, "logon_type") == "Password" {
 		userID := getString(principal, "user_id")
 		if userID == "" {
 			return engine.ExecResult{}, fmt.Errorf("scheduled_task '%s' principal.logon_type is 'Password' but no 'user_id' was given", getString(item, "name"))

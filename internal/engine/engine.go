@@ -144,7 +144,8 @@ var DefaultNoCommandCheckModules = map[string]bool{
 	"symlinks": true, "zip": true, "copy": true, "shell": true,
 	"blockinfile": true, "lineinfile": true, "log": true, "fail": true, "path": true, "fact": true,
 	"registry": true, "scheduled_task": true, "file": true, "template": true,
-	"assert": true, "ssh_host_block": true, "async": true, "wait_for": true, "firewall": true,
+	"assert": true, "ssh_host_block": true, "async": true, "wait_for": true, "firewall": true, "cron": true, "cron_unix": true, "cron_file": true,
+	"group": true, "user": true,
 }
 
 // DefaultModuleCommandNames remaps a module's task-tree name to its actual

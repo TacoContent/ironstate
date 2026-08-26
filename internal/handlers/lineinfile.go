@@ -341,6 +341,9 @@ func absentLineInFile(lines []string, item map[string]any, ctx engine.Context) (
 }
 
 func testLineInFilePresent(item map[string]any, ctx engine.Context) (bool, error) {
+	if itemState(item) != "absent" && hasPathMetadataDirective(item) {
+		return false, nil
+	}
 	path := resolveLineInFilePath(item)
 	if path == "" {
 		return false, fmt.Errorf("lineinfile requires 'path' (or alias 'dest'/'destfile'/'name')")
@@ -414,7 +417,10 @@ func setLineInFile(item map[string]any, ctx engine.Context) error {
 	if err := ensureParentDir(path); err != nil {
 		return err
 	}
-	return writeBlockInFileLines(path, newLines)
+	if err := writeBlockInFileLines(path, newLines); err != nil {
+		return err
+	}
+	return applyPathMetadata(path, item)
 }
 
 func (lineInFileHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {

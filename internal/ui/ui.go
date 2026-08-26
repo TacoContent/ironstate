@@ -92,6 +92,8 @@ var moduleEmoji = map[string]string{
 	"gem":            "💎",
 	"eget":           "📦",
 	"git":            "🌿",
+	"cron":           "⏰",
+	"cron_file":      "⏰",
 	"iptables":       "🧱",
 	"ufw":            "🧱",
 	"advfirewall":    "🧱",
@@ -114,6 +116,8 @@ var moduleEmoji = map[string]string{
 	"assert":         "✅",
 	"async":          "⚡",
 	"wait_for":       "⏳",
+	"user":           "👤",
+	"group":          "👥",
 }
 
 // ModuleEmoji returns module's representative glyph, or a generic bullet

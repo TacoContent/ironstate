@@ -174,6 +174,9 @@ func blockInFileMarkers(item map[string]any, name string) blockMarkers {
 }
 
 func testBlockInFilePresent(item map[string]any, name string, ctx engine.Context) (bool, error) {
+	if itemState(item) != "absent" && hasPathMetadataDirective(item) {
+		return false, nil
+	}
 	dest := resolvePath(getString(item, "dest"))
 	if !fileExists(dest) {
 		return false, nil
@@ -236,7 +239,10 @@ func setBlockInFile(item map[string]any, name string, ctx engine.Context) error 
 	if err := ensureParentDir(dest); err != nil {
 		return err
 	}
-	return writeBlockInFileLines(dest, lines)
+	if err := writeBlockInFileLines(dest, lines); err != nil {
+		return err
+	}
+	return applyPathMetadata(dest, item)
 }
 
 func removeBlockInFile(item map[string]any, name string) error {

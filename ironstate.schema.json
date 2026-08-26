@@ -110,6 +110,9 @@
         "go": { "$ref": "#/$defs/goItem" },
         "eget": { "$ref": "#/$defs/egetItem" },
         "git": { "$ref": "#/$defs/gitItem" },
+        "cron": { "$ref": "#/$defs/cronItem" },
+        "cron_unix": { "$ref": "#/$defs/cronUnixItem" },
+        "cron_file": { "$ref": "#/$defs/cronFileItem" },
         "iptables": { "$ref": "#/$defs/iptablesItem" },
         "ufw": { "$ref": "#/$defs/ufwItem" },
         "advfirewall": { "$ref": "#/$defs/advFirewallItem" },
@@ -132,6 +135,8 @@
         "wait_for": { "$ref": "#/$defs/waitForItem" },
         "registry": { "$ref": "#/$defs/registryItem" },
         "scheduled_task": { "$ref": "#/$defs/scheduledTaskItem" },
+        "group": { "$ref": "#/$defs/groupItem" },
+        "user": { "$ref": "#/$defs/userItem" },
         "include": { "$ref": "#/$defs/includeItem" }
       }
     },
@@ -250,6 +255,87 @@
           "default": true,
           "description": "Run 'git submodule update --init --recursive' after checkout."
         },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "cronItem": {
+      "type": "object",
+      "description": "Cross-platform cron wrapper: manages Unix cron jobs on Linux/macOS and delegates to Windows scheduled_task on Windows.",
+      "additionalProperties": false,
+      "properties": {
+        "backend": { "type": "string", "enum": ["auto", "cron", "scheduled_task"], "default": "auto", "description": "Backend override for the wrapper." },
+        "name": { "type": "string", "description": "Optional label/marker for the cron entry or Windows task." },
+        "command": { "type": "string", "description": "Command to run." },
+        "job": { "type": "string", "description": "Alias for command." },
+        "schedule": { "type": "string", "description": "Direct cron schedule, e.g. '*/15 * * * *'." },
+        "special_time": { "type": "string", "enum": ["hourly", "daily", "midnight", "weekly", "monthly", "yearly", "annually", "reboot"], "description": "Special cron alias determining the schedule." },
+        "minute": { "type": "string", "description": "Minute field." },
+        "hour": { "type": "string", "description": "Hour field." },
+        "day": { "type": "string", "description": "Day of month field." },
+        "month": { "type": "string", "description": "Month field." },
+        "weekday": { "type": "string", "description": "Day of week field." },
+        "user": { "type": "string", "description": "Optional user under whose crontab this entry is managed." },
+        "env": { "type": "boolean", "description": "When true, manage an environment variable line instead of a command line." },
+        "value": { "type": "string", "description": "Environment variable value used when env=true." },
+        "insertbefore": { "type": "string", "description": "Insert env variable before this variable name when env=true." },
+        "insertafter": { "type": "string", "description": "Insert env variable after this variable name when env=true." },
+        "disabled": { "type": "boolean", "description": "Whether the cron job or scheduled task is disabled." },
+        "environment": { "type": "object", "description": "Environment variables to export alongside the job for Unix cron jobs.", "additionalProperties": { "type": "string" } },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "cronUnixItem": {
+      "type": "object",
+      "description": "Manage a Unix cron entry via the local crontab command.",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "description": "Optional label/marker for the cron entry." },
+        "command": { "type": "string", "description": "Command to run." },
+        "job": { "type": "string", "description": "Alias for command." },
+        "schedule": { "type": "string", "description": "Direct cron schedule, e.g. '*/15 * * * *'." },
+        "special_time": { "type": "string", "enum": ["hourly", "daily", "midnight", "weekly", "monthly", "yearly", "annually", "reboot"], "description": "Special cron alias." },
+        "minute": { "type": "string", "description": "Minute field." },
+        "hour": { "type": "string", "description": "Hour field." },
+        "day": { "type": "string", "description": "Day of month field." },
+        "month": { "type": "string", "description": "Month field." },
+        "weekday": { "type": "string", "description": "Day of week field." },
+        "user": { "type": "string", "description": "Optional user under whose crontab this entry is managed." },
+        "env": { "type": "boolean", "description": "When true, manage an environment variable line instead of a command line." },
+        "value": { "type": "string", "description": "Environment variable value used when env=true." },
+        "insertbefore": { "type": "string", "description": "Insert env variable before this variable name when env=true." },
+        "insertafter": { "type": "string", "description": "Insert env variable after this variable name when env=true." },
+        "disabled": { "type": "boolean", "description": "Whether to disable the cron entry by prefixing it with '#'." },
+        "environment": { "type": "object", "description": "Environment variables exported for this cron entry.", "additionalProperties": { "type": "string" } },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "cronFileItem": {
+      "type": "object",
+      "description": "Manage a system cron file entry (cron.d-style), modeled after Ansible cron_file behavior.",
+      "additionalProperties": false,
+      "required": ["cron_file"],
+      "properties": {
+        "cron_file": { "type": "string", "description": "Absolute file path, or filename relative to /etc/cron.d." },
+        "name": { "type": "string", "description": "Optional logical marker name, written as '#Ansible: <name>' for idempotence." },
+        "command": { "type": "string", "description": "Command to run (ignored when env=true)." },
+        "job": { "type": "string", "description": "Alias for command." },
+        "schedule": { "type": "string", "description": "Direct cron schedule, e.g. '*/15 * * * *'." },
+        "special_time": { "type": "string", "enum": ["hourly", "daily", "midnight", "weekly", "monthly", "yearly", "annually", "reboot"], "description": "Special cron alias." },
+        "minute": { "type": "string", "description": "Minute field." },
+        "hour": { "type": "string", "description": "Hour field." },
+        "day": { "type": "string", "description": "Day of month field." },
+        "month": { "type": "string", "description": "Month field." },
+        "weekday": { "type": "string", "description": "Day of week field." },
+        "user": { "type": "string", "description": "Target user for command entries in the cron file. Defaults to root." },
+        "owner": { "type": "string", "description": "Optional file owner (username or numeric uid) for the cron file." },
+        "group": { "type": "string", "description": "Optional file group (group name or numeric gid) for the cron file." },
+        "mode": { "oneOf": [{ "type": "string" }, { "type": "integer" }], "description": "Optional file mode for the cron file (for example '0644' or 420)." },
+        "env": { "type": "boolean", "description": "When true, manage an environment variable line instead of a command line." },
+        "value": { "type": "string", "description": "Environment variable value used when env=true." },
+        "insertbefore": { "type": "string", "description": "Insert env variable before this variable name when env=true." },
+        "insertafter": { "type": "string", "description": "Insert env variable after this variable name when env=true." },
+        "disabled": { "type": "boolean", "description": "Whether to disable a managed command entry by prefixing it with '#'." },
+        "environment": { "type": "object", "description": "Environment variables exported alongside a managed command entry.", "additionalProperties": { "type": "string" } },
         "state": { "$ref": "#/$defs/state" }
       }
     },
@@ -383,6 +469,9 @@
             }
           }
         },
+        "owner": { "type": "string", "description": "Ownership metadata applied to extracted files." },
+        "group": { "type": "string", "description": "Group metadata applied to extracted files." },
+        "mode": { "oneOf": [{ "type": "string" }, { "type": "integer" }], "description": "Mode bits applied to extracted files (for example '0644' or 420)." },
         "state": { "$ref": "#/$defs/state" }
       }
     },
@@ -405,6 +494,9 @@
           "default": true,
           "description": "Replace whatever already exists at 'dest' if it isn't already the right symlink. Default true, unlike 'file's own 'force' (default false) - preserves this module's original always-replace behavior. Set false to instead warn and skip when 'dest' exists as something else."
         },
+        "owner": { "type": "string", "description": "Ownership metadata applied after link creation." },
+        "group": { "type": "string", "description": "Group metadata applied after link creation." },
+        "mode": { "oneOf": [{ "type": "string" }, { "type": "integer" }], "description": "Mode bits applied after link creation (for example '0644' or 420)." },
         "state": { "$ref": "#/$defs/state" }
       }
     },
@@ -433,6 +525,9 @@
           "default": false,
           "description": "When 'path' already exists as something other than 'type', replace it. Default false - warns and skips instead, rather than destroying whatever's already there."
         },
+        "owner": { "type": "string", "description": "Ownership metadata applied after create/touch/link operations." },
+        "group": { "type": "string", "description": "Group metadata applied after create/touch/link operations." },
+        "mode": { "oneOf": [{ "type": "string" }, { "type": "integer" }], "description": "Mode bits applied after create/touch/link operations (for example '0755' or 493)." },
         "state": { "$ref": "#/$defs/state" }
       }
     },
@@ -450,6 +545,9 @@
           "type": "string",
           "description": "Destination path. '~' expansion is supported. A directory when 'src' is a directory."
         },
+        "owner": { "type": "string", "description": "Ownership metadata applied to copied file(s)." },
+        "group": { "type": "string", "description": "Group metadata applied to copied file(s)." },
+        "mode": { "oneOf": [{ "type": "string" }, { "type": "integer" }], "description": "Mode bits applied to copied file(s) (for example '0644' or 420)." },
         "state": { "$ref": "#/$defs/state" }
       }
     },
@@ -469,13 +567,16 @@
         },
         "engine": {
           "type": "string",
-          "enum": ["jinja", "eps", "herestring"],
-          "description": "Which template engine renders 'src': 'jinja' (sandboxed, block-capable - '{{ }}', '{% if/for/set %}'), 'eps' (the PowerShell Gallery EPS module - full unrestricted PowerShell in '<% %>'/'<%= %>'), or 'herestring' ('$Name.Path' / '$(...)' interpolation only, same sandboxed grammar as 'jinja', no block constructs)."
+          "enum": ["jinja", "gotemplate"],
+          "description": "Which template engine renders 'src': 'jinja' (sandboxed, block-capable - '{{ }}', '{% if/for/set %}') or 'gotemplate' (Go text/template syntax)."
         },
         "vars": {
           "type": "object",
           "description": "Extra key/value pairs layered on top of facts/vars/registry for this render only (last-write-wins, shallow merge)."
         },
+        "owner": { "type": "string", "description": "Ownership metadata applied to 'dest' after write." },
+        "group": { "type": "string", "description": "Group metadata applied to 'dest' after write." },
+        "mode": { "oneOf": [{ "type": "string" }, { "type": "integer" }], "description": "Mode bits applied to 'dest' after write (for example '0644' or 420)." },
         "state": { "$ref": "#/$defs/state" }
       }
     },
@@ -491,8 +592,8 @@
         },
         "engine": {
           "type": "string",
-          "enum": ["jinja", "eps", "herestring"],
-          "description": "Which template engine renders 'src': 'jinja' (sandboxed, block-capable - '{{ }}', '{% if/for/set %}'), 'eps' (the PowerShell Gallery EPS module - full unrestricted PowerShell in '<% %>'/'<%= %>'), or 'herestring' ('$Name.Path' / '$(...)' interpolation only, same sandboxed grammar as 'jinja', no block constructs)."
+          "enum": ["jinja", "gotemplate"],
+          "description": "Which template engine renders 'src': 'jinja' (sandboxed, block-capable - '{{ }}', '{% if/for/set %}') or 'gotemplate' (Go text/template syntax)."
         },
         "vars": {
           "type": "object",
@@ -591,6 +692,9 @@
           "default": false,
           "description": "Write a timestamped copy of 'dest' (dest.<yyyyMMddHHmmss>.bak) before changing it."
         },
+        "owner": { "type": "string", "description": "Ownership metadata applied to 'dest' after write." },
+        "group": { "type": "string", "description": "Group metadata applied to 'dest' after write." },
+        "mode": { "oneOf": [{ "type": "string" }, { "type": "integer" }], "description": "Mode bits applied to 'dest' after write (for example '0644' or 420)." },
         "state": { "$ref": "#/$defs/state" }
       }
     },
@@ -666,6 +770,9 @@
           "default": false,
           "description": "Write a timestamped backup copy (path.<yyyyMMddHHmmss>.bak) before changing the file."
         },
+        "owner": { "type": "string", "description": "Ownership metadata applied to the target file after write." },
+        "group": { "type": "string", "description": "Group metadata applied to the target file after write." },
+        "mode": { "oneOf": [{ "type": "string" }, { "type": "integer" }], "description": "Mode bits applied to the target file after write (for example '0644' or 420)." },
         "state": { "$ref": "#/$defs/state" }
       }
     },
@@ -972,6 +1079,8 @@
           "minItems": 1,
           "items": { "$ref": "#/$defs/registryValueItem" }
         },
+        "owner": { "type": "string", "description": "Windows ACL owner to apply to the target registry key." },
+        "group": { "type": "string", "description": "Windows ACL group to apply to the target registry key." },
         "state": { "$ref": "#/$defs/state" }
       }
     },
@@ -1049,7 +1158,7 @@
     },
     "scheduledTaskItem": {
       "type": "object",
-      "description": "A Windows Task Scheduler task, managed via the built-in ScheduledTasks module (Get/New/Register/Set/Unregister/Enable/Disable-ScheduledTask).",
+      "description": "A Windows Task Scheduler task, managed via generated XML and schtasks.exe.",
       "additionalProperties": false,
       "required": ["name"],
       "properties": {
@@ -1067,8 +1176,50 @@
           "description": "Optional - omit for a manual/on-demand-only task.",
           "items": { "$ref": "#/$defs/scheduledTaskTriggerItem" }
         },
+        "owner": { "type": "string", "description": "Alias for principal.user_id when principal.user_id is omitted." },
+        "group": { "type": "string", "description": "Alias for principal.group_id when principal.group_id is omitted." },
         "principal": { "$ref": "#/$defs/scheduledTaskPrincipalItem" },
         "settings": { "$ref": "#/$defs/scheduledTaskSettingsItem" },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "groupItem": {
+      "type": "object",
+      "description": "Manages local groups on Windows/Linux/macOS.",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "description": "Group name." },
+        "group": { "type": "string", "description": "Alias for name." },
+        "gid": { "oneOf": [{ "type": "string" }, { "type": "integer" }], "description": "Group id on Unix/macOS." },
+        "system": { "type": "boolean", "default": false, "description": "Create as a system group where supported." },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "userItem": {
+      "type": "object",
+      "description": "Manages local users on Windows/Linux/macOS.",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "description": "User name." },
+        "user": { "type": "string", "description": "Alias for name." },
+        "password": { "type": "string", "description": "Password value (platform behavior varies)." },
+        "password_env": { "type": "string", "description": "Environment variable name containing the password." },
+        "uid": { "oneOf": [{ "type": "string" }, { "type": "integer" }], "description": "User id on Unix/macOS." },
+        "group": { "type": "string", "description": "Primary group (name or gid)." },
+        "gid": { "oneOf": [{ "type": "string" }, { "type": "integer" }], "description": "Primary group id alias." },
+        "groups": {
+          "type": "array",
+          "description": "Supplementary groups.",
+          "items": { "type": "string" }
+        },
+        "shell": { "type": "string", "description": "Login shell." },
+        "home": { "type": "string", "description": "Home directory." },
+        "comment": { "type": "string", "description": "Display/full name/comment." },
+        "system": { "type": "boolean", "default": false, "description": "Create as a system account where supported." },
+        "create_home": { "type": "boolean", "default": true, "description": "Linux: create home directory." },
+        "remove_home": { "type": "boolean", "default": false, "description": "Linux: remove home directory on delete." },
         "state": { "$ref": "#/$defs/state" }
       }
     },
