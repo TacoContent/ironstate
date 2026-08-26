@@ -587,6 +587,102 @@ func TestGitHandlerUninstallRemovesCheckout(t *testing.T) {
 	}
 }
 
+func TestIPTablesHandlerBuildsAddRuleCommand(t *testing.T) {
+	origRunner := runner
+	defer func() { runner = origRunner }()
+
+	var calls [][]string
+	runner = fakeRunnerFunc(func(exe string, args []string) (ironexec.Result, error) {
+		calls = append(calls, append([]string{exe}, args...))
+		if len(args) > 0 && args[0] == "-C" {
+			return ironexec.Result{RC: 1}, nil
+		}
+		return ironexec.Result{RC: 0}, nil
+	})
+
+	h := iptablesHandler{}
+	item := map[string]any{
+		"chain":    "INPUT",
+		"protocol": "tcp",
+		"port":     "22",
+		"action":   "allow",
+	}
+
+	if _, err := h.Install(item, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) == 0 {
+		t.Fatal("expected iptables command call")
+	}
+	joined := strings.Join(calls[len(calls)-1], " ")
+	if !strings.Contains(joined, "iptables -A INPUT") || !strings.Contains(joined, "--dport 22") || !strings.Contains(joined, "-j ACCEPT") {
+		t.Fatalf("unexpected iptables command: %q", joined)
+	}
+}
+
+func TestUFWHandlerDeleteTreatsMissingRuleAsSuccess(t *testing.T) {
+	origRunner := runner
+	defer func() { runner = origRunner }()
+	runner = fakeRunnerFunc(func(exe string, args []string) (ironexec.Result, error) {
+		return ironexec.Result{RC: 1, Stderr: "Could not delete non-existent rule\n", StderrLines: []string{"Could not delete non-existent rule"}}, nil
+	})
+
+	h := ufwHandler{}
+	res, err := h.Uninstall(map[string]any{"rule": "allow", "port": "22"}, "", testCtx())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.RC != 0 {
+		t.Fatalf("expected missing-rule delete to normalize to rc=0, got %d", res.RC)
+	}
+}
+
+func TestAdvFirewallHandlerRequiresRuleName(t *testing.T) {
+	h := advFirewallHandler{}
+	_, err := h.Install(map[string]any{}, "", testCtx())
+	if err == nil {
+		t.Fatal("expected advfirewall install to fail without name")
+	}
+}
+
+func TestFirewallWrapperExplicitIPTablesBackend(t *testing.T) {
+	origRunner := runner
+	defer func() { runner = origRunner }()
+
+	var calls [][]string
+	runner = fakeRunnerFunc(func(exe string, args []string) (ironexec.Result, error) {
+		calls = append(calls, append([]string{exe}, args...))
+		return ironexec.Result{RC: 0}, nil
+	})
+
+	h := firewallHandler{}
+	_, err := h.Install(map[string]any{
+		"backend":   "iptables",
+		"direction": "in",
+		"protocol":  "tcp",
+		"port":      "443",
+		"action":    "allow",
+	}, "", testCtx())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) == 0 {
+		t.Fatal("expected translated backend invocation")
+	}
+	joined := strings.Join(calls[len(calls)-1], " ")
+	if !strings.Contains(joined, "iptables") || !strings.Contains(joined, "--dport 443") || !strings.Contains(joined, "-j ACCEPT") {
+		t.Fatalf("unexpected translated firewall call: %q", joined)
+	}
+}
+
+func TestFirewallWrapperRejectsUnknownBackend(t *testing.T) {
+	h := firewallHandler{}
+	_, err := h.Install(map[string]any{"backend": "unknown"}, "", testCtx())
+	if err == nil {
+		t.Fatal("expected error for unknown backend")
+	}
+}
+
 func TestSshHostBlockRendersHostEntry(t *testing.T) {
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "config")

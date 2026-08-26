@@ -8,11 +8,6 @@
 - [group](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/group_module.html#ansible-collections-ansible-builtin-group-module): manage groups on the target system
 - [user](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/user_module.html#ansible-collections-ansible-builtin-user-module): manage users on the target system
 - [hostname](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/hostname_module.html#ansible-collections-ansible-builtin-hostname-module): manage the hostname of the target system
-- firewall: manage firewall rules (Linux/macOS) or alias for Windows firewall management
-  This handler is a wrapper around the `iptables` and `ufw` handlers on Linux/macOS, and the `netsh advfirewall` handler on Windows. It automatically detects the platform and uses the appropriate underlying handler.
-  - [iptables](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/iptables_module.html#ansible-collections-ansible-builtin-iptables-module): manage iptables rules (Linux)
-  - ufw: manage ufw rules (Linux)
-  - netsh advfirewall: manage Windows firewall rules
 <!-- - [known_hosts](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/known_hosts_module.html#ansible-collections-ansible-builtin-known-hosts-module): manage SSH known hosts -->
 - [mount_facts](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/mount_facts_module.html#ansible-collections-ansible-builtin-mount-facts-module): gather facts about mounted filesystems
 - [package](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/package_module.html#ansible-collections-ansible-builtin-package-module): manage packages (Linux/macOS) or alias for Windows package management

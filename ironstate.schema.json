@@ -110,6 +110,10 @@
         "go": { "$ref": "#/$defs/goItem" },
         "eget": { "$ref": "#/$defs/egetItem" },
         "git": { "$ref": "#/$defs/gitItem" },
+        "iptables": { "$ref": "#/$defs/iptablesItem" },
+        "ufw": { "$ref": "#/$defs/ufwItem" },
+        "advfirewall": { "$ref": "#/$defs/advFirewallItem" },
+        "firewall": { "$ref": "#/$defs/firewallItem" },
         "zip": { "$ref": "#/$defs/zipItem" },
         "symlinks": { "$ref": "#/$defs/symlinkItem" },
         "file": { "$ref": "#/$defs/fileItem" },
@@ -247,6 +251,94 @@
           "description": "Run 'git submodule update --init --recursive' after checkout."
         },
         "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "iptablesItem": {
+      "type": "object",
+      "description": "Manage iptables/ip6tables rules (modeled on Ansible's iptables module).",
+      "additionalProperties": false,
+      "properties": {
+        "chain": { "type": "string", "description": "Target chain, e.g. INPUT/OUTPUT/FORWARD." },
+        "table": { "type": "string", "default": "filter", "description": "iptables table (filter/nat/mangle/raw/security)." },
+        "jump": { "type": "string", "description": "Target jump action, e.g. ACCEPT/DROP/REJECT." },
+        "action": { "type": "string", "description": "Convenience alias for jump intent (allow/deny/reject)." },
+        "direction": { "type": "string", "enum": ["in", "out"], "description": "Optional direction hint used when chain is omitted." },
+        "protocol": { "type": "string", "description": "Protocol (tcp/udp/icmp/all)." },
+        "source": { "type": "string", "description": "Source CIDR/address for the rule." },
+        "destination": { "type": "string", "description": "Destination CIDR/address for the rule." },
+        "source_port": { "type": "string", "description": "Source port/range." },
+        "destination_port": { "type": "string", "description": "Destination port/range." },
+        "port": { "type": "string", "description": "Alias for destination_port." },
+        "in_interface": { "type": "string", "description": "Incoming interface selector." },
+        "out_interface": { "type": "string", "description": "Outgoing interface selector." },
+        "rule_num": { "oneOf": [{ "type": "string" }, { "type": "integer" }], "description": "Insert position when adding (uses -I)." },
+        "matches": { "type": "array", "items": { "type": "string" }, "description": "Additional -m match modules." },
+        "comment": { "type": "string", "description": "Rule comment (comment match module)." },
+        "ipv6": { "type": "boolean", "default": false, "description": "When true, uses ip6tables instead of iptables." },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "ufwItem": {
+      "type": "object",
+      "description": "Manage rules through the ufw CLI.",
+      "additionalProperties": false,
+      "properties": {
+        "rule": { "type": "string", "enum": ["allow", "deny", "reject", "limit"], "default": "allow", "description": "UFW rule operation." },
+        "action": { "type": "string", "description": "Alias for rule intent (allow/deny/reject/limit)." },
+        "direction": { "type": "string", "enum": ["in", "out"], "description": "Traffic direction." },
+        "interface": { "type": "string", "description": "Interface constraint (on <iface>)." },
+        "source": { "type": "string", "description": "Source selector (from)." },
+        "destination": { "type": "string", "description": "Destination selector (to)." },
+        "port": { "type": "string", "description": "Port/range." },
+        "protocol": { "type": "string", "description": "Protocol (tcp/udp/any)." },
+        "comment": { "type": "string", "description": "Rule comment, when supported by local ufw." },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "advFirewallItem": {
+      "type": "object",
+      "description": "Manage Windows Firewall rules via netsh advfirewall.",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "description": "Rule name." },
+        "rule_name": { "type": "string", "description": "Alias for name." },
+        "direction": { "type": "string", "enum": ["in", "out"], "default": "in", "description": "Rule direction." },
+        "action": { "type": "string", "enum": ["allow", "block", "deny", "reject", "drop"], "default": "allow", "description": "Allow/block behavior." },
+        "protocol": { "type": "string", "default": "ANY", "description": "Protocol value for netsh (ANY/TCP/UDP/etc)." },
+        "local_port": { "type": "string", "description": "Local port or range." },
+        "remote_port": { "type": "string", "description": "Remote port or range." },
+        "port": { "type": "string", "description": "Alias for local_port." },
+        "source": { "type": "string", "description": "Remote IP selector." },
+        "destination": { "type": "string", "description": "Local IP selector." },
+        "program": { "type": "string", "description": "Program path restriction." },
+        "profile": { "type": "string", "description": "Firewall profile scope (domain/private/public/any)." },
+        "enable": { "type": "string", "description": "Enable flag passed to netsh (yes/no)." },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "firewallItem": {
+      "type": "object",
+      "description": "Cross-platform firewall wrapper that translates to iptables, ufw, or advfirewall backends.",
+      "additionalProperties": false,
+      "properties": {
+        "backend": { "type": "string", "enum": ["auto", "iptables", "ufw", "advfirewall"], "default": "auto", "description": "Backend selector. auto chooses by platform and available CLI." },
+        "name": { "type": "string", "description": "Rule name (primarily for advfirewall backend)." },
+        "rule_name": { "type": "string", "description": "Alias for name." },
+        "action": { "type": "string", "description": "Unified action intent (allow/deny/reject/block)." },
+        "direction": { "type": "string", "enum": ["in", "out"], "description": "Unified direction hint." },
+        "protocol": { "type": "string", "description": "Unified protocol value." },
+        "source": { "type": "string", "description": "Unified source selector." },
+        "destination": { "type": "string", "description": "Unified destination selector." },
+        "port": { "type": "string", "description": "Unified port selector." },
+        "state": { "$ref": "#/$defs/state" },
+        "chain": { "type": "string", "description": "iptables backend override." },
+        "table": { "type": "string", "description": "iptables backend override." },
+        "jump": { "type": "string", "description": "iptables backend override." },
+        "in_interface": { "type": "string", "description": "iptables backend override." },
+        "out_interface": { "type": "string", "description": "iptables backend override." },
+        "interface": { "type": "string", "description": "ufw backend override." },
+        "comment": { "type": "string", "description": "Rule comment for backends that support comments." }
       }
     },
     "zipItem": {

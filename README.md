@@ -295,7 +295,8 @@ internal/
 ├── engine/                 ← dispatch loop (fact-first two-phase run, registry/facts/
 │                            command-availability threading, table/JSON/summary output)
 ├── handlers/               ← one file per module: winget, chocolatey, pipx, npm, cargo, go,
-│                            gem, eget, git, zip, symlinks, file, copy, shell, blockinfile, lineinfile,
+│                            gem, eget, git, iptables, ufw, advfirewall, firewall, zip, symlinks, file,
+│                            copy, shell, blockinfile, lineinfile,
 │                            ssh_host_block, log, fail, path, fact, assert, async, wait_for,
 │                            registry, scheduled_task, template
 ├── ui/                     ← terminal color/emoji output styling
@@ -713,6 +714,10 @@ tasks:
 | `go` | Go binaries (`go install`) |
 | `eget` | GitHub release binaries (`eget`) |
 | `git` | Manage git checkouts (`git`) - see [docs/handlers/git.md](docs/handlers/git.md) |
+| `iptables` | Manage iptables/ip6tables rules (`iptables`) - see [docs/handlers/iptables.md](docs/handlers/iptables.md) |
+| `ufw` | Manage rules through UFW (`ufw`) - see [docs/handlers/ufw.md](docs/handlers/ufw.md) |
+| `advfirewall` | Manage Windows Firewall rules (`netsh advfirewall`) - see [docs/handlers/advfirewall.md](docs/handlers/advfirewall.md) |
+| `firewall` | Cross-platform firewall wrapper (auto backend translation) - see [docs/handlers/firewall.md](docs/handlers/firewall.md) |
 | `zip` | Download + extract ZIP (no external tool) |
 | `symlinks` | Symbolic links (no external tool) |
 | `copy` | Copy a local file into place (no external tool) |
@@ -745,6 +750,22 @@ Each module's own fields (documented inline in `site.yml`) still include `state`
 ### `git`
 
 Detailed handler docs and examples: [docs/handlers/git.md](docs/handlers/git.md).
+
+### `iptables`
+
+Detailed handler docs and examples: [docs/handlers/iptables.md](docs/handlers/iptables.md).
+
+### `ufw`
+
+Detailed handler docs and examples: [docs/handlers/ufw.md](docs/handlers/ufw.md).
+
+### `advfirewall`
+
+Detailed handler docs and examples: [docs/handlers/advfirewall.md](docs/handlers/advfirewall.md).
+
+### `firewall`
+
+Detailed handler docs and examples: [docs/handlers/firewall.md](docs/handlers/firewall.md).
 
 ### `zip`
 

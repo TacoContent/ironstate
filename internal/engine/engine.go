@@ -144,13 +144,13 @@ var DefaultNoCommandCheckModules = map[string]bool{
 	"symlinks": true, "zip": true, "copy": true, "shell": true,
 	"blockinfile": true, "lineinfile": true, "log": true, "fail": true, "path": true, "fact": true,
 	"registry": true, "scheduled_task": true, "file": true, "template": true,
-	"assert": true, "ssh_host_block": true, "async": true, "wait_for": true,
+	"assert": true, "ssh_host_block": true, "async": true, "wait_for": true, "firewall": true,
 }
 
 // DefaultModuleCommandNames remaps a module's task-tree name to its actual
 // CLI binary name where they differ — ports
 // '$script:ModuleCommandNames' (today: exactly one entry).
-var DefaultModuleCommandNames = map[string]string{"chocolatey": "choco"}
+var DefaultModuleCommandNames = map[string]string{"chocolatey": "choco", "advfirewall": "netsh"}
 
 // Options configures RunLeaves/Run's dispatch behavior.
 type Options struct {
