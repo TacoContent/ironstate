@@ -2,13 +2,13 @@ package cli
 
 import (
 	"fmt"
+	"github.com/spf13/cobra"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	"github.com/TacoContent/ironstate/internal/facts"
+	"github.com/TacoContent/ironstate/internal/scan"
 )
 
 // minimalDocument is every generated YAML file's starter content -
@@ -20,6 +20,10 @@ const minimalDocument = "---\nvars: {}\ntasks: []\n"
 type initScaffoldFile struct {
 	path    string
 	content string
+}
+
+var gatherScanItems = func(progress func(name string, index, total int)) ([]scan.Item, error) {
+	return scan.NewRegistry().ScanAllWithProgress(progress)
 }
 
 func newInitCommand() *cobra.Command {
@@ -42,10 +46,14 @@ README's "Playbooks" section:
 Every generated YAML file is intentionally minimal ('vars: {}' / 'tasks: []');
 <machine-name>/<user-name> come from this machine's own gathered facts (see
 'ironstate doctor'), lowercased. An already-existing file or directory is left
-untouched rather than overwritten, so running 'init' again is safe.`,
+untouched rather than overwritten, so running 'init' again is safe.
+
+Use '--scan' to populate the generated playbook from the current system state
+instead of creating only placeholders.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runInit,
 	}
+	cmd.Flags().Bool("scan", false, "populate the generated playbook from the current system state")
 	return cmd
 }
 
@@ -53,6 +61,37 @@ func runInit(cmd *cobra.Command, args []string) error {
 	root := "."
 	if len(args) == 1 && args[0] != "" {
 		root = args[0]
+	}
+
+	scanEnabled, err := cmd.Flags().GetBool("scan")
+	if err != nil {
+		return NewLoadError(err)
+	}
+	if scanEnabled {
+		progress := newProgressReporter("scan", cmd.ErrOrStderr())
+		progress.Start()
+		defer progress.Stop()
+
+		items, err := gatherScanItems(func(name string, index, total int) {
+			if total <= 0 {
+				return
+			}
+			progress.Step("scanning", index, total, name)
+		})
+		if err != nil {
+			return NewRunError(err)
+		}
+		progress.Message("populated playbook from current system state")
+		if err := scan.GeneratePlaybook(root, items); err != nil {
+			return NewLoadError(fmt.Errorf("populate playbook from scan: %w", err))
+		}
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "populated %s from current system state\n", root); err != nil {
+			return NewRunError(err)
+		}
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Use ironstate --playbook %s to review the generated playbook.\n", filepath.Join(root, "site.yml")); err != nil {
+			return NewRunError(err)
+		}
+		return nil
 	}
 
 	hostFacts := facts.Gather()

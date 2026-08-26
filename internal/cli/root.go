@@ -91,12 +91,19 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		return NewLoadError(err)
 	}
 
+	progress := newProgressReporter("playbook", cmd.ErrOrStderr())
+	progress.Start()
+	defer progress.Stop()
+	progress.Message("loading playbook inputs")
+
 	resolvedFile, err := packages.ResolvePlaybookPath(cfg.Playbook)
 	if err != nil {
 		return NewLoadError(err)
 	}
 
+	progress.Message("gathering host facts")
 	hostFacts := facts.Gather()
+	progress.Message("loading playbook hierarchy")
 	doc, err := packages.LoadHierarchy(resolvedFile, hostFacts)
 	if err != nil {
 		return NewLoadError(err)
@@ -111,6 +118,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	// earlier one - but all before --var (the most explicit override of
 	// all).
 	for _, raw := range cfg.VarsFiles {
+		progress.Message("merging vars files")
 		varsFilePath := pathutil.ResolveUserPath(raw)
 		overlay, err := packages.LoadFile(varsFilePath, repoRoot)
 		if err != nil {
@@ -123,6 +131,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		docMap = packages.MergeDocuments(docMap, overlayMap)
 	}
 
+	progress.Message("preparing playbook variables")
 	vars := model.Vars(docMap)
 	for _, raw := range cfg.VarOverrides {
 		key, value, err := model.ParseVarOverride(raw)
@@ -164,6 +173,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		return NewLoadError(err)
 	}
 
+	progress.Message("expanding playbook tasks")
 	taskList, err := model.TaskList(docMap)
 	if err != nil {
 		return NewLoadError(err)
@@ -182,6 +192,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	}
 
 	filtered := engine.FilterByTags(leaves, cfg.Tags)
+	progress.Message("running playbook tasks")
 
 	start := time.Now()
 	results, stopped, err := engine.Run(filtered, engine.Options{
@@ -191,11 +202,16 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		Filters:  fset,
 		Apply:    cfg.Apply,
 		Verbose:  cfg.Verbose,
+		Progress: func(stage, detail string, index, total int) {
+			progress.Step(stage, index, total, detail)
+		},
 	})
 	elapsed := time.Since(start)
 	if err != nil {
 		return NewRunError(err)
 	}
+
+	progress.Stop()
 
 	if cfg.Output == "json" {
 		if err := engine.PrintJSON(cmd.OutOrStdout(), results); err != nil {

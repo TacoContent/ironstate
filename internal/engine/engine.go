@@ -163,6 +163,7 @@ type Options struct {
 	Verbose               bool              // when true, also prints a (dim) line for every skipped/unchanged leaf
 	NoCommandCheckModules map[string]bool   // nil -> DefaultNoCommandCheckModules
 	ModuleCommandNames    map[string]string // nil -> DefaultModuleCommandNames
+	Progress              func(stage, detail string, index, total int)
 }
 
 func (o Options) noCommandCheckModules() map[string]bool {
@@ -195,7 +196,7 @@ func Run(leaves []tasks.Leaf, opts Options) ([]Result, bool, error) {
 	}
 
 	state := NewState()
-	results, stopped, err := RunLeaves(factLeaves, opts, state)
+	results, stopped, err := RunLeaves(factLeaves, opts, state, "running facts")
 	if err != nil {
 		return results, stopped, err
 	}
@@ -203,7 +204,7 @@ func Run(leaves []tasks.Leaf, opts Options) ([]Result, bool, error) {
 		return results, true, nil
 	}
 
-	otherResults, stopped2, err := RunLeaves(otherLeaves, opts, state)
+	otherResults, stopped2, err := RunLeaves(otherLeaves, opts, state, "running tasks")
 	results = append(results, otherResults...)
 	return results, stopped2, err
 }
@@ -213,18 +214,26 @@ func Run(leaves []tasks.Leaf, opts Options) ([]Result, bool, error) {
 // '${{ }}' references resolve against facts+vars+registry-so-far
 // immediately before it runs, so a later leaf can see an earlier leaf's
 // 'id'/'fact'.
-func RunLeaves(leaves []tasks.Leaf, opts Options, state *State) ([]Result, bool, error) {
+func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string) ([]Result, bool, error) {
 	noCommandCheck := opts.noCommandCheckModules()
 	moduleCommandNames := opts.moduleCommandNames()
+	runStage := "running tasks"
+	if len(stage) > 0 && strings.TrimSpace(stage[0]) != "" {
+		runStage = stage[0]
+	}
 
 	var results []Result
-	for _, leaf := range leaves {
+	total := len(leaves)
+	for i, leaf := range leaves {
 		if leaf.ID != "" && strings.HasPrefix(leaf.ID, "$") {
 			leaf.SecretID = true
 			leaf.ID = strings.TrimPrefix(leaf.ID, "$")
 		}
 		module := leaf.Module
 		label := leafLabel(leaf)
+		if opts.Progress != nil {
+			opts.Progress(runStage, label, i+1, total)
+		}
 
 		handler, ok := opts.Handlers[module]
 		if !ok {

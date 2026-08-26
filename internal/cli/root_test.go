@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -100,5 +101,36 @@ tasks:
 	cmd.SetOut(&out)
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute error (assertion of merged vars failed): %v\noutput: %s", err, out.String())
+	}
+}
+
+func TestRunApplyReportsProgress(t *testing.T) {
+	dir := t.TempDir()
+	sitePath := filepath.Join(dir, "site.yml")
+	if err := os.WriteFile(sitePath, []byte("---\nvars: {}\ntasks: []\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd, err := newRootCommand()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	cmd.SetArgs([]string{"--playbook", sitePath, "--output", "json"})
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+
+	output := stderr.String()
+	for _, want := range []string{
+		"[playbook] loading playbook inputs",
+		"[playbook] expanding playbook tasks",
+		"[playbook] running playbook tasks",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("stderr = %q, want to contain %q", output, want)
+		}
 	}
 }

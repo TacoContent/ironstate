@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/TacoContent/ironstate/internal/scan"
 )
 
 func TestRunInitCreatesScaffold(t *testing.T) {
@@ -71,5 +73,55 @@ func TestRunInitSkipsExistingFiles(t *testing.T) {
 	}
 	if string(data) != custom {
 		t.Fatalf("existing site.yml was overwritten: got %q", data)
+	}
+}
+
+func TestRunInitWithScanPopulatesPlaybook(t *testing.T) {
+	dir := t.TempDir()
+	playbook := filepath.Join(dir, "myplaybook")
+
+	originalGatherScanItems := gatherScanItems
+	gatherScanItems = func(progress func(name string, index, total int)) ([]scan.Item, error) {
+		if progress != nil {
+			progress("users", 1, 2)
+			progress("groups", 2, 2)
+		}
+		return []scan.Item{
+			{Module: "user", Name: "alice", Config: map[string]any{"name": "alice", "state": "present"}},
+			{Module: "group", Name: "devs", Config: map[string]any{"name": "devs", "state": "present"}},
+		}, nil
+	}
+	defer func() {
+		gatherScanItems = originalGatherScanItems
+	}()
+
+	cmd := newInitCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	if err := cmd.Flags().Set("scan", "true"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.RunE(cmd, []string{playbook}); err != nil {
+		t.Fatalf("runInit error: %v", err)
+	}
+
+	for _, rel := range []string{
+		"site.yml",
+		"roles/system/users/main.yml",
+		"roles/system/groups/main.yml",
+		"roles/system/services/main.yml",
+		"roles/packages/main.yml",
+	} {
+		if _, err := os.Stat(filepath.Join(playbook, rel)); err != nil {
+			t.Fatalf("expected %s to exist: %v", rel, err)
+		}
+	}
+
+	data, err := os.ReadFile(filepath.Join(playbook, "roles", "system", "users", "main.yml")) //nolint:gosec // test-only path under t.TempDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "alice") {
+		t.Fatalf("expected scanned user to be written, got %q", data)
 	}
 }

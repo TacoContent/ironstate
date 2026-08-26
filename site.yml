@@ -1,0 +1,16 @@
+tasks:
+    - include:
+        name: roles/system/users
+      name: Include baseline users
+    - include:
+        name: roles/system/groups
+      name: Include baseline groups
+    - include:
+        name: roles/system/services
+      name: Include baseline services
+    - include:
+        name: roles/packages
+      name: Include baseline packages
+vars:
+    generated_at: "2026-08-26T22:24:35Z"
+    generated_by: ironstate scan
