@@ -1,0 +1,28 @@
+---
+
+tasks:
+
+  - name: Async example
+    async:
+      id: example_async_job
+      tasks:
+        - shell:
+            command: |
+              Write-Output "Running async task"
+              Start-Sleep -Seconds 90
+              Write-Output "Async task completed"
+
+  - name: Wait for async example to complete (with continue on error)
+    continue_on_error: true
+    wait_for:
+      for: example_async_job
+      timeout: 30
+
+  - name: Wait for async example to complete (without continue on error)
+    wait_for:
+      for: example_async_job
+      timeout: 120
+
+  - name: Next After Async
+    log:
+      message: "Proceeding to the next task after async completion"

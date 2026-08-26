@@ -26,7 +26,7 @@ var AllModuleNames = []string{
 	"winget", "chocolatey", "gem", "pipx", "npm", "cargo", "go", "eget",
 	"zip", "symlinks", "file", "copy", "template", "shell", "blockinfile", "lineinfile",
 	"ssh_host_block", "log", "fail", "path", "fact", "registry", "scheduled_task",
-	"assert",
+	"assert", "async", "wait_for",
 }
 
 // All returns every implemented module, ready to hand to
@@ -61,5 +61,7 @@ func All() map[string]engine.Handler {
 		"scheduled_task": scheduledTaskHandler{},
 		"template":       templateHandler{},
 		"lineinfile":     lineInFileHandler{},
+		"async":          asyncHandler{},
+		"wait_for":       waitForHandler{},
 	}
 }

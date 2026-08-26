@@ -9,7 +9,9 @@
     "**/.gitea/workflows/*.yaml",
     "**/.forgejo/workflows/*.yml",
     "**/.forgejo/workflows/*.yaml",
-    "file:///d%3A/Development/projects/ironstate/TaskFile.yml"
+    "file:///d%3A/Development/projects/ironstate/TaskFile.yml",
+    "file:///d%3A/Development/projects/ironstate/playbooks/sample/roles/async/main.yml",
+    "file:///d%3A/Development/projects/ironstate/playbooks/sample/main.yaml"
   ],
   "cSpell.words": [
     "blockinfile",

@@ -38,6 +38,32 @@ func getMap(item map[string]any, key string) map[string]any {
 	return m
 }
 
+// getFloat reads a numeric field (YAML numbers decode as float64 or int),
+// or def if absent/wrong type.
+func getFloat(item map[string]any, key string, def float64) float64 {
+	switch v := item[key].(type) {
+	case float64:
+		return v
+	case int:
+		return float64(v)
+	default:
+		return def
+	}
+}
+
+// stringSlice filters asList(v) down to its string entries, dropping
+// anything else - used for id lists ('for', etc.) where a stray non-string
+// entry should just be ignored rather than crashing a type assertion.
+func stringSlice(v any) []string {
+	var out []string
+	for _, raw := range asList(v) {
+		if s, ok := raw.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // asList wraps v into a []any the same way model.AsList does (a lone
 // scalar becomes a single-element list, nil becomes an empty list) -
 // duplicated here rather than importing internal/model, since these

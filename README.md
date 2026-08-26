@@ -296,8 +296,8 @@ internal/
 │                            command-availability threading, table/JSON/summary output)
 ├── handlers/               ← one file per module: winget, chocolatey, pipx, npm, cargo, go,
 │                            gem, eget, zip, symlinks, file, copy, shell, blockinfile, lineinfile,
-│                            ssh_host_block, log, fail, path, fact, assert, registry,
-│                            scheduled_task, template
+│                            ssh_host_block, log, fail, path, fact, assert, async, wait_for,
+│                            registry, scheduled_task, template
 ├── ui/                     ← terminal color/emoji output styling
 └── exec/                   ← external-process Runner abstraction handlers shell out through
 ```
@@ -721,6 +721,8 @@ tasks:
 | `log` | Print a message at a chosen level (no external tool) |
 | `path` | Add/remove directories on the current user's `PATH` (no external tool) |
 | `fact` | Set an arbitrary named value for later tasks to reference (no external tool) |
+| `async` | Run a nested task list in the background, without waiting for it (no external tool) |
+| `wait_for` | Wait for an async job (or a condition) to complete/become true, with a timeout (no external tool) |
 | `registry` | Write one or more named values under a registry key (no external tool) |
 | `scheduled_task` | Register/update/remove a Windows Task Scheduler task (`ScheduledTasks` module) |
 | `include` | Pull in another document's tasks from `packages/<name>/main.yml` (no external tool) |
@@ -1179,6 +1181,60 @@ tasks:
         - facts.local_bin_path | exists
       fail_msg: "Local bin path fact is not defined or empty. Please define 'facts.local_bin_path' in your inventory or host vars."
       success_msg: "Local bin path fact is defined and valid."
+```
+
+### `async`
+
+Runs a nested `tasks` list in the background and returns immediately - the rest of the playbook continues right away, without waiting for it. A later [`wait_for`](#wait_for) task references the job by its `id` to observe completion.
+
+`id` here is the async job's own handle for `wait_for` to find later - distinct from this task's own top-level `id` (which, like any task, would register this leaf's immediate "started" result, not the background job's eventual outcome). Always actually runs, even without `--apply`, since starting the background job has no meaningful dry-run preview.
+
+The nested tasks run against a snapshot of facts/vars/id-registered results taken when the `async` task runs, against a private, isolated run state - a fact or `id` registered *inside* the background tasks is **not** visible to any other task; only the aggregate result (`rc`/`stdout`/etc. per nested task, under `wait_for`'s own registered `results`) is, once a `wait_for` observes completion.
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `id` | yes | Job handle name. A `wait_for` task's `for` list references this to wait for this job to finish |
+| `tasks` | yes | Task/action list to run in the background, in order - same grammar as the top-level `tasks:` |
+
+```yaml
+tasks:
+  - name: kick off a slow provisioning script in the background
+    async:
+      id: provision_widgets
+      tasks:
+        - shell:
+            command: C:\tools\provision-widgets.ps1
+
+  - name: do other work while it runs
+    log:
+      message: "provisioning started; continuing..."
+
+  - name: wait for provisioning to finish
+    wait_for:
+      for: provision_widgets
+      timeout: 300
+```
+
+### `wait_for`
+
+Blocks until every async job named in `for` has finished, and/or `condition` becomes true (both, if both are given - implicit AND), polling every `interval` seconds up to `timeout` seconds. Fails (`rc: 1`) if the timeout elapses first, or if any awaited async job itself failed.
+
+`condition` uses the same bare-expression grammar as [`when` conditions](#when-conditions)/`assert`'s `that`, evaluated against facts/vars/id-registered results captured when this task runs - it is not re-gathered on every poll, so a plain fact/id reference only ever evaluates once; a `condition` is only useful for polling when driven by something that itself checks live state on each call (e.g. a script filter), or combined with `for`. Always actually runs, even without `--apply`.
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `for` | one of `for`/`condition` | Async job id(s) (see `async`'s `id`) to wait for completion of. A single string, or a list (waits for all of them) |
+| `condition` | one of `for`/`condition` | Condition(s) that must all be true before continuing - same grammar as `when`/`that`. A single expression string, or a list of expressions (implicit AND) |
+| `timeout` | no | Maximum seconds to wait before failing this task. Default `30` |
+| `interval` | no | Seconds to sleep between checks. Default `0.5` |
+
+```yaml
+tasks:
+  - name: wait up to 5 minutes for provisioning
+    wait_for:
+      for: [provision_widgets]
+      timeout: 300
+      interval: 2
 ```
 
 ### `registry`

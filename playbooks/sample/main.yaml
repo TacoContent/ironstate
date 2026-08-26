@@ -3,6 +3,10 @@ version: '1'
 vars: {}
 tasks:
 
+  - name: Include Async Role
+    include:
+      name: roles/async
+
   - name: Include Fail-Checks Role
     include:
       name: roles/fail-checks

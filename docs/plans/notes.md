@@ -20,8 +20,8 @@
 - tempfile: create a temporary file or directory (Linux/macOS) or alias for Windows tempfile
 
 - unarchive: extract an archive (Linux/macOS) or alias for Windows unarchive
-- async: run a task asynchronously, allowing the playbook to continue without waiting for the task to finish. Can be used with `wait_for` to check for completion.
-- wait_for: wait for a fact or condition to be true, then continue. Timeout can be specified, and the task will fail if the condition is not met in time.
+- async: run a task or group of tasks asynchronously, allowing the playbook to continue without waiting for the task to finish. Can be used with `wait_for` to check for completion.
+- wait_for: wait for a fact or condition to be true or async task(s) to complete, then continue. Timeout can be specified, and the task will fail if the condition is not met in time.
 
 ## GitHub
 

@@ -102,11 +102,13 @@ var moduleEmoji = map[string]string{
 	"ssh_host_block": "🔐",
 	"log":            "📢",
 	"fail":           "❌",
-	"path":           "🧭",
+	"path":           "📁",
 	"fact":           "🔎",
 	"registry":       "🗃️",
 	"scheduled_task": "⏰",
 	"assert":         "✅",
+	"async":          "⚡",
+	"wait_for":       "⏳",
 }
 
 // ModuleEmoji returns module's representative glyph, or a generic bullet

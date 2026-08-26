@@ -123,6 +123,8 @@
         "path": { "$ref": "#/$defs/pathItem" },
         "fact": { "$ref": "#/$defs/factItem" },
         "assert": { "$ref": "#/$defs/assertItem" },
+        "async": { "$ref": "#/$defs/asyncItem" },
+        "wait_for": { "$ref": "#/$defs/waitForItem" },
         "registry": { "$ref": "#/$defs/registryItem" },
         "scheduled_task": { "$ref": "#/$defs/scheduledTaskItem" },
         "include": { "$ref": "#/$defs/includeItem" }
@@ -735,6 +737,58 @@
         "success_msg": {
           "type": "string",
           "description": "Message used verbatim when every 'that' condition is true. Without it, a message is built from the task's name and the number of conditions checked."
+        }
+      }
+    },
+    "asyncItem": {
+      "type": "object",
+      "description": "Runs 'tasks' (a nested task/action list, same grammar as the top-level 'tasks:') in the background and returns immediately, without waiting for it to finish - the rest of the playbook continues right away. A later 'wait_for' task references this job by its 'id' to observe completion. Always actually runs, even without '-Apply' - starting the background job has no meaningful dry-run preview. Note: 'id' here is this async job's own handle for 'wait_for' - distinct from this task's top-level 'id' (which, like any task, registers this leaf's own immediate 'started' result, not the background job's eventual outcome). The nested tasks run against a snapshot of facts/vars/id-registered results taken when this task runs, not the live, still-changing state the rest of the run sees - a fact or id registered *inside* the background tasks is not visible to any other task, only via 'wait_for'.",
+      "additionalProperties": false,
+      "required": ["id", "tasks"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Job handle name. 'wait_for' tasks reference this in their own 'for' list to wait for this job to finish."
+        },
+        "tasks": {
+          "type": "array",
+          "description": "Task/action list to run in the background, in order - same grammar as the top-level 'tasks:' (leaves and/or grouping 'actions').",
+          "items": { "$ref": "#/$defs/taskItem" }
+        }
+      }
+    },
+    "waitForItem": {
+      "type": "object",
+      "description": "Blocks until every async job named in 'for' has finished and/or 'condition' becomes true (both, if both given - implicit AND), polling every 'interval' seconds, up to 'timeout' seconds. Fails ('rc: 1') if the timeout elapses first, or if any awaited async job itself failed. 'condition' uses the same bare-expression grammar as 'when'/'that', evaluated against facts/vars/id-registered results captured when this task runs (not re-gathered each poll) - only useful when driven by a filter that itself checks live state (e.g. a script filter), or combined with 'for'. Always actually runs, even without '-Apply'.",
+      "additionalProperties": false,
+      "anyOf": [
+        { "required": ["for"] },
+        { "required": ["condition"] }
+      ],
+      "properties": {
+        "for": {
+          "description": "Async job id(s) (see the 'async' module's 'id') to wait for completion of. A single string, or a list (waits for all of them).",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
+        },
+        "condition": {
+          "description": "Condition(s) that must all be true before continuing - same grammar as 'when'/'that'. A single expression string, or a list of expressions (implicit AND).",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
+        },
+        "timeout": {
+          "type": "number",
+          "default": 30,
+          "description": "Maximum seconds to wait before failing this task."
+        },
+        "interval": {
+          "type": "number",
+          "default": 0.5,
+          "description": "Seconds to sleep between checks."
         }
       }
     },
