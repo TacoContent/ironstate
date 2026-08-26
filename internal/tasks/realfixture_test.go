@@ -18,7 +18,7 @@ import (
 // port doesn't choke on real content ahead of internal/engine existing.
 var realModuleNames = []string{
 	"winget", "chocolatey", "gem", "pipx", "npm", "cargo", "go", "eget",
-	"zip", "symlinks", "file", "copy", "template", "shell", "blockinfile", "lineinfile",
+	"git", "zip", "symlinks", "file", "copy", "template", "shell", "blockinfile", "lineinfile",
 	"ssh_host_block", "log", "fail", "path", "fact", "registry", "scheduled_task",
 	"assert",
 }

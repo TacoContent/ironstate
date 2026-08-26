@@ -91,6 +91,7 @@ var moduleEmoji = map[string]string{
 	"go":             "🐹",
 	"gem":            "💎",
 	"eget":           "📦",
+	"git":            "🌿",
 	"zip":            "🗜️",
 	"symlinks":       "🔗",
 	"file":           "📄",

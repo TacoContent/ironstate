@@ -24,7 +24,7 @@ import "github.com/TacoContent/ironstate/internal/engine"
 // internal/tasks/realfixture_test.go's realModuleNames.
 var AllModuleNames = []string{
 	"winget", "chocolatey", "gem", "pipx", "npm", "cargo", "go", "eget",
-	"zip", "symlinks", "file", "copy", "template", "shell", "blockinfile", "lineinfile",
+	"git", "zip", "symlinks", "file", "copy", "template", "shell", "blockinfile", "lineinfile",
 	"ssh_host_block", "log", "fail", "path", "fact", "registry", "scheduled_task",
 	"assert", "async", "wait_for",
 }
@@ -56,6 +56,7 @@ func All() map[string]engine.Handler {
 		"go":             goHandler{},
 		"gem":            rubyGemHandler{},
 		"eget":           egetHandler{},
+		"git":            gitHandler{},
 		"shell":          shellHandler{},
 		"registry":       registryHandler{},
 		"scheduled_task": scheduledTaskHandler{},

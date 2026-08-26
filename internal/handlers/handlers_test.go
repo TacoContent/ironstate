@@ -479,6 +479,114 @@ func TestLineInFileTemplateWithTemplateSyntax(t *testing.T) {
 	}
 }
 
+func TestGitHandlerLatestWithUpdateAlwaysRuns(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "repo")
+	if err := os.MkdirAll(filepath.Join(dest, ".git"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	h := gitHandler{}
+	installed, err := h.Test(map[string]any{
+		"repo":   "https://example.com/org/repo.git",
+		"dest":   dest,
+		"state":  "latest",
+		"update": true,
+	}, "", testCtx())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if installed {
+		t.Fatal("expected latest+update to report not-installed so Install runs")
+	}
+}
+
+func TestGitHandlerPresentAtVersionReportsInstalled(t *testing.T) {
+	origRunner := runner
+	defer func() { runner = origRunner }()
+	runner = fakeRunnerFunc(func(exe string, args []string) (ironexec.Result, error) {
+		if exe != "git" {
+			return ironexec.Result{}, nil
+		}
+		if len(args) >= 5 && args[2] == "config" && args[3] == "--get" && args[4] == "remote.origin.url" {
+			return ironexec.Result{RC: 0, Stdout: "https://example.com/org/repo.git\n", StdoutLines: []string{"https://example.com/org/repo.git"}}, nil
+		}
+		if len(args) >= 5 && args[2] == "rev-parse" {
+			return ironexec.Result{RC: 0, Stdout: "abc123\n", StdoutLines: []string{"abc123"}}, nil
+		}
+		return ironexec.Result{RC: 0}, nil
+	})
+
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "repo")
+	if err := os.MkdirAll(filepath.Join(dest, ".git"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	h := gitHandler{}
+	installed, err := h.Test(map[string]any{
+		"repo":    "https://example.com/org/repo.git",
+		"dest":    dest,
+		"version": "v1.2.3",
+	}, "", testCtx())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !installed {
+		t.Fatal("expected matching HEAD/version refs to report installed")
+	}
+}
+
+func TestGitHandlerCloneCommandIncludesBranchDepthAndSingleBranch(t *testing.T) {
+	origRunner := runner
+	defer func() { runner = origRunner }()
+
+	var calls [][]string
+	runner = fakeRunnerFunc(func(exe string, args []string) (ironexec.Result, error) {
+		calls = append(calls, append([]string{exe}, args...))
+		return ironexec.Result{RC: 0}, nil
+	})
+
+	h := gitHandler{}
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "repo")
+	if _, err := h.Install(map[string]any{
+		"repo":          "https://example.com/org/repo.git",
+		"dest":          dest,
+		"ref":           "v1.2.3",
+		"depth":         1,
+		"single_branch": true,
+		"recursive":     false,
+	}, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(calls) == 0 {
+		t.Fatal("expected at least one git command invocation")
+	}
+	first := calls[0]
+	joined := strings.Join(first, " ")
+	if !strings.Contains(joined, "git clone") || !strings.Contains(joined, "--depth 1") || !strings.Contains(joined, "--single-branch") || !strings.Contains(joined, "--branch v1.2.3") {
+		t.Fatalf("unexpected clone invocation: %q", joined)
+	}
+}
+
+func TestGitHandlerUninstallRemovesCheckout(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "repo")
+	if err := os.MkdirAll(filepath.Join(dest, ".git"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	h := gitHandler{}
+	if _, err := h.Uninstall(map[string]any{"dest": dest}, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+	if fileExists(dest) {
+		t.Fatalf("expected git uninstall to remove %s", dest)
+	}
+}
+
 func TestSshHostBlockRendersHostEntry(t *testing.T) {
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "config")

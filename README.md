@@ -295,7 +295,7 @@ internal/
 ├── engine/                 ← dispatch loop (fact-first two-phase run, registry/facts/
 │                            command-availability threading, table/JSON/summary output)
 ├── handlers/               ← one file per module: winget, chocolatey, pipx, npm, cargo, go,
-│                            gem, eget, zip, symlinks, file, copy, shell, blockinfile, lineinfile,
+│                            gem, eget, git, zip, symlinks, file, copy, shell, blockinfile, lineinfile,
 │                            ssh_host_block, log, fail, path, fact, assert, async, wait_for,
 │                            registry, scheduled_task, template
 ├── ui/                     ← terminal color/emoji output styling
@@ -712,6 +712,7 @@ tasks:
 | `cargo` | Rust crates (`cargo install`) |
 | `go` | Go binaries (`go install`) |
 | `eget` | GitHub release binaries (`eget`) |
+| `git` | Manage git checkouts (`git`) - see [docs/handlers/git.md](docs/handlers/git.md) |
 | `zip` | Download + extract ZIP (no external tool) |
 | `symlinks` | Symbolic links (no external tool) |
 | `copy` | Copy a local file into place (no external tool) |
@@ -740,6 +741,10 @@ Every leaf shares these envelope fields, which sit *beside* its module key, not 
 | `continue_on_error` | boolean, default `false` | Keep running past a failed leaf instead of stopping the run. See [Failing a task](#failing-a-task-failed_when-continue_on_error) |
 
 Each module's own fields (documented inline in `site.yml`) still include `state` (`present`/`absent`/`latest`, default `present`).
+
+### `git`
+
+Detailed handler docs and examples: [docs/handlers/git.md](docs/handlers/git.md).
 
 ### `zip`
 

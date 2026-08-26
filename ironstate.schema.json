@@ -109,6 +109,7 @@
         "cargo": { "$ref": "#/$defs/basicPackageItem" },
         "go": { "$ref": "#/$defs/goItem" },
         "eget": { "$ref": "#/$defs/egetItem" },
+        "git": { "$ref": "#/$defs/gitItem" },
         "zip": { "$ref": "#/$defs/zipItem" },
         "symlinks": { "$ref": "#/$defs/symlinkItem" },
         "file": { "$ref": "#/$defs/fileItem" },
@@ -194,6 +195,58 @@
           "description": "Extra arguments passed to eget. '--to=' paths support '~' expansion.",
           "items": { "type": "string" }
         }
+      }
+    },
+    "gitItem": {
+      "type": "object",
+      "description": "A git checkout managed with the local git CLI, modeled on Ansible's git module.",
+      "additionalProperties": false,
+      "required": ["repo", "dest"],
+      "properties": {
+        "repo": {
+          "type": "string",
+          "description": "Repository URL/path passed to 'git clone'."
+        },
+        "dest": {
+          "type": "string",
+          "description": "Checkout destination path. '~' expansion is supported."
+        },
+        "version": {
+          "type": "string",
+          "default": "HEAD",
+          "description": "Branch/tag/commit to check out. Default is HEAD."
+        },
+        "update": {
+          "type": "boolean",
+          "default": true,
+          "description": "When true, existing checkouts are fetched/pulled to reconcile changes."
+        },
+        "clone": {
+          "type": "boolean",
+          "default": true,
+          "description": "When false, a missing 'dest' is an error instead of cloning."
+        },
+        "force": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, replaces non-git/mismatched checkouts at 'dest'."
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Shallow clone/fetch depth."
+        },
+        "single_branch": {
+          "type": "boolean",
+          "default": false,
+          "description": "Clone a single branch when cloning."
+        },
+        "recursive": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run 'git submodule update --init --recursive' after checkout."
+        },
+        "state": { "$ref": "#/$defs/state" }
       }
     },
     "zipItem": {
