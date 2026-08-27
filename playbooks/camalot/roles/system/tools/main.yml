@@ -10,3 +10,13 @@ tasks:
       - system
       - system.tools
       - system.tools.sysinternals
+
+  - name: UniGetUI
+    when: system.tools | enabled('unigetui')
+    winget:
+      package: Devolutions.UniGetUI
+      state: "${{ system.tools.unigetui | ternary('present', 'absent') }}"
+    tags:
+      - system
+      - system.tools
+      - system.tools.unigetui

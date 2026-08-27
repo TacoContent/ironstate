@@ -1,4 +1,0 @@
-tasks:
-    - log:
-        message: no matching items found
-      name: No items discovered for this baseline
