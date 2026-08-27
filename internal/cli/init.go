@@ -2,10 +2,11 @@ package cli
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/cobra"
 
 	"github.com/TacoContent/ironstate/internal/facts"
 	"github.com/TacoContent/ironstate/internal/scan"
