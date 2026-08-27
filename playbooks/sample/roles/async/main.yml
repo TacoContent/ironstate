@@ -9,19 +9,19 @@ tasks:
         - shell:
             command: |
               Write-Output "Running async task"
-              Start-Sleep -Seconds 90
+              Start-Sleep -Seconds 5
               Write-Output "Async task completed"
 
   - name: Wait for async example to complete (with continue on error)
     continue_on_error: true
     wait_for:
       for: example_async_job
-      timeout: 30
+      timeout: 2
 
   - name: Wait for async example to complete (without continue on error)
     wait_for:
       for: example_async_job
-      timeout: 120
+      timeout: 10
 
   - name: Next After Async
     log:

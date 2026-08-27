@@ -25,7 +25,7 @@ import "github.com/TacoContent/ironstate/internal/engine"
 var AllModuleNames = []string{
 	"winget", "chocolatey", "gem", "pipx", "npm", "cargo", "go", "eget",
 	"git", "cron", "cron_unix", "cron_file", "iptables", "ufw", "advfirewall", "firewall", "zip", "symlinks", "file", "copy", "template", "shell", "blockinfile", "lineinfile",
-	"ssh_host_block", "log", "fail", "path", "fact", "registry", "scheduled_task", "group", "user",
+	"ssh_host_block", "log", "fail", "path", "fact", "mount_facts", "registry", "scheduled_task", "group", "user",
 	"assert", "async", "wait_for",
 }
 
@@ -41,6 +41,7 @@ func All() map[string]engine.Handler {
 		"fail":           failHandler{},
 		"path":           pathHandler{},
 		"fact":           factHandler{},
+		"mount_facts":    mountFactsHandler{},
 		"assert":         assertHandler{},
 		"file":           fileHandler{},
 		"copy":           copyHandler{},

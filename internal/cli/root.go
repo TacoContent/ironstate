@@ -94,6 +94,29 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	progress := newProgressReporter("playbook", cmd.ErrOrStderr())
 	progress.Start()
 	defer progress.Stop()
+
+	// engine.Info/Warn/Danger print leaf-by-leaf lines straight to
+	// stdout/stderr, with no knowledge of the spinner above still
+	// animating its own line - left alone, the two interleave into
+	// garbled output (e.g. "◒ loading playbook hierarchy───...",
+	// a spinner frame immediately followed by unrelated table/log text
+	// with no newline between them). Route every such print through
+	// progress.Pause for as long as this run's spinner exists, restoring
+	// the real functions on return - mirrors wait_for's own spinner pause
+	// (internal/handlers/util.go's pauseSpinnerForPrint), just scoped to
+	// the whole run instead of one task.
+	origInfo, origWarn, origDanger := engine.Info, engine.Warn, engine.Danger
+	origPackagesWarn, origTasksWarn := packages.Warn, tasks.Warn
+	engine.Info = func(format string, args ...any) { progress.Pause(func() { origInfo(format, args...) }) }
+	engine.Warn = func(format string, args ...any) { progress.Pause(func() { origWarn(format, args...) }) }
+	engine.Danger = func(format string, args ...any) { progress.Pause(func() { origDanger(format, args...) }) }
+	packages.Warn = func(format string, args ...any) { progress.Pause(func() { origPackagesWarn(format, args...) }) }
+	tasks.Warn = func(format string, args ...any) { progress.Pause(func() { origTasksWarn(format, args...) }) }
+	defer func() {
+		engine.Info, engine.Warn, engine.Danger = origInfo, origWarn, origDanger
+		packages.Warn, tasks.Warn = origPackagesWarn, origTasksWarn
+	}()
+
 	progress.Message("loading playbook inputs")
 
 	resolvedFile, err := packages.ResolvePlaybookPath(cfg.Playbook)
@@ -145,12 +168,6 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	engine.RegisterSecretVarPaths(vars)
 	fset := filters.New()
 
-	if tableOutput {
-		if err := ui.PrintFacts(cmd.OutOrStdout(), hostFacts); err != nil {
-			return NewRunError(err)
-		}
-	}
-
 	interpreters := cfg.FilterInterpreters
 	if len(interpreters) == 0 {
 		interpreters = filters.DefaultInterpreters()
@@ -194,6 +211,11 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	filtered := engine.FilterByTags(leaves, cfg.Tags)
 	progress.Message("running playbook tasks")
 
+	// The facts table waits for every 'fact'/'mount_facts' leaf to have
+	// actually run (not just the fixed set gathered up front) before
+	// printing, so it shows the complete, final set of facts - see
+	// engine.Options.OnFactsGathered's doc comment.
+	var factsErr error
 	start := time.Now()
 	results, stopped, err := engine.Run(filtered, engine.Options{
 		Handlers: handlers.All(),
@@ -205,10 +227,19 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		Progress: func(stage, detail string, index, total int) {
 			progress.Step(stage, index, total, detail)
 		},
+		OnFactsGathered: func(allFacts map[string]any) {
+			if !tableOutput {
+				return
+			}
+			progress.Pause(func() { factsErr = ui.PrintFacts(cmd.OutOrStdout(), allFacts) })
+		},
 	})
 	elapsed := time.Since(start)
 	if err != nil {
 		return NewRunError(err)
+	}
+	if factsErr != nil {
+		return NewRunError(factsErr)
 	}
 
 	progress.Stop()

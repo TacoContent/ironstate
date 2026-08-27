@@ -130,6 +130,7 @@
         "fail": { "$ref": "#/$defs/failItem" },
         "path": { "$ref": "#/$defs/pathItem" },
         "fact": { "$ref": "#/$defs/factItem" },
+        "mount_facts": { "$ref": "#/$defs/mountFactsItem" },
         "assert": { "$ref": "#/$defs/assertItem" },
         "async": { "$ref": "#/$defs/asyncItem" },
         "wait_for": { "$ref": "#/$defs/waitForItem" },
@@ -965,6 +966,24 @@
         },
         "value": {
           "description": "Any YAML value - scalar, list, or nested mapping. May reference '${{ <id> }}' / '${{ facts.* }}' / '${{ vars.* }}', resolved before being stored. Required unless 'state' is 'absent' or 'shell' is given (see 'shell')."
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "mountFactsItem": {
+      "type": "object",
+      "description": "Gathers the host's currently-mounted filesystems (Windows drive letters/NTFS mount points/mapped network drives; Linux via /proc/mounts or /etc/mtab; macOS via getfsstat) and registers them as a fact - a task-callable, on-demand counterpart to the fixed set of gathered host facts (see 'Facts'), mirroring Ansible's mount_facts module. Each entry has 'source' (where it was read from), 'device', 'fstype', 'options', and 'path'. Runs in the same facts-first dispatch pass as 'fact'. Reuses the present/absent state machine: 'state: present' (default) or 'latest' (re)gathers and (re)sets the fact every time this is reached; 'state: absent' unsets it.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "default": "mounts",
+          "description": "Name this fact is registered under, as 'facts.<name>'. Defaults to 'mounts'."
+        },
+        "timeout": {
+          "type": "number",
+          "default": 10,
+          "description": "Maximum seconds to spend gathering before failing this task. 0 (or omitted) means no bound. Mainly matters on Windows, where an unreachable mapped network drive can otherwise stall indefinitely."
         },
         "state": { "$ref": "#/$defs/state" }
       }

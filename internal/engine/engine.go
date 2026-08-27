@@ -69,6 +69,23 @@ type Handler interface {
 	Uninstall(item map[string]any, name string, ctx Context) (ExecResult, error)
 }
 
+// FactProducer is an optional extra a Handler implements when its Install
+// result should be merged into state.UserFacts the same way the built-in
+// 'fact' module's own value is (see applyFactResult) — the general
+// mechanism the 'fact' module itself predates (it stays on its own
+// hand-written path below for its 'shell'-deferred-value quirk) and that
+// e.g. 'mount_facts' (internal/handlers/mountfacts.go) uses instead of
+// growing another module-name special case here. A leaf whose module
+// implements this runs in the facts-first dispatch phase (see Run), and
+// after a successful Install, FactName's value is looked up under the
+// returned ExecResult.Extra["value"] and merged into state.UserFacts.
+type FactProducer interface {
+	// FactName returns the fact name this leaf's result should be stored
+	// under, and whether it produced one at all (false leaves state.
+	// UserFacts untouched — e.g. a misconfigured leaf with no 'name').
+	FactName(item map[string]any) (name string, ok bool)
+}
+
 // Result is one dispatched leaf's outcome — ports Invoke-PackageItem's
 // returned PSCustomObject, plus the 'Failed' field Invoke-Tasks adds.
 type Result struct {
@@ -145,7 +162,7 @@ var DefaultNoCommandCheckModules = map[string]bool{
 	"blockinfile": true, "lineinfile": true, "log": true, "fail": true, "path": true, "fact": true,
 	"registry": true, "scheduled_task": true, "file": true, "template": true,
 	"assert": true, "ssh_host_block": true, "async": true, "wait_for": true, "firewall": true, "cron": true, "cron_unix": true, "cron_file": true,
-	"group": true, "user": true,
+	"group": true, "user": true, "mount_facts": true,
 }
 
 // DefaultModuleCommandNames remaps a module's task-tree name to its actual
@@ -164,6 +181,18 @@ type Options struct {
 	NoCommandCheckModules map[string]bool   // nil -> DefaultNoCommandCheckModules
 	ModuleCommandNames    map[string]string // nil -> DefaultModuleCommandNames
 	Progress              func(stage, detail string, index, total int)
+	// OnFactsGathered, if set, is called exactly once by Run - after
+	// every 'fact'/FactProducer leaf has dispatched (the facts-first
+	// phase, in full - see Run), before any other leaf runs - with the
+	// complete merged view of gathered host facts (Facts) and every
+	// user-registered fact (state.UserFacts), same "user facts win on
+	// collision" convention 'facts.*' itself uses in when/${{ }} (see
+	// mergeFlatContext). Lets a caller needing to show "the facts" (e.g.
+	// the CLI's facts table) wait for the actual complete set instead of
+	// a snapshot taken before any 'fact'/'mount_facts' leaf had run.
+	// RunLeaves alone (called directly, bypassing Run's phase split)
+	// never invokes this.
+	OnFactsGathered func(facts map[string]any)
 }
 
 func (o Options) noCommandCheckModules() map[string]bool {
@@ -188,7 +217,7 @@ func (o Options) moduleCommandNames() map[string]string {
 func Run(leaves []tasks.Leaf, opts Options) ([]Result, bool, error) {
 	var factLeaves, otherLeaves []tasks.Leaf
 	for _, l := range leaves {
-		if l.Module == "fact" {
+		if l.Module == "fact" || isFactProducer(opts.Handlers[l.Module]) {
 			factLeaves = append(factLeaves, l)
 		} else {
 			otherLeaves = append(otherLeaves, l)
@@ -204,9 +233,29 @@ func Run(leaves []tasks.Leaf, opts Options) ([]Result, bool, error) {
 		return results, true, nil
 	}
 
+	if opts.OnFactsGathered != nil {
+		opts.OnFactsGathered(mergeFacts(opts.Facts, state.UserFacts))
+	}
+
 	otherResults, stopped2, err := RunLeaves(otherLeaves, opts, state, "running tasks")
 	results = append(results, otherResults...)
 	return results, stopped2, err
+}
+
+// mergeFacts combines gathered host facts and user-registered facts the
+// same "user facts win on collision" way mergeFlatContext's own 'facts'
+// merge does, without pulling in that function's larger vars/inputs/
+// registry flattening - just the facts.* view OnFactsGathered hands a
+// caller.
+func mergeFacts(host, user map[string]any) map[string]any {
+	merged := make(map[string]any, len(host)+len(user))
+	for k, v := range host {
+		merged[k] = v
+	}
+	for k, v := range user {
+		merged[k] = v
+	}
+	return merged
 }
 
 // RunLeaves dispatches leaves sequentially, in document order, mutating
@@ -329,10 +378,13 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 		}
 		leaf.Item = model.AsMap(wrapper["item"])
 
-		// A fact's embedded shell and every 'assert' have no real system
-		// side effect, so previews stay accurate even without '-Apply' -
-		// see docs/plans/go-rewrite.md §2/§4.10.
-		effectiveApply := opts.Apply || hasEmbeddedShell || module == "assert"
+		// A fact's embedded shell, every 'assert', and every FactProducer
+		// (e.g. 'mount_facts') have no real system side effect - each only
+		// reads/computes a value - so previews stay accurate even without
+		// '-Apply' - see docs/plans/go-rewrite.md §2/§4.10. Without this, a
+		// FactProducer's Install would never run in a dry run, leaving its
+		// fact undefined for every later leaf's preview.
+		effectiveApply := opts.Apply || hasEmbeddedShell || module == "assert" || isFactProducer(handler)
 
 		result, err := invokePackageItem(module, leaf.Name, leaf.Item, handler, flatContext, opts.Filters, effectiveApply, opts.Verbose, leaf.SecretID)
 		if err != nil {
@@ -364,6 +416,8 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 
 		if module == "fact" {
 			applyFactResult(leaf.Item, result, state, flatContext, opts.Filters, label, hasEmbeddedShell, hasDeferredFactValue, deferredFactValue)
+		} else if fp, ok := handler.(FactProducer); ok {
+			applyFactProducerResult(fp, leaf.Item, result, state)
 		}
 
 		if leaf.ID != "" {
@@ -415,6 +469,37 @@ func applyFactResult(item map[string]any, result Result, state *State, flatConte
 				secrets.Register(s)
 			}
 		}
+		state.UserFacts[factName] = value
+	}
+}
+
+// isFactProducer reports whether handler (possibly nil, for an
+// unregistered module — Run looks this up before the "unregistered
+// module" warning fires in RunLeaves) implements FactProducer.
+func isFactProducer(handler Handler) bool {
+	_, ok := handler.(FactProducer)
+	return ok
+}
+
+// applyFactProducerResult mirrors applyFactResult's 'default' case for any
+// FactProducer handler other than 'fact' itself: on state 'absent'
+// (Action == ActionUninstall) the fact is removed; otherwise its value is
+// read from result.Exec.Extra["value"] — the convention a FactProducer's
+// Install/Uninstall is expected to follow — and merged into
+// state.UserFacts. A leaf that produced no ExecResult.Extra["value"]
+// (e.g. one that failed before gathering anything) leaves state.UserFacts
+// untouched rather than clobbering an existing fact with nil.
+func applyFactProducerResult(fp FactProducer, item map[string]any, result Result, state *State) {
+	factName, ok := fp.FactName(item)
+	if !ok || factName == "" {
+		return
+	}
+	if result.Action == ActionUninstall {
+		delete(state.UserFacts, factName)
+		delete(state.SecretFacts, factName)
+		return
+	}
+	if value, present := result.Exec.Extra["value"]; present {
 		state.UserFacts[factName] = value
 	}
 }

@@ -39,6 +39,24 @@ func (h *fakeHandler) Uninstall(item map[string]any, name string, ctx Context) (
 	return h.installExec, h.installErr
 }
 
+// fakeFactProducerHandler wraps fakeHandler with a FactProducer
+// implementation - a stand-in for a real fact-gathering module like
+// 'mount_facts' (internal/handlers/mountfacts.go), whose Install result
+// merges into state.UserFacts via ExecResult.Extra["value"] without any
+// module-name special case in engine.go itself.
+type fakeFactProducerHandler struct {
+	fakeHandler
+	factName string
+}
+
+func (h *fakeFactProducerHandler) FactName(item map[string]any) (string, bool) {
+	if h.factName != "" {
+		return h.factName, true
+	}
+	name, _ := item["name"].(string)
+	return name, name != ""
+}
+
 func leaf(module string, item map[string]any, opts ...func(*tasks.Leaf)) tasks.Leaf {
 	l := tasks.Leaf{Module: module, Item: item}
 	for _, o := range opts {
@@ -66,7 +84,7 @@ func baseOpts(handlers map[string]Handler) Options {
 		// real handler with no real backing CLI - "winget" is deliberately
 		// left out so TestRunLeavesMissingCommandOnPathProducesNoResultRow
 		// can still exercise the real PATH-check path.
-		NoCommandCheckModules: map[string]bool{"widget": true, "fact": true, "assert": true},
+		NoCommandCheckModules: map[string]bool{"widget": true, "fact": true, "assert": true, "mount_facts": true},
 	}
 }
 
@@ -576,6 +594,178 @@ func TestRunFactsPassBeforeEverythingElse(t *testing.T) {
 	}
 	if results[0].Module != "fact" {
 		t.Fatalf("expected the fact leaf's result first (facts pass runs before everything else), got %#v", results[0])
+	}
+}
+
+func TestRunLeavesFactProducerRegistersUserFactValue(t *testing.T) {
+	mounts := []any{map[string]any{"path": "/", "fstype": "ext4"}}
+	h := &fakeFactProducerHandler{fakeHandler: fakeHandler{
+		installExec: ExecResult{RC: 0, Extra: map[string]any{"value": mounts}},
+	}}
+	opts := baseOpts(map[string]Handler{"mount_facts": h, "widget": h})
+	opts.Apply = true
+
+	state := NewState()
+	_, stopped, err := RunLeaves([]tasks.Leaf{
+		leaf("mount_facts", map[string]any{"name": "mounts"}),
+	}, opts, state)
+	if err != nil || stopped {
+		t.Fatalf("err=%v stopped=%v", err, stopped)
+	}
+	if got, ok := state.UserFacts["mounts"]; !ok {
+		t.Fatalf("UserFacts = %#v, want 'mounts' registered", state.UserFacts)
+	} else if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", mounts) {
+		t.Fatalf("UserFacts[mounts] = %#v, want %#v", got, mounts)
+	}
+
+	// A later leaf's 'when' must see the FactProducer-registered fact,
+	// exactly like a plain 'fact' leaf's value (TestRunLeavesFactRegistersUserFactValue).
+	results, stopped, err := RunLeaves([]tasks.Leaf{
+		leaf("widget", map[string]any{"state": "present"}, withWhen("facts.mounts[0].fstype == \"ext4\"")),
+	}, opts, state)
+	if err != nil || stopped {
+		t.Fatalf("err=%v stopped=%v", err, stopped)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected the widget leaf to run since its 'when' should see the registered fact, got %#v", results)
+	}
+}
+
+func TestRunLeavesFactProducerForcesExecutionUnderDryRun(t *testing.T) {
+	h := &fakeFactProducerHandler{fakeHandler: fakeHandler{
+		installExec: ExecResult{RC: 0, Extra: map[string]any{"value": "gathered"}},
+	}}
+	opts := baseOpts(map[string]Handler{"mount_facts": h})
+	// opts.Apply left false (dry run) - a FactProducer has no real system
+	// side effect (it only reads/computes a value), so its Install must
+	// still run for real, exactly like a 'fact' with an embedded 'shell' -
+	// otherwise every later leaf's dry-run preview would see this fact as
+	// undefined.
+
+	state := NewState()
+	_, stopped, err := RunLeaves([]tasks.Leaf{
+		leaf("mount_facts", map[string]any{"name": "mounts"}),
+	}, opts, state)
+	if err != nil || stopped {
+		t.Fatalf("err=%v stopped=%v", err, stopped)
+	}
+	if h.installCall != 1 {
+		t.Fatalf("Install call count = %d, want 1 (forced even without --apply)", h.installCall)
+	}
+	if state.UserFacts["mounts"] != "gathered" {
+		t.Fatalf("UserFacts[mounts] = %#v, want \"gathered\"", state.UserFacts["mounts"])
+	}
+}
+
+func TestRunLeavesFactProducerWithNoValueLeavesExistingFactAlone(t *testing.T) {
+	h := &fakeFactProducerHandler{fakeHandler: fakeHandler{
+		installExec: ExecResult{RC: 1, Stderr: "boom"},
+	}}
+	opts := baseOpts(map[string]Handler{"mount_facts": h})
+	opts.Apply = true
+
+	state := NewState()
+	state.UserFacts["mounts"] = "stale"
+	_, stopped, err := RunLeaves([]tasks.Leaf{
+		leaf("mount_facts", map[string]any{"name": "mounts"}, withContinueOnError()),
+	}, opts, state)
+	if err != nil || stopped {
+		t.Fatalf("err=%v stopped=%v", err, stopped)
+	}
+	if state.UserFacts["mounts"] != "stale" {
+		t.Fatalf("UserFacts[mounts] = %#v, want untouched ('stale') since Install produced no Extra[\"value\"]", state.UserFacts["mounts"])
+	}
+}
+
+func TestRunLeavesFactProducerAbsentStateUnsetsFact(t *testing.T) {
+	h := &fakeFactProducerHandler{fakeHandler: fakeHandler{installed: true}}
+	opts := baseOpts(map[string]Handler{"mount_facts": h})
+	opts.Apply = true
+
+	state := NewState()
+	state.UserFacts["mounts"] = []any{"whatever"}
+	_, stopped, err := RunLeaves([]tasks.Leaf{
+		leaf("mount_facts", map[string]any{"name": "mounts", "state": "absent"}),
+	}, opts, state)
+	if err != nil || stopped {
+		t.Fatalf("err=%v stopped=%v", err, stopped)
+	}
+	if _, ok := state.UserFacts["mounts"]; ok {
+		t.Fatalf("UserFacts = %#v, want 'mounts' removed", state.UserFacts)
+	}
+}
+
+func TestRunFactProducerPassBeforeEverythingElse(t *testing.T) {
+	widget := &fakeHandler{installed: false}
+	mountFacts := &fakeFactProducerHandler{fakeHandler: fakeHandler{
+		installExec: ExecResult{RC: 0, Extra: map[string]any{"value": true}},
+	}}
+	opts := baseOpts(map[string]Handler{"widget": widget, "mount_facts": mountFacts})
+	opts.Apply = true
+
+	// Declared in the opposite order on purpose - Run's two-phase split
+	// must route the FactProducer leaf into the facts-first phase purely
+	// from Handler capability, not a hardcoded module-name check.
+	results, stopped, err := Run([]tasks.Leaf{
+		leaf("widget", map[string]any{"state": "present"}, withWhen("facts.ready == true")),
+		leaf("mount_facts", map[string]any{"name": "ready"}),
+	}, opts)
+	if err != nil || stopped {
+		t.Fatalf("err=%v stopped=%v", err, stopped)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected both leaves to run, got %#v", results)
+	}
+	if results[0].Module != "mount_facts" {
+		t.Fatalf("expected the mount_facts leaf's result first (facts pass runs before everything else), got %#v", results[0])
+	}
+}
+
+func TestRunOnFactsGatheredSeesCompleteMergedFactsBeforeOtherLeavesRun(t *testing.T) {
+	widget := &fakeHandler{}
+	fact := &fakeHandler{installExec: ExecResult{RC: 0}}
+	mountFacts := &fakeFactProducerHandler{fakeHandler: fakeHandler{
+		installExec: ExecResult{RC: 0, Extra: map[string]any{"value": []any{"disk0"}}},
+	}}
+	opts := baseOpts(map[string]Handler{"widget": widget, "fact": fact, "mount_facts": mountFacts})
+	opts.Apply = true
+	opts.Facts = map[string]any{"platform": "linux", "overridden_by_user_fact": "host-value"}
+
+	var seen map[string]any
+	calls := 0
+	opts.OnFactsGathered = func(allFacts map[string]any) {
+		calls++
+		seen = allFacts
+		// Must fire strictly after both fact-producing leaves have run,
+		// and strictly before the non-fact 'widget' leaf below does.
+		if widget.installCall != 0 {
+			t.Fatal("OnFactsGathered fired after a non-fact leaf already ran")
+		}
+	}
+
+	results, stopped, err := Run([]tasks.Leaf{
+		leaf("fact", map[string]any{"name": "overridden_by_user_fact", "value": "user-value"}),
+		leaf("mount_facts", map[string]any{"name": "mounts"}),
+		leaf("widget", map[string]any{"state": "present"}),
+	}, opts)
+	if err != nil || stopped {
+		t.Fatalf("err=%v stopped=%v", err, stopped)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected all three leaves to run, got %#v", results)
+	}
+	if calls != 1 {
+		t.Fatalf("OnFactsGathered called %d times, want exactly 1", calls)
+	}
+	if seen["platform"] != "linux" {
+		t.Fatalf("seen[platform] = %#v, want the host fact untouched", seen["platform"])
+	}
+	if seen["overridden_by_user_fact"] != "user-value" {
+		t.Fatalf("seen[overridden_by_user_fact] = %#v, want the user fact to win over the host fact of the same name", seen["overridden_by_user_fact"])
+	}
+	mounts, ok := seen["mounts"].([]any)
+	if !ok || len(mounts) != 1 || mounts[0] != "disk0" {
+		t.Fatalf("seen[mounts] = %#v, want the mount_facts leaf's gathered value", seen["mounts"])
 	}
 }
 

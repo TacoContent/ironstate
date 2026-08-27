@@ -22,6 +22,7 @@ var bashRunner = func() (string, error) { return runVersionProbe("bash", "--vers
 var zshRunner = func() (string, error) { return runVersionProbe("zsh", "--version") }
 var fishRunner = func() (string, error) { return runVersionProbe("fish", "--version") }
 var nuRunner = func() (string, error) { return runVersionProbe("nu", "--version") }
+var pwshRunner = func() (string, error) { return runVersionProbe("pwsh", "--version") }
 
 // runVersionProbe resolves name on PATH and runs it with args, bounded by
 // versionProbeTimeout and with stdin explicitly closed - a timeout (or
@@ -67,6 +68,8 @@ func bashVersion() string { return versionFrom(bashRunner) }
 func zshVersion() string  { return versionFrom(zshRunner) }
 func fishVersion() string { return versionFrom(fishRunner) }
 func nuVersion() string   { return versionFrom(nuRunner) }
+func pwshVersion() string { return versionFrom(pwshRunner) }
+
 
 // stringOrNil reports a version fact as null (rather than "") once it's
 // absent - so 'facts.pwsh_version'/etc. are directly usable in a

@@ -1,0 +1,7 @@
+---
+
+tasks:
+
+  - name: Gather mount facts
+    mount_facts:
+      timeout: 5

@@ -13,8 +13,12 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 
 	"golang.org/x/term"
+	"gopkg.in/yaml.v3"
+
+	"github.com/TacoContent/ironstate/internal/secrets"
 )
 
 // Enabled controls whether style functions actually emit ANSI escape
@@ -111,6 +115,7 @@ var moduleEmoji = map[string]string{
 	"fail":           "❌",
 	"path":           "📁",
 	"fact":           "🔎",
+	"mount_facts":    "🔎",
 	"registry":       "🗃️",
 	"scheduled_task": "⏰",
 	"assert":         "✅",
@@ -129,14 +134,24 @@ func ModuleEmoji(module string) string {
 	return "🏷️"
 }
 
-// PrintFacts renders a small "modern CLI" panel of gathered host facts on
+// PrintFacts renders a small "modern CLI" panel of every gathered fact on
 // w, sorted by key for stable/diffable output — the "display facts info
-// after gathered" request. Values are formatted with fmt's default verb
-// since facts.Gather() only ever produces scalars (string/bool/float64).
-func PrintFacts(w io.Writer, hostFacts map[string]any) error {
-	keys := make([]string, 0, len(hostFacts))
+// after gathered" request. Callers should pass the complete, final set of
+// facts (gathered host facts plus every user-registered 'fact'/
+// 'mount_facts' value - see engine.Options.OnFactsGathered), not a
+// snapshot taken before those had run, since this only ever renders once.
+// facts.Gather()'s own values are scalars (string/bool/float64), printed
+// as one "key  value" line; a user-defined 'fact' can set 'value' to any
+// YAML shape, and 'mount_facts' produces a list of objects - either
+// renders as an indented YAML block under "key:" instead of Go's default
+// '%v' map/slice syntax. Every line is passed through secrets.Redact
+// before printing - the same mechanism a '$name'-prefixed 'fact' value is
+// already registered under (see engine.go's applyFactResult) - so a
+// secret fact never appears here unredacted, scalar or not.
+func PrintFacts(w io.Writer, allFacts map[string]any) error {
+	keys := make([]string, 0, len(allFacts))
 	keyWidth := 0
-	for k := range hostFacts {
+	for k := range allFacts {
 		keys = append(keys, k)
 		if len(k) > keyWidth {
 			keyWidth = len(k)
@@ -148,15 +163,14 @@ func PrintFacts(w io.Writer, hostFacts map[string]any) error {
 	if _, err := fmt.Fprintln(w, rule); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(w, Bold("🧠 Host facts")); err != nil {
+	if _, err := fmt.Fprintln(w, Bold("🧠 Facts")); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(w, rule); err != nil {
 		return err
 	}
 	for _, k := range keys {
-		line := fmt.Sprintf("  %s  %v", Cyan(fmt.Sprintf("%-*s", keyWidth, k)), hostFacts[k])
-		if _, err := fmt.Fprintln(w, line); err != nil {
+		if err := printFactLine(w, k, allFacts[k], keyWidth); err != nil {
 			return err
 		}
 	}
@@ -164,4 +178,48 @@ func PrintFacts(w io.Writer, hostFacts map[string]any) error {
 		return err
 	}
 	return nil
+}
+
+// printFactLine renders one fact: a scalar as a single "key  value" line
+// aligned to keyWidth, a map/slice as "key:" followed by its value
+// YAML-block-indented underneath - the shape a 'fact'/'mount_facts' value
+// can take that a bare '%v' would otherwise dump as Go's map/slice syntax
+// (e.g. "[map[device:... fstype:NTFS] map[device:...]]").
+func printFactLine(w io.Writer, key string, value any, keyWidth int) error {
+	if isScalarFactValue(value) {
+		line := fmt.Sprintf("  %s  %s", Cyan(fmt.Sprintf("%-*s", keyWidth, key)), secrets.Redact(fmt.Sprintf("%v", value)))
+		_, err := fmt.Fprintln(w, line)
+		return err
+	}
+
+	if _, err := fmt.Fprintf(w, "  %s:\n", Cyan(key)); err != nil {
+		return err
+	}
+	rendered, err := yaml.Marshal(value)
+	if err != nil {
+		// Falls back to the plain scalar path rather than failing the
+		// whole panel over one bad value - '%v' always succeeds.
+		_, err := fmt.Fprintf(w, "    %s\n", secrets.Redact(fmt.Sprintf("%v", value)))
+		return err
+	}
+	for _, line := range strings.Split(strings.TrimRight(string(rendered), "\n"), "\n") {
+		if _, err := fmt.Fprintf(w, "    %s\n", secrets.Redact(line)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// isScalarFactValue reports whether v should render as a single "key
+// value" line rather than an indented YAML block - true for everything
+// except the two shapes a YAML-decoded map/list value takes
+// (map[string]any, []any), which is every non-scalar shape a 'fact'/
+// 'mount_facts' value can actually be.
+func isScalarFactValue(v any) bool {
+	switch v.(type) {
+	case map[string]any, []any:
+		return false
+	default:
+		return true
+	}
 }
