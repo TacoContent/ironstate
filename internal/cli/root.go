@@ -91,7 +91,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		return NewLoadError(err)
 	}
 
-	progress := newProgressReporter("playbook", cmd.ErrOrStderr())
+	progress := newProgressReporter()
 	progress.Start()
 	defer progress.Stop()
 

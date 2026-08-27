@@ -104,7 +104,14 @@ tasks:
 	}
 }
 
-func TestRunApplyReportsProgress(t *testing.T) {
+// TestRunApplyProgressHasNoPersistentPhaseLines guards against a past
+// regression where progress.Message printed a persistent "[playbook] ..."
+// line per phase instead of only updating the spinner's suffix in place -
+// see progress.go's Message doc comment. It can't assert the spinner
+// itself is used (bytes.Buffer isn't a real tty, so ui.Enabled is false
+// and the spinner never animates under test - see progress_test.go's top
+// comment), only that the old plain-line behavior doesn't come back.
+func TestRunApplyProgressHasNoPersistentPhaseLines(t *testing.T) {
 	dir := t.TempDir()
 	sitePath := filepath.Join(dir, "site.yml")
 	if err := os.WriteFile(sitePath, []byte("---\nvars: {}\ntasks: []\n"), 0o600); err != nil {
@@ -124,13 +131,13 @@ func TestRunApplyReportsProgress(t *testing.T) {
 	}
 
 	output := stderr.String()
-	for _, want := range []string{
+	for _, unwanted := range []string{
 		"[playbook] loading playbook inputs",
 		"[playbook] expanding playbook tasks",
 		"[playbook] running playbook tasks",
 	} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("stderr = %q, want to contain %q", output, want)
+		if strings.Contains(output, unwanted) {
+			t.Fatalf("stderr = %q, want no persistent phase line %q", output, unwanted)
 		}
 	}
 }

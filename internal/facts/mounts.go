@@ -8,9 +8,9 @@ import (
 // MountFact is one gathered mount entry — shape requested to mirror
 // Ansible's mount_facts module (source/device/fstype/options/mount), kept
 // to today's "report what's currently mounted" scope rather than that
-// module's full multi-source aggregation (no fstab-vs-mtab merge, no
-// built-in device/fstype filters — callers filter downstream with
-// 'when'/templating instead, see internal/handlers/mountfacts.go).
+// module's full multi-source aggregation (no fstab-vs-mtab merge; per-mount
+// filtering is a caller concern handled by internal/handlers/mountfacts.go's
+// 'filter' field, not this package).
 type MountFact struct {
 	// Source is where this entry was read from — a file path
 	// (e.g. "/proc/mounts") on Linux/macOS, or a fixed label describing

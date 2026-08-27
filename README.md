@@ -1218,7 +1218,7 @@ If `value` is omitted, the fact is set directly to the command's trimmed stdout.
 
 ### `mount_facts`
 
-Gathers the host's currently-mounted filesystems and registers them as a fact - a task-callable, on-demand counterpart to the fixed set of always-gathered host facts (see [Facts](#facts)), so the (mildly expensive, and platform-specific) work of enumerating mounts only happens when a `site.yml` actually asks for it. Mirrors Ansible's `mount_facts` module, scoped down to "report what's currently mounted" (no `/etc/fstab`-vs-`/proc/mounts` aggregation, no built-in device/fstype filters - filter the resulting list downstream with `when`/`${{ }}` instead).
+Gathers the host's currently-mounted filesystems and registers them as a fact - a task-callable, on-demand counterpart to the fixed set of always-gathered host facts (see [Facts](#facts)), so the (mildly expensive, and platform-specific) work of enumerating mounts only happens when a `site.yml` actually asks for it. Mirrors Ansible's `mount_facts` module, scoped down to "report what's currently mounted" (no `/etc/fstab`-vs-`/proc/mounts` aggregation) plus a `filter` option to drop entries before they're registered.
 
 **Runs in the same facts-first pass as [`fact`](#fact)** (see [Architecture](#architecture)) - a `mount_facts` task's own `when` can only see gathered facts, vars, and facts registered earlier in that same pass. Like `fact`, it reuses the present/absent state machine: `state: present` (default) or `latest` (re)gathers and (re)sets the fact every time it's reached; `state: absent` unsets it. Always actually runs, even without `--apply` - gathering has no real system side effect, so a dry-run preview of a later `when`/`${{ }}` reference needs a real value to check.
 
@@ -1236,6 +1236,7 @@ Each registered entry is an object with:
 | --- | --- | --- | --- |
 | `name` | no | `mounts` | Name this fact is registered under, as `facts.<name>` |
 | `timeout` | no | `10` | Maximum seconds to spend gathering before failing this task (`rc: 1`). `0` means no bound. Mainly matters on Windows, where an unreachable mapped network drive can otherwise stall indefinitely - Linux/macOS gathering is effectively instant (a file read / local syscall), so it practically never trips there |
+| `filter` | no | *(none)* | Condition(s) a mount must satisfy to be kept. A single expression string, or a list of expressions (implicit AND) - same bare-expression grammar as `when`/`that`, evaluated per-mount against just that mount's own `device`/`fstype`/`options`/`path`/`source` fields |
 | `state` | no | `present` | `present` / `absent` / `latest` |
 
 ```yaml
@@ -1253,6 +1254,14 @@ tasks:
     mount_facts:
       name: disks
       timeout: 3
+
+  - name: gather only real, non-network NTFS mounts
+    mount_facts:
+      name: local_ntfs_mounts
+      filter:
+        - device not in ["none", "drivers"]
+        - fstype == "NTFS"
+        - source not in ["WNetGetConnection"]
 ```
 
 ### `assert`

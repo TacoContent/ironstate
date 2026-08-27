@@ -972,7 +972,7 @@
     },
     "mountFactsItem": {
       "type": "object",
-      "description": "Gathers the host's currently-mounted filesystems (Windows drive letters/NTFS mount points/mapped network drives; Linux via /proc/mounts or /etc/mtab; macOS via getfsstat) and registers them as a fact - a task-callable, on-demand counterpart to the fixed set of gathered host facts (see 'Facts'), mirroring Ansible's mount_facts module. Each entry has 'source' (where it was read from), 'device', 'fstype', 'options', and 'path'. Runs in the same facts-first dispatch pass as 'fact'. Reuses the present/absent state machine: 'state: present' (default) or 'latest' (re)gathers and (re)sets the fact every time this is reached; 'state: absent' unsets it.",
+      "description": "Gathers the host's currently-mounted filesystems (Windows drive letters/NTFS mount points/mapped network drives; Linux via /proc/mounts or /etc/mtab; macOS via getfsstat) and registers them as a fact - a task-callable, on-demand counterpart to the fixed set of gathered host facts (see 'Facts'), mirroring Ansible's mount_facts module. Each entry has 'source' (where it was read from), 'device', 'fstype', 'options', and 'path'; 'filter' can drop entries before they're registered. Runs in the same facts-first dispatch pass as 'fact'. Reuses the present/absent state machine: 'state: present' (default) or 'latest' (re)gathers and (re)sets the fact every time this is reached; 'state: absent' unsets it.",
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -984,6 +984,13 @@
           "type": "number",
           "default": 10,
           "description": "Maximum seconds to spend gathering before failing this task. 0 (or omitted) means no bound. Mainly matters on Windows, where an unreachable mapped network drive can otherwise stall indefinitely."
+        },
+        "filter": {
+          "description": "Condition(s) a mount must satisfy to be kept, evaluated per-mount against just that mount's own 'device'/'fstype'/'options'/'path'/'source' fields. A single expression string, or a list of expressions (implicit AND) - same bare-expression grammar as 'when'/'that' (e.g. 'device not in [\"none\", \"drivers\"]', 'fstype == \"NTFS\"').",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
         },
         "state": { "$ref": "#/$defs/state" }
       }

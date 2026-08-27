@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/TacoContent/ironstate/internal/conditions"
 	"github.com/TacoContent/ironstate/internal/engine"
+	"github.com/TacoContent/ironstate/internal/expr"
 	"github.com/TacoContent/ironstate/internal/facts"
 )
 
@@ -56,9 +58,10 @@ func (mountFactsHandler) Install(item map[string]any, name string, ctx engine.Co
 		return engine.ExecResult{RC: 1, Stderr: msg, StderrLines: []string{msg}}, nil
 	}
 
-	value := make([]any, 0, len(mounts))
-	for _, m := range mounts {
-		value = append(value, m.AsMap())
+	value, err := filterMounts(mounts, asList(item["filter"]), ctx.Filters)
+	if err != nil {
+		msg := fmt.Sprintf("mount_facts: %v", err)
+		return engine.ExecResult{RC: 1, Stderr: msg, StderrLines: []string{msg}}, nil
 	}
 	message := fmt.Sprintf("gathered %d mount(s)", len(value))
 	return engine.ExecResult{
@@ -67,6 +70,28 @@ func (mountFactsHandler) Install(item map[string]any, name string, ctx engine.Co
 		StdoutLines: []string{message},
 		Extra:       map[string]any{"value": value},
 	}, nil
+}
+
+// filterMounts keeps only the mounts that pass every 'filter' condition -
+// a list of bare when/that-style expressions (implicit AND, same as
+// conditions.TestWhen elsewhere), each evaluated against a single mount's
+// own fields (device/fstype/options/path/source) in isolation. Mirrors
+// Ansible's mount_facts filter kwargs but as free-form expressions instead
+// of fixed device/fstype allow-lists.
+func filterMounts(mounts []facts.MountFact, filter []any, filters expr.Filters) ([]any, error) {
+	value := make([]any, 0, len(mounts))
+	for _, m := range mounts {
+		mountMap := m.AsMap()
+		keep, err := conditions.TestWhen(filter, mountMap, filters)
+		if err != nil {
+			return nil, err
+		}
+		if !keep {
+			continue
+		}
+		value = append(value, mountMap)
+	}
+	return value, nil
 }
 
 func (mountFactsHandler) Uninstall(item map[string]any, name string, ctx engine.Context) (engine.ExecResult, error) {

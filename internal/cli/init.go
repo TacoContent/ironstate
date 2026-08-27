@@ -69,7 +69,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return NewLoadError(err)
 	}
 	if scanEnabled {
-		progress := newProgressReporter("scan", cmd.ErrOrStderr())
+		progress := newProgressReporter()
 		progress.Start()
 		defer progress.Stop()
 

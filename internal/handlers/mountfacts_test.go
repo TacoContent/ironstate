@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/TacoContent/ironstate/internal/engine"
+	"github.com/TacoContent/ironstate/internal/facts"
 )
 
 func TestMountFactsHandlerTestReflectsState(t *testing.T) {
@@ -81,6 +82,51 @@ func TestMountFactsHandlerInstallGathersRealMounts(t *testing.T) {
 		if _, present := entry[key]; !present {
 			t.Errorf("mount entry missing key %q: %#v", key, entry)
 		}
+	}
+}
+
+func TestFilterMountsNoFilterKeepsEverything(t *testing.T) {
+	mounts := []facts.MountFact{
+		{Source: "/proc/mounts", Device: "/dev/sda1", FSType: "ext4", Options: "rw", Path: "/"},
+		{Source: "/proc/mounts", Device: "none", FSType: "proc", Options: "rw", Path: "/proc"},
+	}
+	got, err := filterMounts(mounts, nil, nil)
+	if err != nil {
+		t.Fatalf("filterMounts() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("filterMounts(no filter) = %d entries, want 2: %#v", len(got), got)
+	}
+}
+
+func TestFilterMountsANDsMultipleConditions(t *testing.T) {
+	mounts := []facts.MountFact{
+		{Source: "GetVolumeInformation", Device: "\\\\?\\Volume{a}\\", FSType: "NTFS", Options: "rw", Path: "C:\\"},
+		{Source: "WNetGetConnection", Device: "\\\\server\\share", FSType: "NTFS", Options: "rw", Path: "Z:\\"},
+		{Source: "GetVolumeInformation", Device: "none", FSType: "proc", Options: "rw", Path: "/proc"},
+	}
+	filter := []any{
+		`device not in ["none", "drivers"]`,
+		`fstype == "NTFS"`,
+		`source not in ["WNetGetConnection"]`,
+	}
+	got, err := filterMounts(mounts, filter, nil)
+	if err != nil {
+		t.Fatalf("filterMounts() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("filterMounts(3 AND'd conditions) = %d entries, want 1: %#v", len(got), got)
+	}
+	entry := got[0].(map[string]any)
+	if entry["path"] != "C:\\" {
+		t.Fatalf("filterMounts() kept %#v, want the C:\\ entry", entry)
+	}
+}
+
+func TestFilterMountsPropagatesConditionError(t *testing.T) {
+	mounts := []facts.MountFact{{Device: "/dev/sda1"}}
+	if _, err := filterMounts(mounts, []any{"device ==="}, nil); err == nil {
+		t.Fatal("filterMounts(invalid expression) = nil error, want an error")
 	}
 }
 
