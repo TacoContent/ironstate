@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -223,4 +225,42 @@ func (aptHandler) Install(item map[string]any, name string, ctx engine.Context) 
 
 func (aptHandler) Uninstall(item map[string]any, name string, ctx engine.Context) (engine.ExecResult, error) {
 	return runAptPlan(item, engine.ActionUninstall), nil
+}
+
+// ScanRole implements engine.ScanCapable - discovered packages seed
+// roles/packages in a generated playbook (see internal/scan).
+func (aptHandler) ScanRole() string { return "roles/packages" }
+
+// Scan implements engine.ScanCapable: discovers packages apt has
+// explicitly installed - ports the scanning logic that used to live in
+// internal/scan's packageScanner.
+func (aptHandler) Scan(ctx engine.Context) ([]engine.ScanItem, error) {
+	if runtime.GOOS == "windows" {
+		return nil, nil
+	}
+	if _, err := exec.LookPath("apt-mark"); err != nil {
+		return nil, nil
+	}
+	// 'apt-mark showmanual' - not 'dpkg --get-selections' or 'apt list
+	// --installed' - so packages pulled in only as another package's
+	// dependency are excluded; only what the user explicitly asked apt
+	// to install shows up (mirrors 'brew leaves').
+	result, err := runner.Run("apt-mark", []string{"showmanual"})
+	if err != nil {
+		return nil, nil //nolint:nilerr // apt-mark invocation failure just means nothing to report
+	}
+	out := make([]engine.ScanItem, 0)
+	for _, line := range strings.Split(result.Stdout, "\n") {
+		name := strings.TrimSpace(line)
+		if name == "" {
+			continue
+		}
+		out = append(out, engine.ScanItem{
+			Module: "apt",
+			Name:   name,
+			Config: map[string]any{"package": name, "state": "present"},
+			Tags:   []string{"packages"},
+		})
+	}
+	return out, nil
 }

@@ -120,6 +120,39 @@ type FactProducer interface {
 	FactName(item map[string]any) (name string, ok bool)
 }
 
+// ScanItem is a single configuration object a ScanCapable handler
+// discovers on the current system, ready to seed a generated playbook.
+// internal/scan.Item is a type alias for this (rather than its own
+// struct) so a handler's Scan result needs no conversion on the way into
+// internal/scan.GeneratePlaybook.
+type ScanItem struct {
+	Module string         `yaml:"-"`
+	Name   string         `yaml:"name"`
+	Config map[string]any `yaml:"config"`
+	Tags   []string       `yaml:"tags,omitempty"`
+	// Role names the playbook role directory (e.g. "roles/system/users")
+	// this item should be grouped under - stamped by internal/scan's
+	// Registry from the producing Scanner's Role(), not set by the
+	// handler itself.
+	Role string `yaml:"-"`
+}
+
+// ScanCapable is an optional extra a Handler implements when it can also
+// discover its own module's current state on this system and report it
+// back as playbook items - the discovery-side mirror of Install/
+// Uninstall. internal/scan's Registry type-asserts each handlers.All()
+// entry for this interface, so a module's scan logic lives next to its
+// own Handler instead of internal/scan maintaining a separate, hardcoded
+// scanner per module.
+type ScanCapable interface {
+	// ScanRole names the playbook role directory (e.g.
+	// "roles/system/users") this handler's scanned items are grouped
+	// under when internal/scan.GeneratePlaybook writes the role tree.
+	ScanRole() string
+	// Scan discovers this handler's current system state.
+	Scan(ctx Context) ([]ScanItem, error)
+}
+
 // Result is one dispatched leaf's outcome — ports Invoke-PackageItem's
 // returned PSCustomObject, plus the 'Failed' field Invoke-Tasks adds.
 type Result struct {

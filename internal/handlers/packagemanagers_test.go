@@ -336,6 +336,89 @@ func TestShellHandlerAbsentDoesNotFallBackToTopLevelCommand(t *testing.T) {
 	}
 }
 
+func TestWingetPackagesToEntriesKeepsIdsAndSources(t *testing.T) {
+	previousLookup := wingetDisplayNameLookup
+	wingetDisplayNameLookup = func(identifier string) string {
+		if identifier == "9P8LTPGCBZXD" {
+			return "Wintoys"
+		}
+		return ""
+	}
+	defer func() {
+		wingetDisplayNameLookup = previousLookup
+	}()
+
+	items := wingetPackagesToEntries([]wingetExportPackage{
+		{Identifier: "Microsoft.VCRedist.2010.x64", Source: "winget"},
+		{Identifier: "Microsoft.VCRedist.2010.x86", Source: "winget"},
+		{Identifier: "9P8LTPGCBZXD", Source: "msstore"},
+		{Identifier: "7zip.7zip", Source: "winget"},
+	})
+	if len(items) != 4 {
+		t.Fatalf("items = %d, want 4", len(items))
+	}
+	for _, want := range []wingetPackage{
+		{Name: "Microsoft.VCRedist.2010.x64", Identifier: "Microsoft.VCRedist.2010.x64", Source: "winget"},
+		{Name: "Microsoft.VCRedist.2010.x86", Identifier: "Microsoft.VCRedist.2010.x86", Source: "winget"},
+		{Name: "Wintoys", Identifier: "9P8LTPGCBZXD", Source: "msstore"},
+		{Name: "7zip.7zip", Identifier: "7zip.7zip", Source: "winget"},
+	} {
+		matched := false
+		for _, got := range items {
+			if got.Identifier == want.Identifier {
+				matched = true
+				if got != want {
+					t.Fatalf("package %+v, want %+v", got, want)
+				}
+			}
+		}
+		if !matched {
+			t.Fatalf("missing package identifier %q", want.Identifier)
+		}
+	}
+}
+
+func TestWingetHandlerScanRoleAndRoleAreRolesPackages(t *testing.T) {
+	winget := wingetHandler{}
+	if got := winget.ScanRole(); got != "roles/packages" {
+		t.Fatalf("ScanRole() = %q, want roles/packages", got)
+	}
+	choco := chocolateyHandler{}
+	if got := choco.ScanRole(); got != "roles/packages" {
+		t.Fatalf("ScanRole() = %q, want roles/packages", got)
+	}
+	brew := homebrewHandler{}
+	if got := brew.ScanRole(); got != "roles/packages" {
+		t.Fatalf("ScanRole() = %q, want roles/packages", got)
+	}
+	apt := aptHandler{}
+	if got := apt.ScanRole(); got != "roles/packages" {
+		t.Fatalf("ScanRole() = %q, want roles/packages", got)
+	}
+	npm := npmHandler{}
+	if got := npm.ScanRole(); got != "roles/packages" {
+		t.Fatalf("ScanRole() = %q, want roles/packages", got)
+	}
+}
+
+func TestBrewListToItemsSkipsBlankLines(t *testing.T) {
+	items := brewListToItems("ripgrep\nfd\n\nbat\n")
+	if len(items) != 3 {
+		t.Fatalf("items = %d, want 3", len(items))
+	}
+	for _, want := range []string{"ripgrep", "fd", "bat"} {
+		matched := false
+		for _, got := range items {
+			if got.Name == want && got.Module == "homebrew" && got.Config["package"] == want {
+				matched = true
+			}
+		}
+		if !matched {
+			t.Fatalf("missing entry %q in %+v", want, items)
+		}
+	}
+}
+
 func TestShellHandlerCreatesGatesTest(t *testing.T) {
 	dir := t.TempDir()
 	marker := dir + "/done.marker"

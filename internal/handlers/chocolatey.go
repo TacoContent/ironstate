@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"os/exec"
+	"runtime"
 	"strings"
 
 	"github.com/TacoContent/ironstate/internal/engine"
@@ -59,4 +61,42 @@ func (chocolateyHandler) Uninstall(item map[string]any, name string, ctx engine.
 		engine.Warn("choco uninstall %s exited with code %d", pkg, result.RC)
 	}
 	return result, nil
+}
+
+// ScanRole implements engine.ScanCapable - discovered packages seed
+// roles/packages in a generated playbook (see internal/scan).
+func (chocolateyHandler) ScanRole() string { return "roles/packages" }
+
+// Scan implements engine.ScanCapable: discovers packages Chocolatey has
+// installed - ports the choco-fallback branch of the scanning logic that
+// used to live in internal/scan's packageScanner. Runs independently of
+// wingetHandler.Scan (no "prefer winget, fall back to choco" precedence
+// between them anymore - each package-manager handler now only reports
+// its own state).
+func (chocolateyHandler) Scan(ctx engine.Context) ([]engine.ScanItem, error) {
+	if runtime.GOOS != "windows" {
+		return nil, nil
+	}
+	if _, err := exec.LookPath("choco"); err != nil {
+		return nil, nil
+	}
+	result, err := runner.Run("choco", []string{"list", "--local-only", "--limit-output"})
+	if err != nil {
+		return nil, nil //nolint:nilerr // choco invocation failure just means nothing to report
+	}
+	out := make([]engine.ScanItem, 0)
+	for _, line := range strings.Split(result.Stdout, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		name := fields[0]
+		out = append(out, engine.ScanItem{
+			Module: "chocolatey",
+			Name:   name,
+			Config: map[string]any{"package": name, "state": "present"},
+			Tags:   []string{"packages"},
+		})
+	}
+	return out, nil
 }

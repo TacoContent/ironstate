@@ -33,13 +33,13 @@ tasks:
       - scp ./dist/ironstate_darwin_amd64_v1/ironstate {{.MACOS_USER}}@{{.MACOS_IP}}:/Users/{{.MACOS_USER}}/.local/bin/
       - echo "Pushing the built binary to the WSL distributions..."
       - echo "... Ubuntu ..."
-      - wsl -d Ubuntu cp /mnt/d/Development/projects/github/ironstate/dist/ironstate_linux_amd64_v1/ironstate /home/{{.WSL_USER}}/.local/bin/
+      - wsl -d Ubuntu cp /home/{{.WSL_USER}}/Development/oss/ironstate/dist/ironstate_linux_amd64_v1/ironstate /home/{{.WSL_USER}}/.local/bin/
       - echo "... Debian ..."
-      - wsl -d Debian cp /mnt/d/Development/projects/github/ironstate/dist/ironstate_linux_amd64_v1/ironstate /home/{{.WSL_USER}}/.local/bin/
+      - wsl -d Debian cp /home/{{.WSL_USER}}/Development/oss/ironstate/dist/ironstate_linux_amd64_v1/ironstate /home/{{.WSL_USER}}/.local/bin/
       - echo "... KaliLinux ..."
-      - wsl -d KaliLinux cp /mnt/d/Development/projects/github/ironstate/dist/ironstate_linux_amd64_v1/ironstate /home/{{.WSL_USER}}/.local/bin/
+      - wsl -d KaliLinux cp /home/{{.WSL_USER}}/Development/oss/ironstate/dist/ironstate_linux_amd64_v1/ironstate /home/{{.WSL_USER}}/.local/bin/
       - echo "... ArchLinu x..."
-      - wsl -d ArchLinux cp /mnt/d/Development/projects/github/ironstate/dist/ironstate_linux_amd64_v1/ironstate /home/{{.WSL_USER}}/.local/bin/
+      - wsl -d ArchLinux cp /home/{{.WSL_USER}}/Development/oss/ironstate/dist/ironstate_linux_amd64_v1/ironstate /home/{{.WSL_USER}}/.local/bin/
       - echo "... Alpine ..."
-      - wsl -d Alpine cp /mnt/d/Development/projects/github/ironstate/dist/ironstate_linux_amd64_v1/ironstate /home/{{.WSL_USER}}/.local/bin/
+      - wsl -d Alpine cp /home/{{.WSL_USER}}/Development/oss/ironstate/dist/ironstate_linux_amd64_v1/ironstate /home/{{.WSL_USER}}/.local/bin/
       - echo "... DONE ..."

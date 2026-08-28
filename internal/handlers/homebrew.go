@@ -1,6 +1,12 @@
 package handlers
 
-import "github.com/TacoContent/ironstate/internal/engine"
+import (
+	"os/exec"
+	"runtime"
+	"strings"
+
+	"github.com/TacoContent/ironstate/internal/engine"
+)
 
 // homebrewHandler wraps Homebrew (brew) - formulae and casks on macOS and
 // Linux. The dispatch loop remaps the 'homebrew' module's PATH check to
@@ -56,4 +62,49 @@ func (homebrewHandler) Uninstall(item map[string]any, name string, ctx engine.Co
 		engine.Warn("brew uninstall %s exited with code %d", pkg, result.RC)
 	}
 	return result, nil
+}
+
+// ScanRole implements engine.ScanCapable - discovered packages seed
+// roles/packages in a generated playbook (see internal/scan).
+func (homebrewHandler) ScanRole() string { return "roles/packages" }
+
+// Scan implements engine.ScanCapable: discovers formulae/casks Homebrew
+// has installed - ports the scanning logic that used to live in
+// internal/scan's packageScanner.
+func (homebrewHandler) Scan(ctx engine.Context) ([]engine.ScanItem, error) {
+	if runtime.GOOS == "windows" {
+		return nil, nil
+	}
+	if _, err := exec.LookPath("brew"); err != nil {
+		return nil, nil
+	}
+	out := make([]engine.ScanItem, 0)
+	// 'brew leaves' - not 'brew list --formula' - so formulae pulled in
+	// only as another formula's dependency (e.g. libde265 under
+	// handbrake) are excluded; only what the user actually asked to
+	// install shows up.
+	if result, err := runner.Run("brew", []string{"leaves"}); err == nil {
+		out = append(out, brewListToItems(result.Stdout)...)
+	}
+	if result, err := runner.Run("brew", []string{"list", "--cask", "-1"}); err == nil {
+		out = append(out, brewListToItems(result.Stdout)...)
+	}
+	return out, nil
+}
+
+func brewListToItems(out string) []engine.ScanItem {
+	items := make([]engine.ScanItem, 0)
+	for _, line := range strings.Split(out, "\n") {
+		name := strings.TrimSpace(line)
+		if name == "" {
+			continue
+		}
+		items = append(items, engine.ScanItem{
+			Module: "homebrew",
+			Name:   name,
+			Config: map[string]any{"package": name, "state": "present"},
+			Tags:   []string{"packages"},
+		})
+	}
+	return items
 }

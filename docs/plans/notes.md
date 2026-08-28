@@ -15,19 +15,9 @@
 - tempfile: create a temporary file or directory (Linux/macOS) or alias for Windows tempfile
 
 - unarchive: extract an archive (Linux/macOS) or alias for Windows unarchive
-- async: run a task or group of tasks asynchronously, allowing the playbook to continue without waiting for the task to finish. Can be used with `wait_for` to check for completion.
-- wait_for: wait for a fact or condition to be true or async task(s) to complete, then continue. Timeout can be specified, and the task will fail if the condition is not met in time.
 
 ## GitHub
 
 - create issue templates
 
 ## Facts
-
-like the ansible module, the mount_facts should have the ability to filter items.
-
-filter:
-  device:
-    - ${{ item is not in ['none', 'drivers'] }}
-  fstype:
-    - ${{ item == ext4 }}

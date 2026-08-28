@@ -26,7 +26,7 @@ var AllModuleNames = []string{
 	"winget", "chocolatey", "homebrew", "brew", "apt", "gem", "pipx", "npm", "cargo", "go", "eget",
 	"git", "cron", "cron_unix", "cron_file", "iptables", "ufw", "advfirewall", "firewall", "zip", "symlinks", "file", "copy", "template", "shell", "blockinfile", "lineinfile",
 	"ssh_host_block", "log", "fail", "path", "fact", "mount_facts", "registry", "scheduled_task", "group", "user",
-	"assert", "async", "wait_for",
+	"assert", "async", "wait_for", "service",
 }
 
 // All returns every implemented module, ready to hand to
@@ -73,6 +73,7 @@ func All() map[string]engine.Handler {
 		"scheduled_task": scheduledTaskHandler{},
 		"group":          groupHandler{},
 		"user":           userHandler{},
+		"service":        serviceHandler{},
 		"template":       templateHandler{},
 		"lineinfile":     lineInFileHandler{},
 		"async":          asyncHandler{},
