@@ -33,6 +33,7 @@ type Leaf struct {
 	SecretID        bool
 	FailedWhen      []any
 	ContinueOnError bool
+	Become          any // bool or string ('root'/a username) - see engine's resolveBecome; unset/false means no elevation
 	Looped          bool
 	PackageVars     map[string]any
 	PackageInputs   map[string]any
@@ -200,6 +201,7 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 			SecretID:        secretID,
 			FailedWhen:      model.AsList(item["failed_when"]),
 			ContinueOnError: continueOnError,
+			Become:          item["become"],
 			Looped:          sc.parentLooped,
 			PackageVars:     sc.packageVars,
 			PackageInputs:   sc.packageInputs,

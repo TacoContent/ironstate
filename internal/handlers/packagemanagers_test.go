@@ -102,6 +102,151 @@ func TestPipxHandlerLatestFallsBackToInstall(t *testing.T) {
 	}
 }
 
+func TestHomebrewHandlerLatestFallsBackToInstall(t *testing.T) {
+	rec := &recordingRunner{responses: []ironexec.Result{{RC: 1}, {RC: 0}}}
+	withRunner(t, rec)
+
+	h := homebrewHandler{}
+	item := map[string]any{"package": "ripgrep", "state": "latest"}
+	result, err := h.Install(item, "", testCtx())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.calls) != 2 || rec.exes[0] != "brew" || rec.calls[0][0] != "upgrade" || rec.calls[1][0] != "install" {
+		t.Fatalf("exes=%v calls=%v", rec.exes, rec.calls)
+	}
+	if result.RC != 0 {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestHomebrewHandlerTestChecksBrewList(t *testing.T) {
+	rec := &recordingRunner{responses: []ironexec.Result{{RC: 1, Stderr: "Error: No such keg"}}}
+	withRunner(t, rec)
+
+	h := homebrewHandler{}
+	installed, err := h.Test(map[string]any{"package": "ripgrep"}, "", testCtx())
+	if err != nil || installed {
+		t.Fatalf("installed=%v err=%v, want false", installed, err)
+	}
+	if rec.exes[0] != "brew" || strings.Join(rec.calls[0], " ") != "list ripgrep" {
+		t.Fatalf("exe=%q args=%v", rec.exes[0], rec.calls[0])
+	}
+}
+
+func TestBrewIsRegisteredAsHomebrewAlias(t *testing.T) {
+	all := All()
+	if _, ok := all["brew"].(homebrewHandler); !ok {
+		t.Fatal("expected 'brew' to be registered as homebrewHandler")
+	}
+	if _, ok := all["homebrew"].(homebrewHandler); !ok {
+		t.Fatal("expected 'homebrew' to be registered as homebrewHandler")
+	}
+	found := false
+	for _, name := range AllModuleNames {
+		if name == "brew" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected 'brew' in AllModuleNames")
+	}
+}
+
+func TestAptHandlerInstallBatchesMultiplePackages(t *testing.T) {
+	rec := &recordingRunner{responses: []ironexec.Result{{RC: 0}}}
+	withRunner(t, rec)
+
+	h := aptHandler{}
+	item := map[string]any{"package": []any{"git", "curl"}}
+	if _, err := h.Install(item, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+	if rec.exes[0] != "apt-get" {
+		t.Fatalf("exe = %q, want apt-get", rec.exes[0])
+	}
+	want := []string{"install", "-y", "git", "curl"}
+	if strings.Join(rec.calls[0], " ") != strings.Join(want, " ") {
+		t.Fatalf("args = %v, want %v", rec.calls[0], want)
+	}
+}
+
+func TestAptHandlerUpdateCacheThenInstall(t *testing.T) {
+	rec := &recordingRunner{responses: []ironexec.Result{{RC: 0}, {RC: 0}}}
+	withRunner(t, rec)
+
+	h := aptHandler{}
+	item := map[string]any{"package": "git", "update_cache": true}
+	if _, err := h.Install(item, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.calls) != 2 || rec.calls[0][0] != "update" || rec.calls[1][0] != "install" {
+		t.Fatalf("calls = %v", rec.calls)
+	}
+}
+
+func TestAptHandlerUninstallWithPurge(t *testing.T) {
+	rec := &recordingRunner{responses: []ironexec.Result{{RC: 0}}}
+	withRunner(t, rec)
+
+	h := aptHandler{}
+	item := map[string]any{"package": "git", "purge": true}
+	if _, err := h.Uninstall(item, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"purge", "-y", "git"}
+	if strings.Join(rec.calls[0], " ") != strings.Join(want, " ") {
+		t.Fatalf("args = %v, want %v", rec.calls[0], want)
+	}
+}
+
+func TestAptHandlerAutoremoveOnlyTaskAlwaysRuns(t *testing.T) {
+	rec := &recordingRunner{responses: []ironexec.Result{{RC: 0}}}
+	withRunner(t, rec)
+
+	h := aptHandler{}
+	item := map[string]any{"autoremove": true}
+	installed, err := h.Test(item, "", testCtx())
+	if err != nil || installed {
+		t.Fatalf("installed=%v err=%v, want false (so Install always runs)", installed, err)
+	}
+	if _, err := h.Install(item, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"autoremove", "-y"}
+	if strings.Join(rec.calls[0], " ") != strings.Join(want, " ") {
+		t.Fatalf("args = %v, want %v", rec.calls[0], want)
+	}
+}
+
+func TestAptHandlerTestChecksDpkgQuery(t *testing.T) {
+	rec := &recordingRunner{responses: []ironexec.Result{{RC: 0, Stdout: "install ok installed"}}}
+	withRunner(t, rec)
+
+	h := aptHandler{}
+	installed, err := h.Test(map[string]any{"package": "git"}, "", testCtx())
+	if err != nil || !installed {
+		t.Fatalf("installed=%v err=%v, want true", installed, err)
+	}
+	if rec.exes[0] != "dpkg-query" {
+		t.Fatalf("exe = %q, want dpkg-query", rec.exes[0])
+	}
+}
+
+func TestAptHandlerTestAbsentReturnsTrueIfAnyPackagePresent(t *testing.T) {
+	rec := &recordingRunner{responses: []ironexec.Result{
+		{RC: 0, Stdout: "install ok installed"},
+		{RC: 1},
+	}}
+	withRunner(t, rec)
+
+	h := aptHandler{}
+	installed, err := h.Test(map[string]any{"package": []any{"git", "missingpkg"}, "state": "absent"}, "", testCtx())
+	if err != nil || !installed {
+		t.Fatalf("installed=%v err=%v, want true (git is present, so uninstall should run)", installed, err)
+	}
+}
+
 func TestEgetHandlerResolvesToArgAndTests(t *testing.T) {
 	dir := t.TempDir()
 	target := dir + "/delta.exe"

@@ -97,6 +97,12 @@ func (userScanner) Scan() ([]Item, error) {
 		if runtime.GOOS == "windows" && !isWindowsHumanAccountSID(e.SID) {
 			continue
 		}
+		if runtime.GOOS == "darwin" && isMacOSBuiltinUser(e.Username) {
+			continue
+		}
+		if runtime.GOOS == "linux" && isLinuxBuiltinUser(e.Username) {
+			continue
+		}
 		out = append(out, Item{
 			Module: "user",
 			Name:   e.Username,
@@ -122,6 +128,12 @@ func (groupScanner) Scan() ([]Item, error) {
 			continue
 		}
 		if runtime.GOOS == "windows" && isWindowsBuiltInGroupSID(e.SID) {
+			continue
+		}
+		if runtime.GOOS == "darwin" && isMacOSBuiltinGroup(e.Name) {
+			continue
+		}
+		if runtime.GOOS == "linux" && isLinuxBuiltinGroup(e.Name) {
 			continue
 		}
 		out = append(out, Item{
@@ -179,15 +191,24 @@ func (packageScanner) Scan() ([]Item, error) {
 			continue
 		}
 		module := "winget"
-		if runtime.GOOS != "windows" {
+		cfg := map[string]any{"package": p.Identifier, "state": "present"}
+		switch {
+		case runtime.GOOS == "windows":
+			if !isWingetManagedSource(p.Source) {
+				continue
+			}
+			cfg["source"] = p.Source
+		case p.Source == "brew":
+			module = "homebrew"
+		case p.Source == "apt":
+			module = "apt"
+		default:
 			module = "npm"
-		} else if !isWingetManagedSource(p.Source) {
-			continue
 		}
 		out = append(out, Item{
 			Module: module,
 			Name:   p.Name,
-			Config: map[string]any{"package": p.Identifier, "source": p.Source, "state": "present"},
+			Config: cfg,
 			Tags:   []string{"packages"},
 		})
 	}
@@ -431,13 +452,64 @@ func discoverPackages() ([]packageEntry, error) {
 		}
 		return nil, nil
 	}
-	if _, err := exec.LookPath("npm"); err == nil {
-		out, err := runCommand("npm", "list", "-g", "--depth=0", "--json")
-		if err == nil {
-			return parseNPMList(out), nil
+	// Unlike Windows' winget/choco (mutually exclusive - a host normally
+	// has one or the other as its primary manager), brew/apt/npm are
+	// genuinely complementary on a Unix host (e.g. Homebrew for user
+	// tooling alongside apt for the base OS, or Node globals alongside
+	// either) - so every one found on PATH contributes its own entries,
+	// rather than the first successful source winning exclusively.
+	var entries []packageEntry
+	if _, err := exec.LookPath("brew"); err == nil {
+		// 'brew leaves' - not 'brew list --formula' - so formulae pulled in
+		// only as another formula's dependency (e.g. libde265 under
+		// handbrake) are excluded; only what the user actually asked to
+		// install shows up.
+		if out, err := runCommand("brew", "leaves"); err == nil {
+			entries = append(entries, parseBrewList(out)...)
+		}
+		if out, err := runCommand("brew", "list", "--cask", "-1"); err == nil {
+			entries = append(entries, parseBrewList(out)...)
 		}
 	}
-	return nil, nil
+	if _, err := exec.LookPath("apt-mark"); err == nil {
+		// 'apt-mark showmanual' - not 'dpkg --get-selections' or 'apt list
+		// --installed' - so packages pulled in only as another package's
+		// dependency are excluded; only what the user explicitly asked
+		// apt to install shows up (mirrors 'brew leaves' above).
+		if out, err := runCommand("apt-mark", "showmanual"); err == nil {
+			entries = append(entries, parseAptManualList(out)...)
+		}
+	}
+	if _, err := exec.LookPath("npm"); err == nil {
+		if out, err := runCommand("npm", "list", "-g", "--depth=0", "--json"); err == nil {
+			entries = append(entries, parseNPMList(out)...)
+		}
+	}
+	return entries, nil
+}
+
+func parseBrewList(out string) []packageEntry {
+	items := make([]packageEntry, 0)
+	for _, line := range splitLines(out) {
+		name := strings.TrimSpace(line)
+		if name == "" {
+			continue
+		}
+		items = append(items, packageEntry{Name: name, Identifier: name, Source: "brew"})
+	}
+	return items
+}
+
+func parseAptManualList(out string) []packageEntry {
+	items := make([]packageEntry, 0)
+	for _, line := range splitLines(out) {
+		name := strings.TrimSpace(line)
+		if name == "" {
+			continue
+		}
+		items = append(items, packageEntry{Name: name, Identifier: name, Source: "apt"})
+	}
+	return items
 }
 
 func discoverWingetPackagesFromExport() ([]wingetExportPackage, error) {
@@ -554,7 +626,7 @@ func parseNPMList(out string) []packageEntry {
 	if deps, ok := data["dependencies"].(map[string]any); ok {
 		for name := range deps {
 			if strings.TrimSpace(name) != "" && name != "npm" {
-				items = append(items, packageEntry{Name: name})
+				items = append(items, packageEntry{Name: name, Identifier: name})
 			}
 		}
 	}
@@ -576,14 +648,19 @@ func splitLines(s string) []string {
 func runCommand(name string, args ...string) (string, error) {
 	var cmd *exec.Cmd
 	switch name {
+	case "pwsh":
 	case "powershell":
-		cmd = exec.Command("powershell", args...) // #nosec G204 - command is fixed and arguments are internal scan inputs
+		cmd = exec.Command("pwsh", args...) // #nosec G204 - command is fixed and arguments are internal scan inputs
 	case "systemctl":
 		cmd = exec.Command("systemctl", args...) // #nosec G204 - command is fixed and arguments are internal scan inputs
 	case "winget":
 		cmd = exec.Command("winget", args...) // #nosec G204 - command is fixed and arguments are internal scan inputs
 	case "choco":
 		cmd = exec.Command("choco", args...) // #nosec G204 - command is fixed and arguments are internal scan inputs
+	case "brew":
+		cmd = exec.Command("brew", args...) // #nosec G204 - command is fixed and arguments are internal scan inputs
+	case "apt-mark":
+		cmd = exec.Command("apt-mark", args...) // #nosec G204 - command is fixed and arguments are internal scan inputs
 	case "npm":
 		cmd = exec.Command("npm", args...) // #nosec G204 - command is fixed and arguments are internal scan inputs
 	default:
@@ -644,6 +721,179 @@ func isUserManagedWindowsService(service serviceEntry) bool {
 		return false
 	}
 	return true
+}
+
+// macOSBuiltinUsers lists macOS system accounts kept out of the 'users'
+// scan even though they don't use the '_'-prefixed service-account naming
+// convention (see isMacOSBuiltinUser).
+var macOSBuiltinUsers = map[string]bool{
+	"daemon": true,
+	"nobody": true,
+	"root":   true,
+}
+
+// macOSBuiltinGroups lists macOS system/service groups kept out of the
+// 'groups' scan. Every 'com.apple.*' directory-service group (access_ssh,
+// access_screensharing, ...) is covered by the prefix check in
+// isMacOSBuiltinGroup instead of being enumerated here.
+var macOSBuiltinGroups = map[string]bool{
+	"accessibility": true,
+	"admin":         true,
+	"authedusers":   true,
+	"bin":           true,
+	"certusers":     true,
+	"consoleusers":  true,
+	"daemon":        true,
+	"dialer":        true,
+	"everyone":      true,
+	"group":         true,
+	"interactusers": true,
+	"kmem":          true,
+	"localaccounts": true,
+	"mail":          true,
+	"netaccounts":   true,
+	"netusers":      true,
+	"network":       true,
+	"nobody":        true,
+	"nogroup":       true,
+	"operator":      true,
+	"owner":         true,
+	"procmod":       true,
+	"procview":      true,
+	"staff":         true,
+	"sys":           true,
+	"tty":           true,
+	"utmp":          true,
+	"wheel":         true,
+}
+
+// isMacOSBuiltinUser reports whether name is a macOS system account that
+// should never show up as a user-managed 'user' scan item: every
+// '_'-prefixed service account (ports Apple's own convention for daemon
+// accounts, e.g. '_www', '_spotlight') plus the small set of legacy
+// unprefixed system accounts in macOSBuiltinUsers.
+func isMacOSBuiltinUser(name string) bool {
+	if strings.HasPrefix(name, "_") {
+		return true
+	}
+	return macOSBuiltinUsers[name]
+}
+
+// isMacOSBuiltinGroup reports whether name is a macOS system/service group
+// that should never show up as a user-managed 'group' scan item: every
+// '_'-prefixed service group, every 'com.apple.*' directory-service group,
+// plus the legacy unprefixed system groups in macOSBuiltinGroups.
+func isMacOSBuiltinGroup(name string) bool {
+	if strings.HasPrefix(name, "_") || strings.HasPrefix(name, "com.apple.") {
+		return true
+	}
+	return macOSBuiltinGroups[name]
+}
+
+// linuxBuiltinUsers lists Debian/Ubuntu-style system accounts kept out of
+// the 'users' scan even though they don't use the '_'-prefixed
+// service-account naming convention (see isLinuxBuiltinUser). Distro-
+// specific and not exhaustive - a starting point, per-host overrides may
+// become configurable later.
+var linuxBuiltinUsers = map[string]bool{
+	"backup":          true,
+	"bin":             true,
+	"daemon":          true,
+	"dhcpcd":          true,
+	"games":           true,
+	"irc":             true,
+	"list":            true,
+	"lp":              true,
+	"mail":            true,
+	"man":             true,
+	"messagebus":      true,
+	"news":            true,
+	"nobody":          true,
+	"proxy":           true,
+	"root":            true,
+	"sync":            true,
+	"sys":             true,
+	"systemd-network": true,
+	"uucp":            true,
+	"uuidd":           true,
+	"www-data":        true,
+}
+
+// linuxBuiltinGroups lists Debian/Ubuntu-style system/service groups kept
+// out of the 'groups' scan. Same caveats as linuxBuiltinUsers.
+var linuxBuiltinGroups = map[string]bool{
+	"adm":             true,
+	"audio":           true,
+	"backup":          true,
+	"bin":             true,
+	"cdrom":           true,
+	"clock":           true,
+	"crontab":         true,
+	"daemon":          true,
+	"dialout":         true,
+	"dip":             true,
+	"disk":            true,
+	"docker":          true,
+	"fax":             true,
+	"floppy":          true,
+	"games":           true,
+	"input":           true,
+	"irc":             true,
+	"kmem":            true,
+	"kvm":             true,
+	"list":            true,
+	"lp":              true,
+	"mail":            true,
+	"man":             true,
+	"messagebus":      true,
+	"netdev":          true,
+	"news":            true,
+	"nogroup":         true,
+	"operator":        true,
+	"plugdev":         true,
+	"proxy":           true,
+	"render":          true,
+	"root":            true,
+	"sasl":            true,
+	"sgx":             true,
+	"shadow":          true,
+	"src":             true,
+	"staff":           true,
+	"sudo":            true,
+	"sys":             true,
+	"systemd-journal": true,
+	"systemd-network": true,
+	"tape":            true,
+	"tty":             true,
+	"users":           true,
+	"utmp":            true,
+	"uucp":            true,
+	"uuidd":           true,
+	"video":           true,
+	"voice":           true,
+	"www-data":        true,
+}
+
+// isLinuxBuiltinUser reports whether name is a Linux system account that
+// should never show up as a user-managed 'user' scan item: every
+// '_'-prefixed service account (e.g. '_apt') plus the named system
+// accounts in linuxBuiltinUsers.
+func isLinuxBuiltinUser(name string) bool {
+	if strings.HasPrefix(name, "_") {
+		return true
+	}
+	return linuxBuiltinUsers[name]
+}
+
+// isLinuxBuiltinGroup reports whether name is a Linux system/service
+// group that should never show up as a user-managed 'group' scan item:
+// every '_'-prefixed service group (e.g. '_ssh') plus the named system
+// groups in linuxBuiltinGroups.
+func isLinuxBuiltinGroup(name string) bool {
+	if strings.HasPrefix(name, "_") {
+		return true
+	}
+	return linuxBuiltinGroups[name]
 }
 
 func isWingetManagedSource(source string) bool {

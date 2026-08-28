@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/TacoContent/ironstate/internal/conditions"
+	ironexec "github.com/TacoContent/ironstate/internal/exec"
 	"github.com/TacoContent/ironstate/internal/expr"
 	"github.com/TacoContent/ironstate/internal/model"
 	"github.com/TacoContent/ironstate/internal/secrets"
@@ -57,6 +58,39 @@ type Context struct {
 	Flat    map[string]any
 	Filters expr.Filters
 	Apply   bool
+	// Become is this leaf's resolved 'become' directive (see
+	// resolveBecome). Most CLI-backed handlers never need to read this
+	// directly - internal/handlers.runExternalCommand already honors it
+	// automatically via ironexec's ambient SetBecome/ClearBecome (set by
+	// invokePackageItem around every Install/Uninstall call) - it's
+	// exposed here for a handler that wants to branch on whether
+	// elevation was requested instead.
+	Become ironexec.Become
+}
+
+// resolveBecome normalizes the raw 'become' task property (tasks.Leaf.
+// Become - a bool, a string, or nil/absent) into an ironexec.Become:
+// 'become: true' elevates to the platform default (root/Administrator),
+// 'become: false' or an empty/"false" string means no elevation, and any
+// other non-empty string (e.g. 'become: root', 'become: deploy') both
+// requests elevation and names the target user.
+func resolveBecome(v any) ironexec.Become {
+	switch val := v.(type) {
+	case bool:
+		return ironexec.Become{Enabled: val}
+	case string:
+		trimmed := strings.TrimSpace(val)
+		switch {
+		case trimmed == "" || strings.EqualFold(trimmed, "false"):
+			return ironexec.Become{}
+		case strings.EqualFold(trimmed, "true"):
+			return ironexec.Become{Enabled: true}
+		default:
+			return ironexec.Become{Enabled: true, User: trimmed}
+		}
+	default:
+		return ironexec.Become{}
+	}
 }
 
 // Handler is the uniform Test/Describe/Install/Uninstall shape every
@@ -166,9 +200,8 @@ var DefaultNoCommandCheckModules = map[string]bool{
 }
 
 // DefaultModuleCommandNames remaps a module's task-tree name to its actual
-// CLI binary name where they differ — ports
-// '$script:ModuleCommandNames' (today: exactly one entry).
-var DefaultModuleCommandNames = map[string]string{"chocolatey": "choco", "advfirewall": "netsh"}
+// CLI binary name where they differ — ports '$script:ModuleCommandNames'.
+var DefaultModuleCommandNames = map[string]string{"chocolatey": "choco", "homebrew": "brew", "apt": "apt-get", "advfirewall": "netsh"}
 
 // Options configures RunLeaves/Run's dispatch behavior.
 type Options struct {
@@ -386,7 +419,7 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 		// fact undefined for every later leaf's preview.
 		effectiveApply := opts.Apply || hasEmbeddedShell || module == "assert" || isFactProducer(handler)
 
-		result, err := invokePackageItem(module, leaf.Name, leaf.Item, handler, flatContext, opts.Filters, effectiveApply, opts.Verbose, leaf.SecretID)
+		result, err := invokePackageItem(module, leaf.Name, leaf.Item, handler, flatContext, opts.Filters, effectiveApply, opts.Verbose, leaf.SecretID, resolveBecome(leaf.Become))
 		if err != nil {
 			return results, false, err
 		}
@@ -560,7 +593,7 @@ func registerLeafResult(state *State, leaf tasks.Leaf, changed, failed bool, exe
 	}
 }
 
-func invokePackageItem(module, name string, item map[string]any, handler Handler, flatContext map[string]any, filters expr.Filters, apply, verbose, secretID bool) (Result, error) {
+func invokePackageItem(module, name string, item map[string]any, handler Handler, flatContext map[string]any, filters expr.Filters, apply, verbose, secretID bool, become ironexec.Become) (Result, error) {
 	label := name
 	if label == "" {
 		label = itemLabel(item)
@@ -574,7 +607,7 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 		state = "present"
 	}
 
-	ctx := Context{Flat: flatContext, Filters: filters, Apply: apply}
+	ctx := Context{Flat: flatContext, Filters: filters, Apply: apply, Become: become}
 
 	installed, err := handler.Test(item, name, ctx)
 	if err != nil {
@@ -607,6 +640,13 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 			Info("%s %s [%s] %s", emoji, ui.BrightCyan(fmt.Sprintf("› would %s", verb)), module, description)
 		} else {
 			Info("%s %s [%s] %s", emoji, ui.Bold(fmt.Sprintf("→ %sing", verb)), module, description)
+			// Ambient, not threaded through Install/Uninstall's signature -
+			// see ironexec.SetBecome. Cleared unconditionally once this
+			// call returns, whether or not elevation was actually
+			// requested, so a later leaf with no 'become' never inherits
+			// this one's.
+			ironexec.SetBecome(become)
+			defer ironexec.ClearBecome()
 			var execErr error
 			if secretID {
 				oldInfo, oldWarn, oldDanger := Info, Warn, Danger
@@ -652,16 +692,26 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 	}, nil
 }
 
+// resolvePackageAction's 'state' recognizes ansible's own present/absent
+// synonyms ('installed'/'removed') in addition to this port's own
+// 'present'/'absent' - previously any handler item using the ansible
+// spelling would hard-fail here with "unknown state", not just warn, so
+// this is purely additive. 'build-dep'/'fixed' (apt-specific: install
+// build dependencies for a source package / fix a broken dependency
+// state) have no natural "already satisfied" check, so - like 'latest' -
+// they always resolve to ActionInstall regardless of what Test reported;
+// a handler using either state is expected to run its own idempotency
+// logic (or accept running every dispatch) inside Install itself.
 func resolvePackageAction(state string, installed bool) (Action, error) {
 	switch state {
-	case "present":
+	case "present", "installed":
 		if installed {
 			return ActionSkip, nil
 		}
 		return ActionInstall, nil
-	case "latest":
+	case "latest", "build-dep", "fixed":
 		return ActionInstall, nil
-	case "absent":
+	case "absent", "removed":
 		if installed {
 			return ActionUninstall, nil
 		}

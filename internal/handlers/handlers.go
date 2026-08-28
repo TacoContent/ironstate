@@ -3,8 +3,8 @@ package handlers
 // Package handlers implements the Handler interface for every module
 // implemented so far (docs/plans/go-rewrite.md §10): log, path, fact,
 // assert, file, copy, symlinks, blockinfile, ssh_host_block, zip (Phase 3);
-// winget, chocolatey, pipx, npm, cargo, go, gem, eget, shell, registry,
-// scheduled_task, template (Phase 4).
+// winget, chocolatey, homebrew, apt, pipx, npm, cargo, go, gem, eget,
+// shell, registry, scheduled_task, template (Phase 4).
 //
 // Deviation from the master plan's §3 layout (one Go package per module
 // under internal/handlers/<module>/): these Phase 3 handlers share a lot
@@ -23,7 +23,7 @@ import "github.com/TacoContent/ironstate/internal/engine"
 // registered Handler (Phase 4 fills in the rest). Order matches
 // internal/tasks/realfixture_test.go's realModuleNames.
 var AllModuleNames = []string{
-	"winget", "chocolatey", "gem", "pipx", "npm", "cargo", "go", "eget",
+	"winget", "chocolatey", "homebrew", "brew", "apt", "gem", "pipx", "npm", "cargo", "go", "eget",
 	"git", "cron", "cron_unix", "cron_file", "iptables", "ufw", "advfirewall", "firewall", "zip", "symlinks", "file", "copy", "template", "shell", "blockinfile", "lineinfile",
 	"ssh_host_block", "log", "fail", "path", "fact", "mount_facts", "registry", "scheduled_task", "group", "user",
 	"assert", "async", "wait_for",
@@ -51,6 +51,9 @@ func All() map[string]engine.Handler {
 		"zip":            zipHandler{},
 		"winget":         wingetHandler{},
 		"chocolatey":     chocolateyHandler{},
+		"homebrew":       homebrewHandler{},
+		"brew":           homebrewHandler{}, // alias for 'homebrew' - both dispatch to the same handler
+		"apt":            aptHandler{},
 		"pipx":           pipxHandler{},
 		"npm":            npmHandler{},
 		"cargo":          cargoHandler{},

@@ -17,7 +17,7 @@ import (
 // *real* repo's site.yml against, as an integration smoke test that this
 // port doesn't choke on real content ahead of internal/engine existing.
 var realModuleNames = []string{
-	"winget", "chocolatey", "gem", "pipx", "npm", "cargo", "go", "eget",
+	"winget", "chocolatey", "homebrew", "brew", "apt", "gem", "pipx", "npm", "cargo", "go", "eget",
 	"git", "cron", "cron_unix", "cron_file", "iptables", "ufw", "advfirewall", "firewall", "zip", "symlinks", "file", "copy", "template", "shell", "blockinfile", "lineinfile",
 	"ssh_host_block", "log", "fail", "path", "fact", "mount_facts", "registry", "scheduled_task",
 	"assert",

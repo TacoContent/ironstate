@@ -282,6 +282,25 @@ func TestFailedWhenAndContinueOnErrorCarryThrough(t *testing.T) {
 	}
 }
 
+func TestBecomeCarriesThroughAsRawValue(t *testing.T) {
+	leaves := expandOK(t, `
+- name: elevated
+  become: root
+  log: { message: hi }
+- name: not elevated
+  log: { message: hi }
+`, Options{})
+	if len(leaves) != 2 {
+		t.Fatalf("leaves = %#v", leaves)
+	}
+	if leaves[0].Become != "root" {
+		t.Fatalf("leaves[0].Become = %#v, want %q", leaves[0].Become, "root")
+	}
+	if leaves[1].Become != nil {
+		t.Fatalf("leaves[1].Become = %#v, want nil", leaves[1].Become)
+	}
+}
+
 // Not part of Tasks.psm1 itself, but exercises the include path through
 // internal/packages end-to-end to catch integration drift between the two
 // packages early.

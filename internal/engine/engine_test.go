@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	ironexec "github.com/TacoContent/ironstate/internal/exec"
 	"github.com/TacoContent/ironstate/internal/expr"
 	"github.com/TacoContent/ironstate/internal/filters"
 	"github.com/TacoContent/ironstate/internal/secrets"
@@ -22,6 +23,14 @@ type fakeHandler struct {
 	testErr     error
 	installExec ExecResult
 	installErr  error
+
+	// seenBecome/ambientBecomeDuringInstall let a test assert both halves
+	// of become's plumbing: ctx.Become is the value a handler can read
+	// directly, ambientBecomeDuringInstall is what
+	// ironexec.CurrentBecome() reports at the moment Install runs (what
+	// internal/handlers.runExternalCommand actually consults).
+	seenBecome                 ironexec.Become
+	ambientBecomeDuringInstall ironexec.Become
 }
 
 func (h *fakeHandler) Test(item map[string]any, name string, ctx Context) (bool, error) {
@@ -32,6 +41,8 @@ func (h *fakeHandler) Describe(item map[string]any, action Action, ctx Context) 
 }
 func (h *fakeHandler) Install(item map[string]any, name string, ctx Context) (ExecResult, error) {
 	h.installCall++
+	h.seenBecome = ctx.Become
+	h.ambientBecomeDuringInstall = ironexec.CurrentBecome()
 	return h.installExec, h.installErr
 }
 func (h *fakeHandler) Uninstall(item map[string]any, name string, ctx Context) (ExecResult, error) {
@@ -72,6 +83,7 @@ func withFailedWhen(fw ...any) func(*tasks.Leaf) {
 	return func(l *tasks.Leaf) { l.FailedWhen = fw }
 }
 func withContinueOnError() func(*tasks.Leaf) { return func(l *tasks.Leaf) { l.ContinueOnError = true } }
+func withBecome(v any) func(*tasks.Leaf)     { return func(l *tasks.Leaf) { l.Become = v } }
 func withLooped() func(*tasks.Leaf)          { return func(l *tasks.Leaf) { l.Looped = true } }
 
 func baseOpts(handlers map[string]Handler) Options {
@@ -413,6 +425,84 @@ func TestRunLeavesContinueOnErrorKeepsGoing(t *testing.T) {
 	}
 	if len(results) != 2 {
 		t.Fatalf("expected both leaves to run, got %#v", results)
+	}
+}
+
+func TestResolveBecome(t *testing.T) {
+	tests := []struct {
+		name string
+		in   any
+		want ironexec.Become
+	}{
+		{"nil", nil, ironexec.Become{}},
+		{"bool true", true, ironexec.Become{Enabled: true}},
+		{"bool false", false, ironexec.Become{}},
+		{"string true", "true", ironexec.Become{Enabled: true}},
+		{"string false", "false", ironexec.Become{}},
+		{"empty string", "", ironexec.Become{}},
+		{"string root", "root", ironexec.Become{Enabled: true, User: "root"}},
+		{"string user", "deploy", ironexec.Become{Enabled: true, User: "deploy"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolveBecome(tt.in); got != tt.want {
+				t.Fatalf("resolveBecome(%#v) = %+v, want %+v", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunLeavesBecomeTrueReachesHandlerAndAmbientState(t *testing.T) {
+	h := &fakeHandler{installed: false, installExec: ExecResult{RC: 0}}
+	opts := baseOpts(map[string]Handler{"widget": h})
+	opts.Apply = true
+
+	_, _, err := RunLeaves([]tasks.Leaf{
+		leaf("widget", map[string]any{"state": "present"}, withBecome(true)),
+	}, opts, NewState())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !h.seenBecome.Enabled {
+		t.Fatalf("ctx.Become = %+v, want Enabled", h.seenBecome)
+	}
+	if !h.ambientBecomeDuringInstall.Enabled {
+		t.Fatalf("ironexec.CurrentBecome() during Install = %+v, want Enabled", h.ambientBecomeDuringInstall)
+	}
+	if got := ironexec.CurrentBecome(); got.Enabled {
+		t.Fatalf("ironexec.CurrentBecome() after RunLeaves returns = %+v, want cleared", got)
+	}
+}
+
+func TestRunLeavesBecomeUserStringReachesHandler(t *testing.T) {
+	h := &fakeHandler{installed: false, installExec: ExecResult{RC: 0}}
+	opts := baseOpts(map[string]Handler{"widget": h})
+	opts.Apply = true
+
+	_, _, err := RunLeaves([]tasks.Leaf{
+		leaf("widget", map[string]any{"state": "present"}, withBecome("deploy")),
+	}, opts, NewState())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (ironexec.Become{Enabled: true, User: "deploy"}); h.seenBecome != want {
+		t.Fatalf("ctx.Become = %+v, want %+v", h.seenBecome, want)
+	}
+}
+
+func TestRunLeavesNoBecomeLeavesAmbientClear(t *testing.T) {
+	h := &fakeHandler{installed: false, installExec: ExecResult{RC: 0}}
+	opts := baseOpts(map[string]Handler{"widget": h})
+	opts.Apply = true
+
+	_, _, err := RunLeaves([]tasks.Leaf{
+		leaf("widget", map[string]any{"state": "present"}),
+	}, opts, NewState())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.ambientBecomeDuringInstall.Enabled {
+		t.Fatalf("ironexec.CurrentBecome() during Install = %+v, want cleared", h.ambientBecomeDuringInstall)
 	}
 }
 

@@ -8,8 +8,7 @@ import (
 
 // chocolateyHandler ports Handlers/Chocolatey.psm1. The dispatch loop
 // remaps this module's PATH check to the 'choco' binary (see
-// engine.DefaultModuleCommandNames) - the one instance of that remapping
-// in the whole codebase.
+// engine.DefaultModuleCommandNames).
 type chocolateyHandler struct{}
 
 func (chocolateyHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {

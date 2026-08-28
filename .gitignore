@@ -23,6 +23,8 @@ playbooks/
 **/variables/**
 !**/variables/.gitkeep
 
+.*.taskfile.yml
+
 
 # Created by https://www.toptal.com/developers/gitignore/api/windows,powershell,visualstudiocode,go
 # Edit at https://www.toptal.com/developers/gitignore?templates=windows,powershell,visualstudiocode,go

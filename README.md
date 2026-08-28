@@ -294,7 +294,7 @@ internal/
 │   └── embed/               ← the generic PowerShell shim script filters run through
 ├── engine/                 ← dispatch loop (fact-first two-phase run, registry/facts/
 │                            command-availability threading, table/JSON/summary output)
-├── handlers/               ← one file per module: winget, chocolatey, pipx, npm, cargo, go,
+├── handlers/               ← one file per module: winget, chocolatey, homebrew, apt, pipx, npm, cargo, go,
 │                            gem, eget, git, iptables, ufw, advfirewall, firewall, zip, symlinks, file,
 │                            copy, shell, blockinfile, lineinfile,
 │                            ssh_host_block, log, fail, path, fact, mount_facts, assert, async, wait_for,
@@ -351,6 +351,8 @@ A single at-a-glance health check: confirms every package-manager CLI a `site.ym
 $ ironstate doctor --filters-dir path/to/your/playbook/filters
 [ok]      winget   C:\Users\you\AppData\Local\Microsoft\WindowsApps\winget.exe
 [missing] choco    not found on PATH
+[missing] brew     not found on PATH
+[missing] apt-get  not found on PATH
 [ok]      pipx     C:\Users\you\.local\bin\pipx.exe
 [missing] npm      not found on PATH
 [ok]      cargo    C:\Users\you\.cargo\bin\cargo.exe
@@ -363,7 +365,7 @@ script filters discovered under path/to/your/playbook/filters:
   my_custom_filter
 ```
 
-A `[missing]` line isn't necessarily a problem - it only matters for the specific package-manager modules (`winget`/`chocolatey`/`pipx`/`npm`/`cargo`/`go`/`gem`/`eget`) or `shell.host: pwsh` tasks your own `site.yml` actually uses; `doctor` checks a fixed list of every module this build knows about; `bin` availability is otherwise re-checked per-module at dispatch time regardless (see [Architecture](#architecture)).
+A `[missing]` line isn't necessarily a problem - it only matters for the specific package-manager modules (`winget`/`chocolatey`/`homebrew`/`apt`/`pipx`/`npm`/`cargo`/`go`/`gem`/`eget`) or `shell.host: pwsh` tasks your own `site.yml` actually uses; `doctor` checks a fixed list of every module this build knows about; `bin` availability is otherwise re-checked per-module at dispatch time regardless (see [Architecture](#architecture)).
 
 ## Task/action model
 
@@ -615,7 +617,7 @@ The registered value is shaped like an Ansible registered variable:
 | --- | --- |
 | `changed` | Whether this leaf resolved to `Install`/`Uninstall` (not `Skip`) |
 | `failed` | Whether this leaf counted as failed - see [Failing a task](#failing-a-task-failed_when-continue_on_error) |
-| `rc` | Exit code. Real for every CLI-backed module (`winget`/`chocolatey`/`pipx`/`npm`/`cargo`/`go`/`eget`) and `shell`; every pure-PowerShell module defaults to `0` unless it throws (then `1`) |
+| `rc` | Exit code. Real for every CLI-backed module (`winget`/`chocolatey`/`homebrew`/`apt`/`pipx`/`npm`/`cargo`/`go`/`eget`) and `shell`; every pure-PowerShell module defaults to `0` unless it throws (then `1`) |
 | `stdout` / `stdout_lines` | Captured stdout (joined / split on newlines). Real for the same modules as `rc`; `''`/`[]` otherwise |
 | `stderr` / `stderr_lines` | Captured stderr, same as above (a thrown exception's message lands here) |
 
@@ -708,6 +710,8 @@ tasks:
 | --- | --- |
 | `winget` | Windows Package Manager (`winget`) |
 | `chocolatey` | Chocolatey (`choco`) |
+| `homebrew` (alias: `brew`) | Homebrew formulae/casks on macOS and Linux (`brew`) |
+| `apt` | Debian/Ubuntu packages (`apt-get`) - the one package-manager module here that can install/remove several packages in a single leaf (`package:` takes a list); modeled on `ansible.builtin.apt`'s core surface (`state`, `update_cache`/`cache_valid_time`, `upgrade`, `purge`, `autoremove`, `autoclean`, `install_recommends`, `only_upgrade`, `allow_unauthenticated`, `force`). Needs `become: true` (or a specific user) to actually run, since apt-get requires root - see [`become`](#become) |
 | `pipx` | Python isolated tools (`pipx`) |
 | `npm` | Node global packages (`npm -g`) |
 | `cargo` | Rust crates (`cargo install`) |
@@ -749,8 +753,29 @@ Every leaf shares these envelope fields, which sit *beside* its module key, not 
 | `items` / `with` | list / any value | Materializes this task once per entry (`items`) or exactly once (`with`), templating `${{ item.* }}` first. See [Looping](#looping-withitems) |
 | `failed_when` | string or list of strings | Overrides whether this leaf counts as failed. See [Failing a task](#failing-a-task-failed_when-continue_on_error) |
 | `continue_on_error` | boolean, default `false` | Keep running past a failed leaf instead of stopping the run. See [Failing a task](#failing-a-task-failed_when-continue_on_error) |
+| `become` | boolean or string, default `false` | Run this leaf's command elevated. See [`become`](#become) |
 
 Each module's own fields (documented inline in `site.yml`) still include `state` (`present`/`absent`/`latest`, default `present`).
+
+### `become`
+
+`become: true` runs this leaf's command through `sudo` (or Windows 11's built-in `sudo.exe`, if enabled under Settings > For developers); `become: '<user>'` (e.g. `become: root`, `become: deploy`) elevates to that specific user via `sudo -u <user>` (Windows' `sudo.exe` has no equivalent to an arbitrary `-u <user>` switch - it only elevates to Administrator, so a non-`root` user string there just gets a warning and elevates anyway). `become: false`, or omitting the field, runs unelevated - the default, since ironstate itself is not meant to run elevated and not every task needs to be. Unlike `tags`/`when`, `become` does **not** cascade from a grouping task (`actions:`) down to its children - set it on each leaf action that needs it, matching `continue_on_error`'s own per-leaf (not inherited) scope.
+
+Both Unix `sudo` and Windows' `sudo.exe` may prompt interactively (a password, or a UAC dialog) - that's expected, `become` is meant for interactive use, not unattended automation. If `sudo` isn't on `PATH` at all, the leaf fails outright (no silent fallback to running unelevated) and flows through the normal `failed_when`/`continue_on_error` chain like any other failure.
+
+`become` takes effect for any module whose Install/Uninstall shells out to an external command (every package manager here, plus `git`, `shell`, `iptables`, `ufw`, `cron_unix`, `cron_file`, ...) - which covers the common case of "this needs root" (installing/removing system packages, managing services, editing firewall rules). A handful of modules that mutate the system directly in Go (`file`, `copy`, `registry`, `user`, `group`, ...) don't currently honor `become` - if one of those needs elevated permissions, run ironstate itself elevated instead.
+
+```yaml
+- name: install packages via apt (requires root)
+  become: true
+  apt:
+    package: [git, curl, ripgrep]
+
+- name: run a command as a specific user
+  become: deploy
+  shell:
+    command: whoami
+```
 
 ### `git`
 

@@ -3,6 +3,7 @@ package handlers
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/TacoContent/ironstate/internal/engine"
@@ -147,8 +148,23 @@ var runner ironexec.Runner = ironexec.Default
 
 // runExternalCommand ports Common.psm1's Invoke-ExternalCommand: runs exe,
 // echoing captured stdout (Info)/stderr (Warn) after the command finishes,
-// then returns the normalized engine.ExecResult.
+// then returns the normalized engine.ExecResult. Every package-manager
+// (and other CLI-backed) handler's mutating command goes through here, so
+// this is also the one place a leaf's 'become' directive actually takes
+// effect - see ironexec.CurrentBecome/WrapForBecome, set ambiently by
+// internal/engine around each Install/Uninstall call. A leaf with no
+// 'become' sees an empty ironexec.Become, which WrapForBecome passes
+// straight through unchanged.
 func runExternalCommand(exe string, args []string) engine.ExecResult {
+	become := ironexec.CurrentBecome()
+	if become.Enabled && runtime.GOOS == "windows" && become.User != "" && !strings.EqualFold(become.User, "root") {
+		engine.Warn("become: Windows elevation only supports the default Administrator identity via sudo.exe/UAC; ignoring become user %q", become.User)
+	}
+	exe, args, err := ironexec.WrapForBecome(become, exe, args)
+	if err != nil {
+		engine.Warn("%s", err)
+		return engine.ExecResult{RC: 1, Stderr: err.Error(), StderrLines: []string{err.Error()}}
+	}
 	result, err := runner.Run(exe, args)
 	if err != nil {
 		engine.Warn("%s: %v", exe, err)
