@@ -234,7 +234,7 @@ var DefaultNoCommandCheckModules = map[string]bool{
 
 // DefaultModuleCommandNames remaps a module's task-tree name to its actual
 // CLI binary name where they differ — ports '$script:ModuleCommandNames'.
-var DefaultModuleCommandNames = map[string]string{"chocolatey": "choco", "homebrew": "brew", "apt": "apt-get", "advfirewall": "netsh"}
+var DefaultModuleCommandNames = map[string]string{"chocolatey": "choco", "homebrew": "brew", "apt": "apt-get", "advfirewall": "netsh", "macports": "port"}
 
 // Options configures RunLeaves/Run's dispatch behavior.
 type Options struct {

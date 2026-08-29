@@ -294,7 +294,8 @@ internal/
 │   └── embed/               ← the generic PowerShell shim script filters run through
 ├── engine/                 ← dispatch loop (fact-first two-phase run, registry/facts/
 │                            command-availability threading, table/JSON/summary output)
-├── handlers/               ← one file per module: winget, chocolatey, homebrew, apt, pipx, npm, cargo, go,
+├── handlers/               ← one file per module: winget, chocolatey, homebrew, apt, pacman, yum, apk,
+│                            snap, flatpak, scoop, macports, pipx, npm, cargo, go,
 │                            gem, eget, git, iptables, ufw, advfirewall, firewall, zip, symlinks, file,
 │                            copy, shell, blockinfile, lineinfile,
 │                            ssh_host_block, log, fail, path, fact, mount_facts, assert, async, wait_for,
@@ -365,7 +366,7 @@ script filters discovered under path/to/your/playbook/filters:
   my_custom_filter
 ```
 
-A `[missing]` line isn't necessarily a problem - it only matters for the specific package-manager modules (`winget`/`chocolatey`/`homebrew`/`apt`/`pipx`/`npm`/`cargo`/`go`/`gem`/`eget`) or `shell.host: pwsh` tasks your own `main.yml` actually uses; `doctor` checks a fixed list of every module this build knows about; `bin` availability is otherwise re-checked per-module at dispatch time regardless (see [Architecture](#architecture)).
+A `[missing]` line isn't necessarily a problem - it only matters for the specific package-manager modules (`winget`/`chocolatey`/`homebrew`/`apt`/`pacman`/`yum`/`apk`/`snap`/`flatpak`/`scoop`/`macports`/`pipx`/`npm`/`cargo`/`go`/`gem`/`eget`) or `shell.host: pwsh` tasks your own `main.yml` actually uses; `doctor` checks a fixed list of every module this build knows about; `bin` availability is otherwise re-checked per-module at dispatch time regardless (see [Architecture](#architecture)).
 
 ## Task/action model
 
@@ -617,7 +618,7 @@ The registered value is shaped like an Ansible registered variable:
 | --- | --- |
 | `changed` | Whether this leaf resolved to `Install`/`Uninstall` (not `Skip`) |
 | `failed` | Whether this leaf counted as failed - see [Failing a task](#failing-a-task-failed_when-continue_on_error) |
-| `rc` | Exit code. Real for every CLI-backed module (`winget`/`chocolatey`/`homebrew`/`apt`/`pipx`/`npm`/`cargo`/`go`/`eget`) and `shell`; every pure-PowerShell module defaults to `0` unless it throws (then `1`) |
+| `rc` | Exit code. Real for every CLI-backed module (`winget`/`chocolatey`/`homebrew`/`apt`/`pacman`/`yum`/`apk`/`snap`/`flatpak`/`scoop`/`macports`/`pipx`/`npm`/`cargo`/`go`/`eget`) and `shell`; every pure-PowerShell module defaults to `0` unless it throws (then `1`) |
 | `stdout` / `stdout_lines` | Captured stdout (joined / split on newlines). Real for the same modules as `rc`; `''`/`[]` otherwise |
 | `stderr` / `stderr_lines` | Captured stderr, same as above (a thrown exception's message lands here) |
 
@@ -712,6 +713,13 @@ tasks:
 | `chocolatey` | Chocolatey (`choco`) |
 | `homebrew` (alias: `brew`) | Homebrew formulae/casks on macOS and Linux (`brew`) |
 | `apt` | Debian/Ubuntu packages (`apt-get`) - the one package-manager module here that can install/remove several packages in a single leaf (`package:` takes a list); modeled on `ansible.builtin.apt`'s core surface (`state`, `update_cache`/`cache_valid_time`, `upgrade`, `purge`, `autoremove`, `autoclean`, `install_recommends`, `only_upgrade`, `allow_unauthenticated`, `force`). Needs `become: true` (or a specific user) to actually run, since apt-get requires root - see [`become`](#become) |
+| `pacman` | Arch Linux packages (`pacman`) - like `apt`, can install/remove several packages in a single leaf (`package:` takes a list); modeled on `ansible.builtin.pacman`'s core surface (`state`, `update_cache`/`cache_valid_time`, `upgrade`, `force`, `recurse`, `nosave`). Needs `become: true` (or a specific user) to actually run, since pacman requires root - see [`become`](#become) |
+| `yum` | RHEL/CentOS/Fedora packages (`yum`) - like `apt`, can install/remove several packages in a single leaf (`package:` takes a list); modeled on `ansible.builtin.yum`'s core surface (`state`, `update_cache`/`cache_valid_time`, `enablerepo`, `disablerepo`, `exclude`, `disable_gpg_check`). Needs `become: true` (or a specific user) to actually run, since yum requires root - see [`become`](#become) |
+| `apk` | Alpine Linux packages (`apk`) - like `apt`, can install/remove several packages in a single leaf (`package:` takes a list); modeled on `community.general.apk`'s core surface (`state`, `update_cache`/`cache_valid_time`, `upgrade`, `repository`, `no_cache`). Needs `become: true` (or a specific user) to actually run, since apk requires root - see [`become`](#become) |
+| `snap` | Snap packages (`snap`) - can install/remove several snaps in a single leaf (`package:` takes a list); modeled on `ansible.builtin.snap`'s core surface (`state`, `classic`, `channel`). `state: latest` refreshes an installed snap, falling back to install if it isn't present yet. Needs `become: true` (or a specific user) to actually run, since snap requires root - see [`become`](#become) |
+| `flatpak` | Flatpak applications (`flatpak`) - can install/remove several apps in a single leaf (`package:` takes a list); modeled on `community.general.flatpak`'s core surface (`state`, `remote`, `method`). `state: latest` updates an installed app, falling back to install if it isn't present yet. System-scope installs need `become: true`; `method: user` installs don't - see [`become`](#become) |
+| `scoop` | Scoop apps on Windows (`scoop`) - can install/remove several apps in a single leaf (`package:` takes a list); modeled on `community.windows.win_scoop`'s core surface (`state`, `global`, `architecture`). `state: latest` updates an installed app, falling back to install if it isn't present yet. Per-user installs (the default) need no elevation; `global: true` does |
+| `macports` | MacPorts packages on macOS (`port`) - can install/remove several ports in a single leaf (`package:` takes a list); modeled after `homebrew`'s surface (`state`, `update_cache`). `state: latest` upgrades an installed port, falling back to install if it isn't present yet. Needs `become: true` (or a specific user) to actually run, since port requires root - see [`become`](#become) |
 | `pipx` | Python isolated tools (`pipx`) |
 | `npm` | Node global packages (`npm -g`) |
 | `cargo` | Rust crates (`cargo install`) |

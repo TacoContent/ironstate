@@ -1,6 +1,9 @@
 {
   "yaml.schemas": {
-    
+    "https://raw.githubusercontent.com/TacoContent/ironstate/develop/ironstate.schema.json": [
+      "playbooks/**/*.yml",
+      "playbooks/**/*.yaml"
+    ]
   },
   "yaml.disableSchemaDetection": [
     "**/.github/workflows/*.yml",
@@ -10,10 +13,8 @@
     "**/.forgejo/workflows/*.yml",
     "**/.forgejo/workflows/*.yaml",
     "file:///d%3A/Development/projects/ironstate/TaskFile.yml",
-    "file:///d%3A/Development/projects/ironstate/playbooks/sample/roles/async/main.yml",
-    "file:///d%3A/Development/projects/ironstate/playbooks/sample/main.yaml",
-    "file:///d%3A/Development/projects/ironstate/playbooks/sample2/roles/packages/main.yml",
-    "file:///d%3A/Development/projects/ironstate/playbooks/sample/roles/mount-fact/main.yml"
+    "playbooks/**/*.yml",
+    "playbooks/**/*.yaml"
   ],
   "cSpell.words": [
     "blockinfile",

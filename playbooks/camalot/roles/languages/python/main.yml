@@ -4,7 +4,7 @@ tasks:
   - name: Install Python
     tags:
       - languages
-      - python
+      - languages.python
     winget:
       package: "${{ languages.python | toggle(defaults.languages.python) }}"
       state: "${{ languages.python | ternary('present', 'absent') }}"
