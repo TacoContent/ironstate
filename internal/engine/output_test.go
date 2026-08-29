@@ -65,6 +65,55 @@ func TestPrintTableAlignsWithoutColor(t *testing.T) {
 	}
 }
 
+func withColorEnabled(t *testing.T) {
+	t.Helper()
+	prev := ui.Enabled
+	ui.Enabled = true
+	t.Cleanup(func() { ui.Enabled = prev })
+}
+
+// TestPrintTableUsesCRLFWhenEnabled guards against a real bug: on at
+// least one Windows terminal, plain "\n" only moves the cursor down a
+// row without returning to column 0, so every row after the first drifts
+// further right (a "staircase") - single-line engine.Info/Warn prints
+// never showed this because the progress spinner's own '\r' erase/redraw
+// happens to bracket each of them, but PrintTable's back-to-back rows
+// have no such bracketing. See ui.Newline's doc comment.
+func TestPrintTableUsesCRLFWhenEnabled(t *testing.T) {
+	withColorEnabled(t)
+	var buf bytes.Buffer
+	results := []Result{
+		{Module: "winget", Package: "Git.Git", State: "present", Action: ActionInstall, Apply: true},
+		{Module: "fact", Package: "computer_name", State: "present", Action: ActionSkip},
+	}
+	if err := PrintTable(&buf, results); err != nil {
+		t.Fatalf("PrintTable error: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "\r\n") {
+		t.Fatalf("PrintTable with Enabled=true should use \\r\\n line endings, got %q", out)
+	}
+	if strings.Contains(strings.ReplaceAll(out, "\r\n", ""), "\n") {
+		t.Fatalf("PrintTable with Enabled=true should never emit a bare \\n, got %q", out)
+	}
+}
+
+func TestPrintSummaryUsesCRLFWhenEnabled(t *testing.T) {
+	withColorEnabled(t)
+	var buf bytes.Buffer
+	stats := Stats{Total: 3, Installed: 1, Uninstalled: 1, Skipped: 1, Failed: 0}
+	if err := PrintSummary(&buf, stats, 250*time.Millisecond); err != nil {
+		t.Fatalf("PrintSummary error: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "\r\n") {
+		t.Fatalf("PrintSummary with Enabled=true should use \\r\\n line endings, got %q", out)
+	}
+	if strings.Contains(strings.ReplaceAll(out, "\r\n", ""), "\n") {
+		t.Fatalf("PrintSummary with Enabled=true should never emit a bare \\n, got %q", out)
+	}
+}
+
 func TestPrintJSONRedactsRegisteredSecrets(t *testing.T) {
 	secrets.Register("super-secret-value")
 	var buf bytes.Buffer

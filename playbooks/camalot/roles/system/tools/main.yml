@@ -20,3 +20,23 @@ tasks:
       - system
       - system.tools
       - system.tools.unigetui
+
+  - name: Blender
+    when: system.tools | enabled('blender')
+    winget:
+      package: BlenderFoundation.Blender
+      state: "${{ system.tools.blender | ternary('present', 'absent') }}"
+    tags:
+      - system
+      - system.tools
+      - system.tools.blender
+
+  - name: Paint.NET
+    when: system.tools | enabled('paintnet')
+    winget:
+      package: dotPDN.PaintDotNet
+      state: "${{ system.tools.paintnet | ternary('present', 'absent') }}"
+    tags:
+      - system
+      - system.tools
+      - system.tools.paintnet

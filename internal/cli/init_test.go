@@ -28,12 +28,12 @@ func TestRunInitCreatesScaffold(t *testing.T) {
 		}
 	}
 
-	siteYML, err := os.ReadFile(filepath.Join(playbook, "site.yml")) //nolint:gosec // test-only path under t.TempDir()
+	siteYML, err := os.ReadFile(filepath.Join(playbook, "main.yml")) //nolint:gosec // test-only path under t.TempDir()
 	if err != nil {
-		t.Fatalf("site.yml not created: %v", err)
+		t.Fatalf("main.yml not created: %v", err)
 	}
 	if string(siteYML) != minimalDocument {
-		t.Fatalf("site.yml content = %q, want %q", siteYML, minimalDocument)
+		t.Fatalf("main.yml content = %q, want %q", siteYML, minimalDocument)
 	}
 
 	hostsDir := filepath.Join(playbook, "hosts")
@@ -54,7 +54,7 @@ func TestRunInitSkipsExistingFiles(t *testing.T) {
 	if err := os.MkdirAll(playbook, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	sitePath := filepath.Join(playbook, "site.yml")
+	sitePath := filepath.Join(playbook, "main.yml")
 	custom := "---\nvars: { custom: true }\ntasks: []\n"
 	if err := os.WriteFile(sitePath, []byte(custom), 0o600); err != nil {
 		t.Fatal(err)
@@ -72,7 +72,7 @@ func TestRunInitSkipsExistingFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(data) != custom {
-		t.Fatalf("existing site.yml was overwritten: got %q", data)
+		t.Fatalf("existing main.yml was overwritten: got %q", data)
 	}
 }
 
@@ -106,7 +106,7 @@ func TestRunInitWithScanPopulatesPlaybook(t *testing.T) {
 	}
 
 	for _, rel := range []string{
-		"site.yml",
+		"main.yml",
 		"roles/system/users/main.yml",
 		"roles/system/groups/main.yml",
 		"roles/system/services/main.yml",

@@ -141,6 +141,35 @@ func ModuleEmoji(module string) string {
 	return "🏷️"
 }
 
+// Newline is the line terminator every human-facing multi-line panel
+// (PrintFacts here, engine.PrintTable/PrintSummary) should end each
+// printed line with, instead of plain "\n": explicit "\r\n" whenever
+// attached to a real terminal (Enabled). Observed live: on at least one
+// Windows terminal, a bare '\n' only moves the cursor down a row without
+// returning it to column 0 (real VT100 "index" semantics - a full
+// "newline" is CR+LF together) - a single engine.Info/Warn/Danger line
+// never shows this because the progress spinner's own '\r'-prefixed
+// erase/redraw happens to run immediately before and after it, but a
+// block of several Fprintln calls with no spinner activity in between
+// (the facts panel, the final results table + summary) drifted one
+// line's width further right with every line, producing a garbled
+// "staircase". Piped/redirected output (not Enabled) stays plain "\n" -
+// a stray \r there would just be noise for a script/file consumer, not a
+// rendering fix.
+func Newline() string {
+	if Enabled {
+		return "\r\n"
+	}
+	return "\n"
+}
+
+// WriteLine writes s terminated by Newline() - see Newline's doc comment
+// for why this isn't plain fmt.Fprintln.
+func WriteLine(w io.Writer, s string) error {
+	_, err := io.WriteString(w, s+Newline())
+	return err
+}
+
 // PrintFacts renders a small "modern CLI" panel of every gathered fact on
 // w, sorted by key for stable/diffable output — the "display facts info
 // after gathered" request. Callers should pass the complete, final set of
@@ -167,13 +196,13 @@ func PrintFacts(w io.Writer, allFacts map[string]any) error {
 	sort.Strings(keys)
 
 	rule := Dim("──────────────────────────────")
-	if _, err := fmt.Fprintln(w, rule); err != nil {
+	if err := WriteLine(w, rule); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(w, Bold("🧠 Facts")); err != nil {
+	if err := WriteLine(w, Bold("🧠 Facts")); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(w, rule); err != nil {
+	if err := WriteLine(w, rule); err != nil {
 		return err
 	}
 	for _, k := range keys {
@@ -181,7 +210,7 @@ func PrintFacts(w io.Writer, allFacts map[string]any) error {
 			return err
 		}
 	}
-	if _, err := fmt.Fprintln(w, rule); err != nil {
+	if err := WriteLine(w, rule); err != nil {
 		return err
 	}
 	return nil
@@ -195,22 +224,20 @@ func PrintFacts(w io.Writer, allFacts map[string]any) error {
 func printFactLine(w io.Writer, key string, value any, keyWidth int) error {
 	if isScalarFactValue(value) {
 		line := fmt.Sprintf("  %s  %s", Cyan(fmt.Sprintf("%-*s", keyWidth, key)), secrets.Redact(fmt.Sprintf("%v", value)))
-		_, err := fmt.Fprintln(w, line)
-		return err
+		return WriteLine(w, line)
 	}
 
-	if _, err := fmt.Fprintf(w, "  %s:\n", Cyan(key)); err != nil {
+	if err := WriteLine(w, fmt.Sprintf("  %s:", Cyan(key))); err != nil {
 		return err
 	}
 	rendered, err := yaml.Marshal(value)
 	if err != nil {
 		// Falls back to the plain scalar path rather than failing the
 		// whole panel over one bad value - '%v' always succeeds.
-		_, err := fmt.Fprintf(w, "    %s\n", secrets.Redact(fmt.Sprintf("%v", value)))
-		return err
+		return WriteLine(w, fmt.Sprintf("    %s", secrets.Redact(fmt.Sprintf("%v", value))))
 	}
 	for _, line := range strings.Split(strings.TrimRight(string(rendered), "\n"), "\n") {
-		if _, err := fmt.Fprintf(w, "    %s\n", secrets.Redact(line)); err != nil {
+		if err := WriteLine(w, fmt.Sprintf("    %s", secrets.Redact(line))); err != nil {
 			return err
 		}
 	}

@@ -56,12 +56,19 @@ func PrintTable(w io.Writer, results []Result) error {
 		statusWidth = max(statusWidth, len(status))
 	}
 
-	if _, err := fmt.Fprintf(w, "   %-*s  %-*s  %-*s  %-*s\n", widths[0], "MODULE", widths[1], "PACKAGE", widths[2], "STATE", statusWidth, "STATUS"); err != nil {
+	// Header's leading gap (4 columns) matches a row's own "emoji + 2
+	// spaces" leading segment: every ui.ModuleEmoji glyph renders 2
+	// columns wide in a real terminal (not 1, despite being a single
+	// rune), so "emoji(2) + 2 literal spaces" = 4, not 3 - previously
+	// mismatched, throwing the header out of alignment with every row.
+	header := fmt.Sprintf("    %-*s  %-*s  %-*s  %-*s", widths[0], "MODULE", widths[1], "PACKAGE", widths[2], "STATE", statusWidth, "STATUS")
+	if err := ui.WriteLine(w, header); err != nil {
 		return err
 	}
 	for _, rr := range rows {
 		paddedStatus := fmt.Sprintf("%-*s", statusWidth, rr.status)
-		if _, err := fmt.Fprintf(w, "%s  %-*s  %-*s  %-*s  %s\n", rr.emoji, widths[0], rr.module, widths[1], rr.pkg, widths[2], rr.state, rr.colorFn(paddedStatus)); err != nil {
+		line := fmt.Sprintf("%s  %-*s  %-*s  %-*s  %s", rr.emoji, widths[0], rr.module, widths[1], rr.pkg, widths[2], rr.state, rr.colorFn(paddedStatus))
+		if err := ui.WriteLine(w, line); err != nil {
 			return err
 		}
 	}
@@ -126,7 +133,7 @@ func PrintSummary(w io.Writer, stats Stats, elapsed time.Duration) error {
 		rule,
 	}
 	for _, line := range lines {
-		if _, err := fmt.Fprintln(w, line); err != nil {
+		if err := ui.WriteLine(w, line); err != nil {
 			return err
 		}
 	}

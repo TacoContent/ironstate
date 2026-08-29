@@ -5,8 +5,19 @@ tasks:
   - name: Install smartmontools
     include:
       name: packages/smartctl
-      state: present
-    when: (monitoring is mapping) or (monitoring is boolean and monitoring) 
+    when: 
+      - monitoring | enabled("smartctl")
     tags:
       - monitoring
       - monitoring.smartctl
+
+  - name: Install Prometheus Windows Exporter
+    winget:
+      package: Prometheus.WindowsExporter
+      state: ${{ monitoring | enabled("windows_exporter") | ternary("present", "absent") }}
+    tags:
+      - monitoring
+      - monitoring.windows_exporter
+    when: 
+      - ansible_os_family == "windows"
+      - monitoring | enabled("windows_exporter")

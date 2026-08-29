@@ -76,38 +76,38 @@ go build -o bin/ironstate ./cmd/ironstate     # bin/ironstate.exe on Windows
 
 ```shell
 # Scaffold a new playbook (see Playbooks below)
-./bin/ironstate init my-playbook
+ironstate init my-playbook
 
 # Dry-run / apply / tags - --playbook takes a specific file, a playbook
 # directory (searches for site.yml/main.yml inside it), or a bare name
 # with a sibling '<name>.yml'; omit it to use the current directory.
-./bin/ironstate --playbook path/to/your/playbook
-./bin/ironstate --playbook path/to/your/site.yml --apply
-./bin/ironstate --playbook path/to/your/site.yml --tags cli,security --apply
+ironstate --playbook path/to/your/playbook
+ironstate --playbook path/to/your/main.yml --apply
+ironstate --playbook path/to/your/main.yml --tags cli,security --apply
 
 # Verbose (also prints a line for every already-satisfied/skipped leaf)
-./bin/ironstate --playbook path/to/your/site.yml --verbose
+ironstate --playbook path/to/your/main.yml --verbose
 
 # Merge in an extra vars document, and/or override individual vars by
 # dotted key path (repeatable, highest precedence of all)
-./bin/ironstate --playbook path/to/your/site.yml --vars-file ./ci-vars.yml
-./bin/ironstate --playbook path/to/your/site.yml --var editor=nvim --var ssh.port=2222
+ironstate --playbook path/to/your/main.yml --vars-file ./ci-vars.yml
+ironstate --playbook path/to/your/main.yml --var editor=nvim --var ssh.port=2222
 
 # Introspection
-./bin/ironstate filters list
-./bin/ironstate doctor
-./bin/ironstate version
+ironstate filters list
+ironstate doctor
+ironstate version
 ```
 
 **Exit codes**: `0` on a clean run; `1` when the run stopped on a task's `failed_when`/an unhandled dispatch error; `2` when the site file failed to load or parse (see `internal/cli/errors.go`).
 
-**Cross-platform**: `ironstate` itself builds and runs on Windows/Linux/macOS. Windows-only modules (`winget`, `chocolatey`, `registry`, `scheduled_task`, `path`) error clearly when dispatched on a non-Windows host; a `shell.host: pwsh` task still needs `pwsh` on `PATH` wherever it's actually dispatched, same as any other `shell` host preset needing its own interpreter present. See [Facts](#facts) for the `platform`/`arch`/`os_family` facts a `site.yml` can branch on.
+**Cross-platform**: `ironstate` itself builds and runs on Windows/Linux/macOS. Windows-only modules (`winget`, `chocolatey`, `registry`, `scheduled_task`, `path`) error clearly when dispatched on a non-Windows host; a `shell.host: pwsh` task still needs `pwsh` on `PATH` wherever it's actually dispatched, same as any other `shell` host preset needing its own interpreter present. See [Facts](#facts) for the `platform`/`arch`/`os_family` facts a `main.yml` can branch on.
 
 **Output**: on a real terminal, results print as a colored table with a per-module emoji, a host-facts panel up front, and a final summary block with elapsed time - a "changed" leaf (installed/removed) reads brighter than an already-satisfied skip, and a failure reads in a danger red. `--output json` switches to a plain JSON array on stdout instead (informational/progress lines go to stderr, so this stream stays clean and pipeable, e.g. `... --output json | jq`); colors auto-disable when not attached to a terminal, honor `NO_COLOR`/`IRONSTATE_NO_COLOR`, or can be forced off with `--no-color`.
 
 ## Playbooks
 
-`ironstate` doesn't hard-code a single site file location - like an Ansible playbook, you create your own directory with a `site.yml` plus whatever `hosts/`, `variables/`, `packages/`/`roles/` overlays it needs, then point `--playbook` at that directory (or its `site.yml` directly). [`playbooks/camalot/`](playbooks/camalot) in this repo is one such playbook, kept here as a real-world worked example (the repo owner's own machine setup) - copy its shape for your own playbook, or start from an empty `site.yml`. Nothing about the `playbooks/` directory name, or `camalot` itself, is special or required by `ironstate` - it's just a sample.
+`ironstate` doesn't hard-code a single site file location - like an Ansible playbook, you create your own directory with a `main.yml` plus whatever `hosts/`, `variables/`, `packages/`/`roles/` overlays it needs, then point `--playbook` at that directory (or its `main.yml` directly). [`playbooks/camalot/`](playbooks/camalot) in this repo is one such playbook, kept here as a real-world worked example (the repo owner's own machine setup) - copy its shape for your own playbook, or start from an empty `main.yml`. Nothing about the `playbooks/` directory name, or `camalot` itself, is special or required by `ironstate` - it's just a sample.
 
 `--playbook` doesn't require the exact file path: point it at a directory and it searches for `site.yml`, `site.yaml`, `main.yml`, then `main.yaml` inside it; point it at a bare name (e.g. `playbooks/camalot`) and it also tries a sibling `playbooks/camalot.yml`/`.yaml` file; omit `--playbook` entirely to search the current directory. An error names every path tried if none exist.
 
@@ -117,7 +117,7 @@ go build -o bin/ironstate ./cmd/ironstate     # bin/ironstate.exe on Windows
 
 ```
 <playbook-name>/
-├── site.yml
+├── main.yml
 ├── roles/
 ├── tasks/
 ├── packages/
@@ -128,9 +128,9 @@ go build -o bin/ironstate ./cmd/ironstate     # bin/ironstate.exe on Windows
 Every generated YAML file is intentionally minimal (`vars: {}` / `tasks: []`) - just enough to be a valid document to start editing; `roles/`, `tasks/`, `packages/` are created empty (with a `.gitkeep` placeholder so they survive a fresh `git clone`). `<machine-name>`/`<user-name>` come from this machine's own `computer_name`/`user_name` facts (see [Facts](#facts)), lowercased. Re-running `init` is safe - an already-existing file or directory is left untouched, never overwritten.
 
 ```shell
-./bin/ironstate init my-playbook
+ironstate init my-playbook
 cd my-playbook
-../bin/ironstate --playbook site.yml
+ironstate --playbook main.yml
 ```
 
 ## File hierarchy
@@ -139,7 +139,7 @@ Files are loaded and merged in this order. Each subsequent file's `tasks` list i
 
 ``` tree
 <playbook>/
-├── site.yml                              ← base (always loaded)
+├── main.yml                              ← base (always loaded)
 ├── hosts/
 │   ├── main.yml                          ← default, merged if it exists
 │   └── <chained-name>.yml                ← chained overlays, merged least-to-most specific
@@ -167,21 +167,21 @@ krayt.amd64.windows.linux.yml    # the fully-qualified chain (os_family and plat
 `--vars-file <path>` (repeatable) merges one or more additional documents on top of everything above, in the order given (a later `--vars-file` wins over an earlier one on overlapping keys) - highest precedence short of `--var` - handy for a CI-only or one-off vars file that isn't part of the playbook's own hierarchy:
 
 ```shell
-./bin/ironstate --playbook site.yml --vars-file ./ci-vars.yml
-./bin/ironstate --playbook site.yml --vars-file ./ci-vars.yml --vars-file ./local-overrides.yml
+ironstate --playbook main.yml --vars-file ./ci-vars.yml
+ironstate --playbook main.yml --vars-file ./ci-vars.yml --vars-file ./local-overrides.yml
 ```
 
 `--var key=value` (repeatable) overrides a single var by dotted key path, after everything else has merged - the final, most explicit word on a var's value:
 
 ```shell
-./bin/ironstate --playbook site.yml --var editor=nvim --var ssh.port=2222
+ironstate --playbook main.yml --var editor=nvim --var ssh.port=2222
 ```
 
 Overlay files use the explicit `tasks:`/`vars:` mapping form (not the bare-list form) so they have somewhere to merge into.
 
 ### `.env` / `.secrets`
 
-Before anything else runs, `ironstate` loads `KEY=VALUE` lines from a `.env` file, then a `.secrets` file, out of the **current working directory** (not the playbook's own directory, and not relative to the binary) into the process environment - so `lookup('env', 'KEY')`, a `scheduled_task`'s `password_env`, or anything else reading `$env:KEY`/`os.Getenv` sees them. Either file is optional; a missing one is silently skipped. Each non-blank, non-`#`-comment line is `KEY=VALUE`; a value wrapped in matching `'...'`/`"..."` has those quotes stripped. Loaded in that order (`.env` then `.secrets`), so run `ironstate` from wherever these files live - typically your playbook's own root, alongside `site.yml`, if you keep it there.
+Before anything else runs, `ironstate` loads `KEY=VALUE` lines from a `.env` file, then a `.secrets` file, out of the **current working directory** (not the playbook's own directory, and not relative to the binary) into the process environment - so `lookup('env', 'KEY')`, a `scheduled_task`'s `password_env`, or anything else reading `$env:KEY`/`os.Getenv` sees them. Either file is optional; a missing one is silently skipped. Each non-blank, non-`#`-comment line is `KEY=VALUE`; a value wrapped in matching `'...'`/`"..."` has those quotes stripped. Loaded in that order (`.env` then `.secrets`), so run `ironstate` from wherever these files live - typically your playbook's own root, alongside `main.yml`, if you keep it there.
 
 ### Secrets and sensitive values
 
@@ -341,7 +341,7 @@ A name shown as `built-in` is always resolved from `internal/filters/builtins.go
 
 ### `ironstate doctor`
 
-A single at-a-glance health check: confirms every package-manager CLI a `site.yml` might dispatch to is actually on `PATH`, plus reports discovered script filters (the same listing `filters list` gives, folded into one command since both are "is my environment set up correctly" checks).
+A single at-a-glance health check: confirms every package-manager CLI a `main.yml` might dispatch to is actually on `PATH`, plus reports discovered script filters (the same listing `filters list` gives, folded into one command since both are "is my environment set up correctly" checks).
 
 | Flag | Default | Description |
 | --- | --- | --- |
@@ -365,7 +365,7 @@ script filters discovered under path/to/your/playbook/filters:
   my_custom_filter
 ```
 
-A `[missing]` line isn't necessarily a problem - it only matters for the specific package-manager modules (`winget`/`chocolatey`/`homebrew`/`apt`/`pipx`/`npm`/`cargo`/`go`/`gem`/`eget`) or `shell.host: pwsh` tasks your own `site.yml` actually uses; `doctor` checks a fixed list of every module this build knows about; `bin` availability is otherwise re-checked per-module at dispatch time regardless (see [Architecture](#architecture)).
+A `[missing]` line isn't necessarily a problem - it only matters for the specific package-manager modules (`winget`/`chocolatey`/`homebrew`/`apt`/`pipx`/`npm`/`cargo`/`go`/`gem`/`eget`) or `shell.host: pwsh` tasks your own `main.yml` actually uses; `doctor` checks a fixed list of every module this build knows about; `bin` availability is otherwise re-checked per-module at dispatch time regardless (see [Architecture](#architecture)).
 
 ## Task/action model
 
@@ -555,7 +555,7 @@ tasks:
 
 ### Facts
 
-Gathered fresh every run; a deliberately small, easy-to-extend starter set (see `internal/facts/facts.go`). Anything pricier to gather that most runs don't need - like the host's mounted filesystems - is a task-callable module instead, gathered only when a `site.yml` actually asks for it: see [`mount_facts`](#mount_facts).
+Gathered fresh every run; a deliberately small, easy-to-extend starter set (see `internal/facts/facts.go`). Anything pricier to gather that most runs don't need - like the host's mounted filesystems - is a task-callable module instead, gathered only when a `main.yml` actually asks for it: see [`mount_facts`](#mount_facts).
 
 | Fact | Description |
 | --- | --- |
@@ -581,7 +581,7 @@ Gathered fresh every run; a deliberately small, easy-to-extend starter set (see 
 
 ### Vars
 
-User-defined, under a top-level `vars:` mapping (merges across `site.yml`/`hosts/`/`variables/` - see [File hierarchy](#file-hierarchy)):
+User-defined, under a top-level `vars:` mapping (merges across `main.yml`/`hosts/`/`variables/` - see [File hierarchy](#file-hierarchy)):
 
 ```yaml
 vars:
@@ -755,7 +755,7 @@ Every leaf shares these envelope fields, which sit *beside* its module key, not 
 | `continue_on_error` | boolean, default `false` | Keep running past a failed leaf instead of stopping the run. See [Failing a task](#failing-a-task-failed_when-continue_on_error) |
 | `become` | boolean or string, default `false` | Run this leaf's command elevated. See [`become`](#become) |
 
-Each module's own fields (documented inline in `site.yml`) still include `state` (`present`/`absent`/`latest`, default `present`).
+Each module's own fields (documented inline in `main.yml`) still include `state` (`present`/`absent`/`latest`, default `present`).
 
 ### `become`
 
@@ -867,7 +867,7 @@ tasks:
 
 | Field | Required | Description |
 | --- | --- | --- |
-| `src` | yes | Source file or directory. Resolved relative to the playbook's own root directory (the directory containing its `site.yml`), or the owning package's own directory — see [Includes](#includes) — unless it's absolute or `~`-prefixed |
+| `src` | yes | Source file or directory. Resolved relative to the playbook's own root directory (the directory containing its `main.yml`), or the owning package's own directory — see [Includes](#includes) — unless it's absolute or `~`-prefixed |
 | `dest` | yes | Destination path (`~` expansion supported) - a directory when `src` is a directory |
 | `owner` / `group` | no | Ownership metadata applied to copied file(s) |
 | `mode` | no | Mode bits applied to copied file(s) |
@@ -1243,7 +1243,7 @@ If `value` is omitted, the fact is set directly to the command's trimmed stdout.
 
 ### `mount_facts`
 
-Gathers the host's currently-mounted filesystems and registers them as a fact - a task-callable, on-demand counterpart to the fixed set of always-gathered host facts (see [Facts](#facts)), so the (mildly expensive, and platform-specific) work of enumerating mounts only happens when a `site.yml` actually asks for it. Mirrors Ansible's `mount_facts` module, scoped down to "report what's currently mounted" (no `/etc/fstab`-vs-`/proc/mounts` aggregation) plus a `filter` option to drop entries before they're registered.
+Gathers the host's currently-mounted filesystems and registers them as a fact - a task-callable, on-demand counterpart to the fixed set of always-gathered host facts (see [Facts](#facts)), so the (mildly expensive, and platform-specific) work of enumerating mounts only happens when a `main.yml` actually asks for it. Mirrors Ansible's `mount_facts` module, scoped down to "report what's currently mounted" (no `/etc/fstab`-vs-`/proc/mounts` aggregation) plus a `filter` option to drop entries before they're registered.
 
 **Runs in the same facts-first pass as [`fact`](#fact)** (see [Architecture](#architecture)) - a `mount_facts` task's own `when` can only see gathered facts, vars, and facts registered earlier in that same pass. Like `fact`, it reuses the present/absent state machine: `state: present` (default) or `latest` (re)gathers and (re)sets the fact every time it's reached; `state: absent` unsets it. Always actually runs, even without `--apply` - gathering has no real system side effect, so a dry-run preview of a later `when`/`${{ }}` reference needs a real value to check.
 
@@ -1457,10 +1457,10 @@ A leaf with **no effective tags at all** (neither its own nor any ancestor task'
 
 ## Includes
 
-A related set of items (an eget binary, a symlink to it, a config file to copy, a setup script...) can be defined once as a package under `packages/<name>/main.yml`, using the same `tasks:` shape as `site.yml` (the explicit form, so it has a `tasks:` key to merge on). Pull it into a run with an `include:` action, wherever you'd write any other action:
+A related set of items (an eget binary, a symlink to it, a config file to copy, a setup script...) can be defined once as a package under `packages/<name>/main.yml`, using the same `tasks:` shape as `main.yml` (the explicit form, so it has a `tasks:` key to merge on). Pull it into a run with an `include:` action, wherever you'd write any other action:
 
 ```yaml
-# site.yml
+# main.yml
 tasks:
   - name: install lolcat
     tags: [lolcat, cli]
@@ -1535,12 +1535,12 @@ tasks:
 
 A `vars:` block at the top of a package's own `main.yml` declares **package-local defaults**: bare top-level names (here `defaults`, but a package author can name it anything - it's not a reserved word) distinct from site-level `vars.*`, so a package can express "the user's override, else my own built-in default" as two separate paths rather than one merged value. Package-local vars are available inside that package's own expressions only (not to its caller, nor to a package it in turn includes); if a package-local name ever collides with a site-level var/fact/id-registered name, the site-level one wins.
 
-Here, a user's `site.yml` sets `languages.java.jdk` to a plain **boolean** (`true`/`false`, matching every other `languages.*` toggle) to enable/disable Java without specifying a package - `toggle(...)` (unlike `default`, which only replaces `null`) treats *any* boolean the same as unset, and falls back to the package's own built-in default; a **string** value instead names a specific override package ID (e.g. `jdk: Eclipse.Temurin.21`). The separate `when: languages.java.jdk != false` is what actually skips the task when the user explicitly disabled it - `toggle(...)`'s job is only to pick the right package ID once the task is known to be enabled. A filter's argument can just as well be a literal (`default('Oracle.JDK.25')`) or a site-level path (`default(vars.editor)`) instead - whichever suits the package. Filters also chain left-to-right (`${{ inputs.name | trim | upper }}`).
+Here, a user's `main.yml` sets `languages.java.jdk` to a plain **boolean** (`true`/`false`, matching every other `languages.*` toggle) to enable/disable Java without specifying a package - `toggle(...)` (unlike `default`, which only replaces `null`) treats *any* boolean the same as unset, and falls back to the package's own built-in default; a **string** value instead names a specific override package ID (e.g. `jdk: Eclipse.Temurin.21`). The separate `when: languages.java.jdk != false` is what actually skips the task when the user explicitly disabled it - `toggle(...)`'s job is only to pick the right package ID once the task is known to be enabled. A filter's argument can just as well be a literal (`default('Oracle.JDK.25')`) or a site-level path (`default(vars.editor)`) instead - whichever suits the package. Filters also chain left-to-right (`${{ inputs.name | trim | upper }}`).
 
 If an expression is the **entire** value of a field (e.g. `state: ${{ package.state }}` or `tags: ${{ package.tags }}`), that field is replaced with the referenced value's native type — a string stays a string, an array stays an array. If that whole-value expression can't be resolved, the field is **omitted** instead (a warning is logged either way) - the consuming code's own default applies, rather than injecting a wrongly-typed empty string (see [Looping](#looping-withitems) for the common case: an optional per-item field like `args: ${{ item.args }}`). If the expression is embedded inside a larger string instead (e.g. a `shell.command` or a `copy.dest` path), it's substituted as text, and an unresolved one just blanks that portion of the string (there's no "omit part of a string" equivalent).
 
 ```yaml
-# site.yml
+# main.yml
 tasks:
   - name: kanata
     include:

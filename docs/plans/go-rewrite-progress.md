@@ -8,7 +8,7 @@ plan-level/durable back into `go-rewrite.md` proper.
 
 Module path: `github.com/TacoContent/ironstate`. Go toolchain: developed against 1.24.3
 locally; `go.mod`'s `go` directive is currently `1.25.0` (see notes below on why). Repo
-root layout is unchanged (`site.yml`, `hosts/`, `packages/`, `roles/`, `variables/`,
+root layout is unchanged (`main.yml`, `hosts/`, `packages/`, `roles/`, `variables/`,
 `tasks/`).
 
 ## Status
@@ -17,7 +17,7 @@ root layout is unchanged (`site.yml`, `hosts/`, `packages/`, `roles/`, `variable
 - [x] Phase 1 — `internal/expr`, `internal/template`, `internal/filters` (built-ins)
 - [x] Phase 2 — `internal/model`, `internal/packages` (hierarchy/include/env/paths),
       `internal/tasks` (`Expand-TaskTree` port), `internal/facts` (windows/other build
-      split). Validated against REAL `site.yml` + `hosts/krayt.yml` + `hosts/camalot` +
+      split). Validated against REAL `main.yml` + `hosts/krayt.yml` + `hosts/camalot` +
       the whole `roles/*`/`packages/*` tree (181 flattened leaves, zero errors) in
       `internal/tasks/realfixture_test.go`.
 - [x] Phase 3 — `internal/engine`: port `ironstate.ps1`'s `Invoke-Tasks`/`Invoke-PackageItem`
@@ -32,7 +32,7 @@ root layout is unchanged (`site.yml`, `hosts/`, `packages/`, `roles/`, `variable
       `fact`, `assert`, `file`, `copy`, `symlinks`, `blockinfile`, `ssh_host_block`, `zip`).
       `internal/cli/root.go` wired end-to-end (load hierarchy → soft-resolve → flatten →
       tag-filter → `engine.Run` → table/JSON output) and smoke-tested in dry-run against
-      the real `site.yml` (see "Phase 3 smoke test" note below).
+      the real `main.yml` (see "Phase 3 smoke test" note below).
 - [x] Phase 4 — `internal/exec` (Runner abstraction, mockable via a package-level var);
       package-manager handlers `winget`/`chocolatey`/`pipx`/`npm`/`cargo`/`go`/`gem`/`eget`
       (argv-tested against fake runners); `shell` (per-state present/absent/latest
@@ -207,8 +207,8 @@ root layout is unchanged (`site.yml`, `hosts/`, `packages/`, `roles/`, `variable
   3. `internal/filters`'s `exists` filter called `os.Stat` directly on the raw string,
      never expanding a leading `~` - but the original `exists.ps1`'s `Test-Path` resolves
      `~` automatically. Found via a **side-by-side real dry-run diff** (build the Go
-     binary, run it and `ironstate.ps1` against the exact same real `site.yml`, diff the
-     console output) rather than a unit test - `site.yml`'s own bootstrap assert
+     binary, run it and `ironstate.ps1` against the exact same real `main.yml`, diff the
+     console output) rather than a unit test - `main.yml`'s own bootstrap assert
      (`facts.local_bin_path | exists`) passed under PowerShell but failed under Go,
      stopping every dry-run dead after just a handful of fact leaves. Fixed by resolving
      via `pathutil.ResolveUserPath` first (see `TestExistsFilterExpandsTilde`).
@@ -275,7 +275,7 @@ and needs the repo owner, not an agent, to execute:
 
 - **Run a real, side-by-side `-Apply` validation** on a low-risk host: `git checkout` the
   old `ironstate.ps1`/`modules/` from history into a scratch location, run it with
-  `-Apply` there and `ironstate --file <site.yml> --apply` from the working tree against
+  `-Apply` there and `ironstate --playbook <main.yml> --apply` from the working tree against
   the *same* playbook from a known-clean state (or diff their dry-run plans first, then
   apply the Go binary's), and confirm no unintended diff. Since the PowerShell version no
   longer exists in the working tree, an unintended diff found here means patching the Go
@@ -368,7 +368,7 @@ further numbered phase remains after Phase 7.
   (unused) `"hard"` classification itself is a stub.
 - **`engine.Context` carries a `Filters expr.Filters` field** (added while porting
   `assert`, whose `that` conditions can themselves use `| filter(...)`, e.g. the real
-  `facts.local_bin_path | length > 0` in `site.yml`; also needed by `template`'s jinja
+  `facts.local_bin_path | length > 0` in `main.yml`; also needed by `template`'s jinja
   rendering) — this is a deviation from the master plan's §4.8 `Handler` interface sketch
   (which didn't show `Context` needing a filter registry at all). Keep this in mind if
   the plan's interface sketch is ever used as a literal checklist — the *implemented*

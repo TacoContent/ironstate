@@ -35,7 +35,7 @@ func Execute() error {
 func newRootCommand() (*cobra.Command, error) {
 	cmd := &cobra.Command{
 		Use:           "ironstate",
-		Short:         "Declarative, Ansible-style task runner driven by site.yml",
+		Short:         "Declarative, Ansible-style task runner driven by main.yml",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE:          runApply,

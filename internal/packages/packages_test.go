@@ -99,7 +99,7 @@ func TestMergeDocumentsAppendsTasksAndDeepMergesVars(t *testing.T) {
 
 func TestLoadHierarchyMergesHostAndUserOverlays(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "site.yml"), `
+	writeFile(t, filepath.Join(dir, "main.yml"), `
 vars:
   editor: code
 tasks:
@@ -122,7 +122,7 @@ tasks:
 	t.Setenv("USERNAME", "testuser")
 	hostFacts := map[string]any{"computer_name": "TESTHOST"}
 
-	doc, err := LoadHierarchy(filepath.Join(dir, "site.yml"), hostFacts)
+	doc, err := LoadHierarchy(filepath.Join(dir, "main.yml"), hostFacts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ tasks:
 
 func TestLoadHierarchySkipsMissingOverlays(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "site.yml"), `
+	writeFile(t, filepath.Join(dir, "main.yml"), `
 tasks:
   - name: base task
     log: { message: base }
@@ -146,7 +146,7 @@ tasks:
 	t.Setenv("USERNAME", "nosuchuser")
 	hostFacts := map[string]any{"computer_name": "NOSUCHHOST"}
 
-	doc, err := LoadHierarchy(filepath.Join(dir, "site.yml"), hostFacts)
+	doc, err := LoadHierarchy(filepath.Join(dir, "main.yml"), hostFacts)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,6 @@
 module github.com/TacoContent/ironstate
 
-go 1.26.7
+go 1.27.0
 
 require (
 	github.com/briandowns/spinner v1.23.2

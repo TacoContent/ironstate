@@ -7,16 +7,16 @@ vars:
     work: d:/Development/work/imanage
   monitoring: false
   cli: false
-  languages: false
-    # rust: true
-    # python: true
-    # nodejs: true
-    # golang: true
-    # java: false
-    #   # jre: false
-    #   # jdk: EclipseAdoptium.Temurin.21.JDK
-    # dotnet: true
-    # ruby: false
+  languages: 
+    rust: true
+    python: true
+    nodejs: true
+    golang: true
+    java: false
+      # jre: false
+      # jdk: EclipseAdoptium.Temurin.21.JDK
+    dotnet: true
+    ruby: false
       # install:
       #   override: '/verysilent /tasks="assocfiles,modpath" /DIR="d:\ruby" /currentuser'
   shell:

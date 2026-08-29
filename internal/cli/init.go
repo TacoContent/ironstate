@@ -36,7 +36,7 @@ given) with the base file/directory structure ironstate expects - see the
 README's "Playbooks" section:
 
   <playbook>/
-  |-- site.yml
+  |-- main.yml
   |-- filters/
   |-- roles/
   |-- tasks/
@@ -89,7 +89,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "populated %s from current system state\n", root); err != nil {
 			return NewRunError(err)
 		}
-		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Use ironstate --playbook %s to review the generated playbook.\n", filepath.Join(root, "site.yml")); err != nil {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Use ironstate --playbook %s to review the generated playbook.\n", filepath.Join(root, "main.yml")); err != nil {
 			return NewRunError(err)
 		}
 		return nil
@@ -116,7 +116,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	files := []initScaffoldFile{
-		{filepath.Join(root, "site.yml"), minimalDocument},
+		{filepath.Join(root, "main.yml"), minimalDocument},
 		{filepath.Join(root, "hosts", machineName+".yml"), minimalDocument},
 		{filepath.Join(root, "hosts", osFamily+".yml"), minimalDocument},
 		{filepath.Join(root, "variables", userName+".yml"), minimalDocument},
@@ -137,7 +137,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		cmd.Printf("created %s\n", f.path)
 	}
 
-	cmd.Printf("\nPlaybook ready. Try:\n  ironstate --playbook %s\n", filepath.Join(root, "site.yml"))
+	cmd.Printf("\nPlaybook ready. Try:\n  ironstate --playbook %s\n", filepath.Join(root, "main.yml"))
 	return nil
 }
 

@@ -30,7 +30,7 @@ func TestRunApplyLoadsDotEnvAndDotSecretsFromCWD(t *testing.T) {
 		_ = os.Unsetenv("TEST_SECRETS_CLI_VAR")
 	}()
 
-	sitePath := filepath.Join(dir, "site.yml")
+	sitePath := filepath.Join(dir, "main.yml")
 	if err := os.WriteFile(sitePath, []byte("---\nvars: {}\ntasks: []\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestRunApplyLoadsDotEnvAndDotSecretsFromCWD(t *testing.T) {
 func TestRunApplyMergesVarsFileAndVarOverrides(t *testing.T) {
 	dir := t.TempDir()
 
-	sitePath := filepath.Join(dir, "site.yml")
+	sitePath := filepath.Join(dir, "main.yml")
 	if err := os.WriteFile(sitePath, []byte(`
 vars:
   editor: code
@@ -113,7 +113,7 @@ tasks:
 // comment), only that the old plain-line behavior doesn't come back.
 func TestRunApplyProgressHasNoPersistentPhaseLines(t *testing.T) {
 	dir := t.TempDir()
-	sitePath := filepath.Join(dir, "site.yml")
+	sitePath := filepath.Join(dir, "main.yml")
 	if err := os.WriteFile(sitePath, []byte("---\nvars: {}\ntasks: []\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

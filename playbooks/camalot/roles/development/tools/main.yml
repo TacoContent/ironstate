@@ -6,9 +6,6 @@ vars:
       jetbrains_toolbox: false
 
 tasks:
-
-  
-
   - name: Install orhun/git-cliff
     tags:
       - development
@@ -52,3 +49,13 @@ tasks:
       package: JetBrains.Toolbox
       state: "${{ package.state | default('present')}}"
       source: winget
+
+  - name: JetBrains dotPeek
+    when: development.tools | enabled('jetbrains_dotpeek')
+    winget:
+      package: JetBrains.dotPeek
+      state: "${{ development.tools.jetbrains_dotpeek | ternary('present', 'absent') }}"
+    tags:
+      - development
+      - development.tools
+      - development.tools.jetbrains_dotpeek

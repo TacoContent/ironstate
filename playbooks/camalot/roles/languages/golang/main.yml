@@ -7,15 +7,15 @@ tasks:
       - languages.golang
     winget:
       package: "GoLang.Go"
-      state: ${{ languages.golang | enabled() | ternary('present', 'absent') }}
+      state: ${{ languages.golang | enabled() | ternary('latest', 'absent') }}
 
   - name: Install Golangci-lint
     tags: 
       - languages
       - languages.golang
-    winget:
-      package: "GolangCI.golangci-lint"
-      state: ${{ languages.golang | enabled() | ternary('present', 'absent') }}
+    eget:
+      package: "golangci/golangci-lint"
+      state: ${{ languages.golang | enabled() | ternary('latest', 'absent') }}
 
   - name: Install GoReleaser
     tags: 
@@ -23,4 +23,4 @@ tasks:
       - languages.golang
     winget:
       package: "GoReleaser.GoReleaser"
-      state: ${{ languages.golang | enabled() | ternary('present', 'absent') }}
+      state: ${{ languages.golang | enabled() | ternary('latest', 'absent') }}

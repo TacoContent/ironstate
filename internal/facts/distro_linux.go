@@ -14,7 +14,7 @@ var osReleasePaths = []string{"/etc/os-release", "/usr/lib/os-release"}
 
 // distroAliases maps a handful of os-release(5) IDs to the names more
 // commonly used elsewhere (e.g. Ansible's ansible_distribution), since
-// 'facts.os_family == "archlinux"' reads more naturally in a site.yml
+// 'facts.os_family == "archlinux"' reads more naturally in a main.yml
 // than the raw freedesktop ID "arch".
 var distroAliases = map[string]string{
 	"arch": "archlinux",

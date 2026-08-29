@@ -4,7 +4,7 @@
 // (docs/plans/go-rewrite.md §1's cross-platform goal): ironstate.ps1 was
 // always Windows-only, but the Go binary itself is genuinely
 // cross-platform (windows/linux/darwin builds, see .goreleaser.yaml), so
-// a site.yml can now usefully branch on 'when: facts.platform == "linux"'
+// a main.yml can now usefully branch on 'when: facts.platform == "linux"'
 // - a deliberate addition beyond parity, not a compatibility requirement.
 // Gathered fresh every run (unlike 'vars', which come from YAML and are
 // merged/overridable).

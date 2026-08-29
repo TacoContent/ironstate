@@ -3,7 +3,7 @@
 Status: IN PROGRESS (reviewed once via rubber-duck subagent, see [Revision Log](#revision-log))
 Owner: (fill in)
 Target: replace `ironstate.ps1` + `modules/*.psm1` with a single Go binary, byte-for-byte
-compatible with the current `site.yml`/`hosts/`/`variables/`/`packages/`/`roles/` document
+compatible with the current `main.yml`/`hosts/`/`variables/`/`packages/`/`roles/` document
 model and CLI behavior.
 
 ## Implementation status
@@ -15,8 +15,8 @@ just a quick at-a-glance progress marker kept in sync with it.
 | --- | --- |
 | 0 — Scaffolding | ✅ Done — `go.mod`, `cmd/ironstate`, cobra/viper CLI (`version`/`filters list`/`doctor` + root flags), `.goreleaser.yaml`, `.github/workflows/ci.yml`+`codeql.yml`, `.golangci.yml` |
 | 1 — Core engine, no I/O | ✅ Done — `internal/expr` (lexer/parser/AST/evaluator + fuzz tests), `internal/template` (span scan/expand, soft-vs-strict, boundary keys), `internal/filters` (all 21 built-ins) |
-| 2 — Document loading & flattening | ✅ Done — `internal/model` (generic YAML shape + helpers), `internal/packages` (hierarchy load/merge, `include` resolution, `.env` loader, path resolution), `internal/tasks` (`Expand-TaskTree` port: loops, `parent.item`, tags/when cascading), `internal/facts` (Windows-real / other-stub build split). Validated against the **real** `site.yml` + `hosts/krayt.yml` → `hosts/camalot` → the full `roles/*`/`packages/*` tree (181 flattened leaves, zero errors) |
-| 3 — Engine + low-risk handlers | ✅ Done — `internal/conditions` (Test-WhenClause/Test-Condition port), `internal/engine` (Invoke-Tasks/Invoke-PackageItem port: registry/user-facts/command-availability threading, facts-first two-phase `Run`, the two dry-run-forces-execution exceptions, missing-handler/missing-command no-result-row, tag filtering, table/JSON output), `internal/handlers` (`log`, `path` [Windows-only, build-tagged], `fact`, `assert`, `file`, `copy`, `symlinks`, `blockinfile`, `ssh_host_block`, `zip`). CLI (`internal/cli/root.go`) now wired end-to-end and smoke-tested (dry-run) against the real `site.yml` |
+| 2 — Document loading & flattening | ✅ Done — `internal/model` (generic YAML shape + helpers), `internal/packages` (hierarchy load/merge, `include` resolution, `.env` loader, path resolution), `internal/tasks` (`Expand-TaskTree` port: loops, `parent.item`, tags/when cascading), `internal/facts` (Windows-real / other-stub build split). Validated against the **real** `main.yml` + `hosts/krayt.yml` → `hosts/camalot` → the full `roles/*`/`packages/*` tree (181 flattened leaves, zero errors) |
+| 3 — Engine + low-risk handlers | ✅ Done — `internal/conditions` (Test-WhenClause/Test-Condition port), `internal/engine` (Invoke-Tasks/Invoke-PackageItem port: registry/user-facts/command-availability threading, facts-first two-phase `Run`, the two dry-run-forces-execution exceptions, missing-handler/missing-command no-result-row, tag filtering, table/JSON output), `internal/handlers` (`log`, `path` [Windows-only, build-tagged], `fact`, `assert`, `file`, `copy`, `symlinks`, `blockinfile`, `ssh_host_block`, `zip`). CLI (`internal/cli/root.go`) now wired end-to-end and smoke-tested (dry-run) against the real `main.yml` |
 | 4 — Package-manager handlers + `shell` + template engines | ✅ Done — `internal/exec` (Runner abstraction), package-manager handlers (`winget`, `chocolatey`, `pipx`, `npm`, `cargo`, `go`, `gem`, `eget`), `shell` (per-state present/absent/latest fallback, host presets, `creates` - pwsh host is always a subprocess in Go, no in-process native-object merge, an audited-unused v1 gap), `registry` (Windows-only, `golang.org/x/sys/windows/registry` directly, no PSDrive mounting needed), `scheduled_task` (Windows-only, generates a Task Scheduler XML definition and shells out to `schtasks.exe` rather than the ScheduledTasks PowerShell module/CIM - keeps `shell.host: pwsh` the only pwsh dependency, at the documented cost of existence+enabled-only idempotency, no deep drift detection), `internal/templateengines` (native `jinja` port reusing `internal/expr`, plus additive `gotemplate` via Go stdlib `text/template`; `eps`/`herestring` are hard errors), `template` module wired to both engines, `fact`'s embedded `shell` and `blockinfile`'s `template` field now delegate to the real `shell`/`template` implementations (closing the two Phase 3 stand-in gaps) |
 | 5 — Filter plugin system (script filters) | ✅ Done — `internal/filters`'s script-filter adapter: a generic, embedded PowerShell shim (`embed/shim.ps1`) speaks a JSON-over-stdio protocol to an unmodified `filters/*.ps1` file; a persistent per-filter worker process (`Pool`/`scriptWorker`) is kept warm rather than spawned per call; `DiscoverScriptFilters` registers a discovered script under its own name only when no built-in already claims it. `ironstate filters list`/`doctor` report discovered script filters; `internal/cli/root.go`'s real run wires discovery in too. Verified against a live `pwsh`-backed round trip, not just fakes. |
 | 6 — Hardening (SBOM/packaging/signing) | ✅ Done — `.github/workflows/release.yml` (tag-triggered `goreleaser release`, `syft`/`cosign` installed via actions), `.goreleaser.yaml`'s `signs:` block (keyless cosign signing of `checksums.txt` via GitHub OIDC) alongside the existing `sboms:` block, `actions/attest-build-provenance` on every release artifact, `.github/dependabot.yml` (gomod + github-actions, weekly). `golangci-lint run ./...` reduced from 40 findings to 0 (real zip-slip path-traversal fix in `zip.go`'s extraction, `go.mod`'s `go` directive bumped `1.25.0` → `1.26.7` to clear 5 stdlib CVEs `govulncheck` found, plus errcheck/gosec/unused/staticcheck cleanup — see the progress doc's Phase 6 notes for the full list). `go build`/`go vet`/`gofmt`/`go test ./...` green on `windows`, cross-compiled `linux`/`darwin`. README got a light-touch "Go binary (preview)" section + documented exit-code contract; the full README rewrite/PowerShell-legacy marking is deliberately deferred to Phase 7 (cutover), not done here. |
@@ -41,7 +41,7 @@ ask to have them folded in here if this plan is being handed off.
 - Single statically-linked Go binary (`ironstate.exe` / `ironstate`), no PowerShell runtime
   required to *run* the tool itself.
 - Full behavioral compatibility with the current PowerShell engine: same YAML schema, same
-  merge order (`site.yml` → `hosts/<COMPUTERNAME>.yml` → `variables/<USERNAME>.yml`), same
+  merge order (`main.yml` → `hosts/<COMPUTERNAME>.yml` → `variables/<USERNAME>.yml`), same
   task-tree flattening rules (tags cascade, `when` cascades AND, `with`/`items` looping,
   `parent.item`), same fact-gathering-first phase, same `id` registry semantics, same
   `${{ }}` expression grammar and filter pipeline, same dry-run-by-default / `-Apply` model.
@@ -58,7 +58,7 @@ ask to have them folded in here if this plan is being handed off.
 **Non-goals (explicitly out of scope for v1)**
 
 - Porting `eps` or `herestring` (see [§4.7](#47-template-engines)) — a repo-wide audit
-  found zero real usage of either engine in `site.yml`/`hosts/*`/`packages/*`/`roles/*`/
+  found zero real usage of either engine in `main.yml`/`hosts/*`/`packages/*`/`roles/*`/
   `tasks/*` (only `jinja` is actually used, in `roles/development/git/main.yml` and
   `tasks/wsl-shim/main.yml`); both are dropped outright rather than ported or shelled out
   to `pwsh`. `template.engine`/`blockinfile.template.engine` accepting `eps`/`herestring`
@@ -175,7 +175,7 @@ model the Go rewrite must reproduce.)
 ## 3. Target repository layout
 
 ```
-ironstate/                        (repo root, unchanged: site.yml, hosts/, variables/, packages/, roles/, tasks/)
+ironstate/                        (repo root, unchanged: main.yml, hosts/, variables/, packages/, roles/, tasks/)
 ├── cmd/
 │   └── ironstate/
 │       └── main.go               # cobra root command wiring only
@@ -219,19 +219,19 @@ moving.
 Root command mirrors current flags exactly, plus additive ones:
 
 ```
-ironstate [--file site.yml] [--apply] [--tags a,b] [--output table|json] [-v|--verbose]
+ironstate [--playbook main.yml] [--apply] [--tags a,b] [--output table|json] [-v|--verbose]
 ironstate version
 ironstate filters list                # introspection: built-in + discovered script filters
 ironstate doctor                      # PATH checks for winget/choco/etc.
 ```
 
-- `--file` defaults to `./site.yml` (was `-PackagesFile`); a hidden alias flag keeps
+- `--playbook` defaults to `./main.yml` (was `-PackagesFile`); a hidden alias flag keeps
   `-PackagesFile`-shaped invocations from breaking any existing muscle memory/scripts,
-  but the documented primary flag becomes `--file`.
+  but the documented primary flag becomes `--playbook`.
 - Viper layers, highest precedence first: CLI flags → environment variables
   (`IRONSTATE_*`) → optional `ironstate.yaml`/`.ironstate.yaml` config file (new,
-  additive — lets a user pin `--tags`/`--file` defaults) → built-in defaults. This is
-  purely ergonomic; it must never change what `site.yml`'s own `vars`/merge behavior does.
+  additive — lets a user pin `--tags`/`--playbook` defaults) → built-in defaults. This is
+  purely ergonomic; it must never change what `main.yml`'s own `vars`/merge behavior does.
 - Cobra's `PersistentPreRunE` wires viper→typed config struct once; all subcommands read
   the same struct, no direct `viper.Get*` calls scattered through business logic (keeps
   `internal/engine` etc. testable without viper in the loop at all).
@@ -259,7 +259,7 @@ not map key order within a single leaf). Use `gopkg.in/yaml.v3` (`yaml.Node` or 
   discrepancies found get fixed in the schema itself (small, low-risk PRs against the
   existing PowerShell-era repo) rather than silently baked into the Go model. Once
   reconciled, add a `go generate`-able validator (`internal/model/schema_test.go`) that
-  validates every fixture and real `site.yml`/overlay file against it in CI.
+  validates every fixture and real `main.yml`/overlay file against it in CI.
 
 ### 4.3 Expression engine (`internal/expr`)
 
@@ -283,7 +283,7 @@ Direct, disciplined port of `Expressions.psm1`:
   behavior *before* porting logic (translate the prose in `Expressions.psm1`'s docstring
   and README's grammar table into test cases first), then implement until green. This is
   the highest-risk subtlety area and needs the most fixture coverage from real
-  `site.yml`/`packages/*`/`roles/*` usage:
+  `main.yml`/`packages/*`/`roles/*` usage:
   - The `enabled()` filter's mapping-descends/boolean-short-circuits walk
     (`modules/Filters/enabled.ps1`) gates nearly every role/package inclusion in this repo
     (`roles/*/main.yml`, `hosts/camalot/main.yml`) — a bug here has the widest blast
@@ -374,7 +374,7 @@ This is the piece the user explicitly called out, so it gets its own contract:
       warm for the process lifetime (stdin/stdout kept open, one JSON request/response
       per call over the same pipe) rather than spawning fresh each invocation — needed
       because filters like `default`/`upper` can run hundreds of times across a large
-      `site.yml`. Fall back to spawn-per-call only if the interpreter doesn't tolerate a
+      `main.yml`. Fall back to spawn-per-call only if the interpreter doesn't tolerate a
       long-lived REPL-style loop.
   - Errors from a script filter surface as Go `error` and propagate the same as a thrown
     PowerShell exception did (aborts expression evaluation with a clear message including
@@ -461,11 +461,11 @@ type Handler interface {
 - **`shell.host: pwsh` native-object merge audit — done, not deferred**: a repo-wide grep
   for `host: pwsh` and for any consumer dotting into a non-reserved field off a `shell`
   task's `id` (the `${{ pf.ProgramFilesDir }}` pattern from the README) found **zero real
-  usages** in `site.yml`/`hosts/*`/`packages/*`/`roles/*` today — this feature is currently
+  usages** in `main.yml`/`hosts/*`/`packages/*`/`roles/*` today — this feature is currently
   demonstrated only in documentation, not exercised anywhere in this repo. Given that,
   `shell`'s Go port can drop `Merge-ShellNativeResult` entirely for v1 (documented as a
   compatibility gap, see §8) without a JSON-bridging redesign, and only needs to be
-  revisited if a future `site.yml` change starts relying on it — re-run this grep as part
+  revisited if a future `main.yml` change starts relying on it — re-run this grep as part
   of Phase 3/4 sign-off in case usage was added since this plan was written.
 - Handler registry mirrors `Get-PackageManagerHandlers`/`$script:NoCommandCheckModules`/
   `$script:ModuleCommandNames`: a `Registry` type built from a static list at `main.go`
@@ -514,7 +514,7 @@ driven by whole fixture documents rather than isolated calls.
    entry) before it's trusted as a Go-loader validation input; once reconciled, it does
    not change further without an explicit decision.
 2. **Golden compatibility harness**: for every fixture under `testdata/` (curated subset
-   of real `site.yml`/`hosts/*.yml`/`variables/*.yml`/`packages/*/main.yml`/`roles/*/main.yml`
+   of real `main.yml`/`hosts/*.yml`/`variables/*.yml`/`packages/*/main.yml`/`roles/*/main.yml`
    shapes, plus synthetic edge cases for every documented grammar corner — loops,
    `parent.item`, `failed_when`, `is`/`is not`, filter chains, `--tags` filtering, an
    embedded-shell `fact`, an `assert`, a fact-value self-reference, a `vars:`-referencing-
@@ -533,7 +533,7 @@ driven by whole fixture documents rather than isolated calls.
    `pwsh_version` fact's meaning shifts once the runner isn't
    PowerShell. Each gets a line in the README and a decision recorded before Phase 3/4
    sign-off (see [§8](#8-risks--open-questions)).
-4. **No new required config** for existing users: `site.yml`/`hosts/`/`variables/` files
+4. **No new required config** for existing users: `main.yml`/`hosts/`/`variables/` files
    need zero edits to work under the Go binary on day one.
 
 ## 6. Testing strategy
@@ -597,7 +597,7 @@ as the project matures.
     scope); `linux/amd64`, `darwin/arm64`/`darwin/amd64` builds too, clearly documented as
     "engine-only / limited handler support" builds (Windows-only handlers return a clear
     unsupported-OS error rather than being compiled out, so the binary still runs and
-    reports sensibly against a cross-platform subset of `site.yml`).
+    reports sensibly against a cross-platform subset of `main.yml`).
   - Archives: `.zip` for Windows, `.tar.gz` for Unix-likes; embed `README.md`,
     `LICENSE`, `ironstate.schema.json`.
   - Checksums file (`checksums.txt`, SHA256) signed with **cosign** (keyless/OIDC via
@@ -648,8 +648,8 @@ green specifically for PRs touching the path-filtered directories above.
 | --- | --- | --- |
 | 0 — Scaffolding | `go.mod`, `cmd/ironstate`, cobra/viper wiring, CI skeleton (`ci.yml` running lint+vet+empty test suite), `.goreleaser.yaml` snapshot build | `ironstate version` builds and runs in CI on all target platforms |
 | 1 — Core engine, no I/O | `internal/expr`, `internal/template`, `internal/filters` (built-ins only), `internal/model`, **schema-vs-`ironstate.ps1` reconciliation audit** (fix drift, e.g. missing `gem` entry, before trusting `ironstate.schema.json` as a validator input), schema validation test | Expression/template unit tests green (incl. fuzz targets); parity fixtures ported from README grammar examples; schema audit findings resolved or explicitly tracked |
-| 2 — Document loading & flattening | `internal/packages`, `internal/tasks`, `internal/facts` | Real `site.yml` + all `hosts/`/`variables/` overlays (including `hosts/`-rooted and `roles/`-rooted `include`s) load, merge, and flatten to the expected leaf list (fixture-asserted) |
-| 3 — Engine + no-op/low-risk handlers | `internal/engine` (incl. dry-run execution exceptions for embedded-shell `fact`/`assert`, missing-handler row absence), handlers: `log`, `path`, `fact`, `assert`, `file`, `copy`, `blockinfile`, `ssh_host_block`, `symlinks`, `zip` | Full dry-run of real `site.yml` across all hosts produces a stable, reviewed plan; §4.8's `shell.host: pwsh` audit re-confirmed against current repo state; `.env`/`.secrets` resolution behavior decided (§2/§11) |
+| 2 — Document loading & flattening | `internal/packages`, `internal/tasks`, `internal/facts` | Real `main.yml` + all `hosts/`/`variables/` overlays (including `hosts/`-rooted and `roles/`-rooted `include`s) load, merge, and flatten to the expected leaf list (fixture-asserted) |
+| 3 — Engine + no-op/low-risk handlers | `internal/engine` (incl. dry-run execution exceptions for embedded-shell `fact`/`assert`, missing-handler row absence), handlers: `log`, `path`, `fact`, `assert`, `file`, `copy`, `blockinfile`, `ssh_host_block`, `symlinks`, `zip` | Full dry-run of real `main.yml` across all hosts produces a stable, reviewed plan; §4.8's `shell.host: pwsh` audit re-confirmed against current repo state; `.env`/`.secrets` resolution behavior decided (§2/§11) |
 | 4 — Package-manager handlers + `shell` + template engines | `winget`, `chocolatey`, `pipx`, `npm`, `cargo`, `go`, `gem`, `eget`, `registry`, `scheduled_task`, `shell` (incl. per-state fallback rules), `template` module w/ `jinja` (build-vs-buy spike first) and new `gotemplate` (Go stdlib `text/template`) | Dry-run parity harness (§5.2) green across all fixtures; any (currently nonexistent) real `eps`/`herestring` usage discovered late is migrated to `jinja`/`gotemplate` before this phase exits |
 | 5 — Filter plugin system | External-script filter loader + shim + persistent worker pool (§4.5, race-tested), `filters list`/`doctor` commands | Existing `modules/Filters/*.ps1` run unmodified through the Go binary; a sample non-PowerShell script filter proves the interpreter-config hook works |
 | 6 — Hardening | Full test matrix green, SBOM + provenance attestation + packaging + signing wired, docs updated (`README.md` rewritten for the Go binary, PowerShell version marked legacy, exit-code contract documented) | `release.yml` produces a signed, SBOM'd, attested `v0.x.0` pre-release artifact |
@@ -666,7 +666,7 @@ keeps review tractable and gives natural checkpoints to re-run the rubber-duck r
   case usage was added since this plan was written; only build the JSON-bridging design
   if that re-audit finds a real consumer.
 - **`eps`/`herestring` removal** (§1, §4.7): a repo-wide grep for `engine:\s*(eps|herestring)`
-  found zero matches in any real `site.yml`/`hosts/*`/`packages/*`/`roles/*`/`tasks/*`
+  found zero matches in any real `main.yml`/`hosts/*`/`packages/*`/`roles/*`/`tasks/*`
   content — only `jinja` is used (`roles/development/git/main.yml`,
   `tasks/wsl-shim/main.yml`). Both engines are dropped rather than ported or shelled out;
   `template`/`blockinfile.template` reject them with a clear "unsupported engine, migrate

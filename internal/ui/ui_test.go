@@ -42,6 +42,44 @@ func TestStyleEmptyString(t *testing.T) {
 	}
 }
 
+func TestNewlineIsCRLFWhenEnabled(t *testing.T) {
+	prev := Enabled
+	Enabled = true
+	defer func() { Enabled = prev }()
+
+	if got := Newline(); got != "\r\n" {
+		t.Fatalf("Newline() with Enabled=true = %q, want \\r\\n", got)
+	}
+}
+
+func TestNewlineIsLFWhenDisabled(t *testing.T) {
+	prev := Enabled
+	Enabled = false
+	defer func() { Enabled = prev }()
+
+	if got := Newline(); got != "\n" {
+		t.Fatalf("Newline() with Enabled=false = %q, want \\n", got)
+	}
+}
+
+func TestPrintFactsUsesCRLFWhenEnabled(t *testing.T) {
+	prev := Enabled
+	Enabled = true
+	defer func() { Enabled = prev }()
+
+	var buf bytes.Buffer
+	if err := PrintFacts(&buf, map[string]any{"a": "1", "b": "2"}); err != nil {
+		t.Fatalf("PrintFacts error: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "\r\n") {
+		t.Fatalf("PrintFacts with Enabled=true should use \\r\\n line endings, got %q", out)
+	}
+	if strings.Contains(strings.ReplaceAll(out, "\r\n", ""), "\n") {
+		t.Fatalf("PrintFacts with Enabled=true should never emit a bare \\n, got %q", out)
+	}
+}
+
 func TestPrintFactsSortsKeysAndIncludesEverything(t *testing.T) {
 	prev := Enabled
 	Enabled = false

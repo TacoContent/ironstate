@@ -39,7 +39,7 @@ tasks:
 The `$` is stripped for the actual registered/accessible name; it only ever exists as a
 marker on the *authored* key. This is a single, uniform mechanism rather than a
 per-module `secret: true` field (the alternative raised) - one convention to document,
-one thing for a reader of someone else's `site.yml` to recognize, and it works
+one thing for a reader of someone else's `main.yml` to recognize, and it works
 identically whether the sensitive value comes from a fact, a var, or a registered task
 result, without a per-module opt-in field to remember to add everywhere.
 

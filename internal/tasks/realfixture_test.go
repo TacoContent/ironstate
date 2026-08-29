@@ -14,7 +14,7 @@ import (
 
 // realModuleNames mirrors ironstate.ps1's Get-PackageManagerHandlers
 // registration list (docs/plans/go-rewrite.md §2) — used to flatten the
-// *real* repo's site.yml against, as an integration smoke test that this
+// *real* repo's main.yml against, as an integration smoke test that this
 // port doesn't choke on real content ahead of internal/engine existing.
 var realModuleNames = []string{
 	"winget", "chocolatey", "homebrew", "brew", "apt", "gem", "pipx", "npm", "cargo", "go", "eget",
@@ -35,14 +35,14 @@ func repoRoot(t *testing.T) string {
 
 func TestFlattenRealSiteYAML(t *testing.T) {
 	root := repoRoot(t)
-	sitePath := filepath.Join(root, "site.yml")
+	sitePath := filepath.Join(root, "main.yml")
 	if _, err := os.Stat(sitePath); err != nil {
-		t.Skipf("site.yml not found at %s (unexpected repo layout): %v", sitePath, err)
+		t.Skipf("main.yml not found at %s (unexpected repo layout): %v", sitePath, err)
 	}
 
 	doc, err := packages.LoadFile(sitePath, root)
 	if err != nil {
-		t.Fatalf("LoadFile(site.yml) error: %v", err)
+		t.Fatalf("LoadFile(main.yml) error: %v", err)
 	}
 	docMap := model.AsMap(doc)
 
@@ -53,12 +53,12 @@ func TestFlattenRealSiteYAML(t *testing.T) {
 	// Mirrors ironstate.ps1's whole-document '-Soft' pass before flattening.
 	ctx := map[string]any{"facts": f, "vars": v}
 	if err := template.ResolveInPlace(docMap, ctx, fset, "site", true); err != nil {
-		t.Fatalf("soft-resolving site.yml failed: %v", err)
+		t.Fatalf("soft-resolving main.yml failed: %v", err)
 	}
 
 	taskList, err := model.TaskList(docMap)
 	if err != nil {
-		t.Fatalf("TaskList(site.yml) error: %v", err)
+		t.Fatalf("TaskList(main.yml) error: %v", err)
 	}
 
 	leaves, err := Expand(taskList, Options{
@@ -69,18 +69,18 @@ func TestFlattenRealSiteYAML(t *testing.T) {
 		Filters:      fset,
 	})
 	if err != nil {
-		t.Fatalf("Expand(site.yml) error: %v", err)
+		t.Fatalf("Expand(main.yml) error: %v", err)
 	}
 
 	if len(leaves) == 0 {
-		t.Fatal("expected at least one flattened leaf from the real site.yml + its includes")
+		t.Fatal("expected at least one flattened leaf from the real main.yml + its includes")
 	}
 	for _, l := range leaves {
 		if l.Module == "" {
 			t.Errorf("leaf with no module: %#v", l)
 		}
 	}
-	t.Logf("flattened %d leaves from the real site.yml", len(leaves))
+	t.Logf("flattened %d leaves from the real main.yml", len(leaves))
 }
 
 // TestFlattenRealSiteYAMLWithHostOverlay pulls in hosts/krayt.yml ->
@@ -91,9 +91,9 @@ func TestFlattenRealSiteYAML(t *testing.T) {
 // real internal/engine yet.
 func TestFlattenRealSiteYAMLWithHostOverlay(t *testing.T) {
 	root := repoRoot(t)
-	sitePath := filepath.Join(root, "site.yml")
+	sitePath := filepath.Join(root, "main.yml")
 	if _, err := os.Stat(sitePath); err != nil {
-		t.Skipf("site.yml not found at %s: %v", sitePath, err)
+		t.Skipf("main.yml not found at %s: %v", sitePath, err)
 	}
 
 	t.Setenv("COMPUTERNAME", "KRAYT")
@@ -111,7 +111,7 @@ func TestFlattenRealSiteYAMLWithHostOverlay(t *testing.T) {
 
 	ctx := map[string]any{"facts": f, "vars": v}
 	if err := template.ResolveInPlace(docMap, ctx, fset, "site", true); err != nil {
-		t.Fatalf("soft-resolving site.yml+hosts/krayt.yml failed: %v", err)
+		t.Fatalf("soft-resolving main.yml+hosts/krayt.yml failed: %v", err)
 	}
 
 	taskList, err := model.TaskList(docMap)
@@ -137,5 +137,5 @@ func TestFlattenRealSiteYAMLWithHostOverlay(t *testing.T) {
 			t.Errorf("leaf with empty module: %#v", l)
 		}
 	}
-	t.Logf("flattened %d leaves from site.yml + hosts/krayt.yml (-> hosts/camalot -> roles/*)", len(leaves))
+	t.Logf("flattened %d leaves from main.yml + hosts/krayt.yml (-> hosts/camalot -> roles/*)", len(leaves))
 }

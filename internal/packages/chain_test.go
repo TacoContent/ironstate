@@ -74,7 +74,7 @@ func TestLoadHierarchyAppliesBareOSFamilyOverlayWithoutHostname(t *testing.T) {
 	// with no hostname component at all, should still apply on any
 	// Windows machine.
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "site.yml"), `
+	writeFile(t, filepath.Join(dir, "main.yml"), `
 tasks:
   - name: base task
     log: { message: base }
@@ -93,7 +93,7 @@ tasks:
 `)
 
 	hostFacts := map[string]any{"computer_name": "some-other-host", "os_family": "windows", "platform": "windows"}
-	doc, err := LoadHierarchy(filepath.Join(dir, "site.yml"), hostFacts)
+	doc, err := LoadHierarchy(filepath.Join(dir, "main.yml"), hostFacts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ tasks:
 
 func TestLoadHierarchyAcceptsOverlayNameInAnyOrder(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "site.yml"), `
+	writeFile(t, filepath.Join(dir, "main.yml"), `
 vars:
   editor: code
 tasks: []
@@ -122,7 +122,7 @@ vars:
 `)
 
 	hostFacts := map[string]any{"computer_name": "krayt", "arch": "amd64"}
-	doc, err := LoadHierarchy(filepath.Join(dir, "site.yml"), hostFacts)
+	doc, err := LoadHierarchy(filepath.Join(dir, "main.yml"), hostFacts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ vars:
 
 func TestLoadHierarchyDefaultThenChainedOverlaysMostSpecificWins(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "site.yml"), `
+	writeFile(t, filepath.Join(dir, "main.yml"), `
 vars:
   editor: code
 tasks:
@@ -158,7 +158,7 @@ vars:
 `)
 
 	hostFacts := map[string]any{"computer_name": "krayt", "arch": "amd64"}
-	doc, err := LoadHierarchy(filepath.Join(dir, "site.yml"), hostFacts)
+	doc, err := LoadHierarchy(filepath.Join(dir, "main.yml"), hostFacts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +264,7 @@ func TestResolvePlaybookPathErrorsWhenNothingFound(t *testing.T) {
 
 func TestResolvePlaybookPathDefaultsToCWD(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "site.yml"), "---\nvars: {}\ntasks: []\n")
+	writeFile(t, filepath.Join(dir, "main.yml"), "---\nvars: {}\ntasks: []\n")
 
 	origWD, err := os.Getwd()
 	if err != nil {
@@ -279,7 +279,7 @@ func TestResolvePlaybookPathDefaultsToCWD(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := filepath.Join(".", "site.yml"); got != want {
+	if want := filepath.Join(".", "main.yml"); got != want {
 		t.Errorf("ResolvePlaybookPath(\"\") = %q, want %q", got, want)
 	}
 }
