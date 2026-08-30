@@ -199,6 +199,43 @@ tasks:
 	}
 }
 
+// TestLoadIncludedPackageDefersFieldsOnSiteVarCollision guards against a
+// regression where a package's own 'vars.<key>' (here 'productivity',
+// providing only a couple of sub-fields) shadowed a same-named site var at
+// this soft-resolution stage. mergeFlatContext (internal/engine) always
+// lets the fully-merged site vars - which may add sub-fields this
+// package's own vars never mention, e.g. via '--var' - wholesale-replace a
+// package's same-named var at real dispatch time; baking in a value here
+// from the package's (possibly partial) view alone, before that happens,
+// would leave the real per-leaf pass with nothing left to fix.
+func TestLoadIncludedPackageDefersFieldsOnSiteVarCollision(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "productivity", "main.yml"), `
+vars:
+  productivity:
+    browsers: false
+tasks:
+  - name: btop
+    winget:
+      package: btop
+      state: ${{ productivity | enabled("btop") | ternary("present", "absent") }}
+`)
+
+	fset := filters.New()
+	includeSpec := map[string]any{"name": "productivity", "state": "present"}
+	siteVars := map[string]any{"productivity": map[string]any{"btop": true}}
+	included, err := LoadIncludedPackage(includeSpec, root, map[string]any{}, siteVars, fset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := included.Data.(map[string]any)
+	leaf := data["tasks"].([]any)[0].(map[string]any)
+	state := leaf["winget"].(map[string]any)["state"]
+	if s, ok := state.(string); ok && (s == "present" || s == "absent") {
+		t.Fatalf("winget.state = %q, want the '${{ }}' expression left unresolved for the real per-leaf pass (which sees the site's 'productivity.btop', not just this package's)", s)
+	}
+}
+
 func TestLoadIncludedPackageMissingReturnsNilNotError(t *testing.T) {
 	root := t.TempDir()
 	included, err := LoadIncludedPackage(map[string]any{"name": "does-not-exist"}, root, nil, nil, filters.New())

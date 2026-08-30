@@ -45,3 +45,11 @@ tasks:
     when: productivity | enabled('communication')
     include:
       name: roles/productivity/communication
+
+  - name: Include Productivity CLI Role
+    tags:
+      - productivity
+      - productivity.cli
+    when: productivity | enabled('cli')
+    include:
+      name: roles/productivity/cli

@@ -1,0 +1,90 @@
+---
+
+tasks:
+  - name: ripgrep
+    eget:
+      package: BurntSushi/ripgrep
+      state: ${{ productivity | enabled("ripgrep") | ternary("present", "absent") }}
+      args:
+        - --to=${{ facts.local_bin_path | join(item.bin) }}
+    tags:
+      - productivity
+      - productivity.cli
+      - productivity.cli.ripgrep
+    when:
+      - productivity.cli | enabled("ripgrep")
+    with:
+      bin: "${{ (facts.os_family == 'windows') | ternary('rg.exe', 'rg') }}"
+
+  - name: gping
+    when: productivity.cli | enabled('gping')
+    eget:
+      package: orf/gping
+      state: ${{ productivity | enabled("cli", "gping") | ternary("present", "absent") }}
+      args:
+        - --to=${{ facts.local_bin_path | join(item.bin) }}
+    with:
+      bin: "${{ (facts.os_family == 'windows') | ternary('gping.exe', 'gping') }}"
+    tags:
+      - productivity
+      - productivity.cli
+      - productivity.cli.gping
+
+  - name: fd
+    eget:
+      package: sharkdp/fd
+      state: ${{ productivity | enabled("cli", "fd") | ternary("present", "absent") }}
+      args:
+        - --to=${{ facts.local_bin_path | join(item.bin) }}
+    tags:
+      - productivity
+      - productivity.cli
+      - productivity.cli.fd
+    when:
+      - productivity.cli | enabled("fd")
+    with:
+      bin: "${{ (facts.os_family == 'windows') | ternary('fd.exe', 'fd') }}"
+
+  - name: bat
+    eget:
+      package: sharkdp/bat
+      state: ${{ productivity | enabled("cli", "bat") | ternary("present", "absent") }}
+      args:
+        - --to=${{ facts.local_bin_path | join(item.bin) }}
+    tags:
+      - productivity
+      - productivity.cli
+      - productivity.cli.bat
+    when:
+      - productivity.cli | enabled("bat")
+    with:
+      bin: "${{ (facts.os_family == 'windows') | ternary('bat.exe', 'bat') }}"
+
+  - name: eza
+    eget:
+      package: ogham/exa
+      state: ${{ productivity | enabled("cli", "eza") | ternary("present", "absent") }}
+      args:
+        - --to=${{ facts.local_bin_path | join(item.bin) }}
+    tags:
+      - productivity
+      - productivity.cli
+      - productivity.cli.eza
+    when:
+      - productivity.cli | enabled("eza")
+    with:
+      bin: "${{ (facts.os_family == 'windows') | ternary('eza.exe', 'eza') }}"
+
+  - name: btop++
+    eget:
+      package: aristocratos/btop
+      state: ${{ productivity | enabled("cli", "btop") | ternary("present", "absent") }}
+      args:
+        - --to=${{ facts.local_bin_path | join('btop') }}
+    tags:
+      - productivity
+      - productivity.cli
+      - productivity.cli.btop
+    when:
+      - productivity.cli | enabled("btop")
+      - facts.os_platform == 'linux'

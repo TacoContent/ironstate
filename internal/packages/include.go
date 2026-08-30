@@ -86,6 +86,18 @@ func LoadIncludedPackage(includeSpec map[string]any, packagesRoot string, facts,
 			Warn("package '%s': its own 'vars.%s' collides with a reserved namespace name; ignoring", nameStr, key)
 			continue
 		}
+		if _, siteWins := vars[key]; siteWins {
+			// mergeFlatContext (internal/engine) has site vars wholesale-
+			// replace a package's own same-named top-level var at real
+			// dispatch time - it's never a deep merge of the two. Treating
+			// this package's (possibly partial) value as a "known"
+			// namespace here would let a '${{ }}' field referencing it
+			// resolve - and permanently bake in a plain value - using data
+			// the later, authoritative, fully-merged/--var-overridden pass
+			// can then never revisit. Leave it unknown so any such
+			// expression defers to that pass instead.
+			continue
+		}
 		ctx[key] = val
 	}
 

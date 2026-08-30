@@ -163,3 +163,28 @@ tasks:
         if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {
           oh-my-posh init pwsh --config "${{ shell.pwsh.omp.profile | default(defaults.shell.pwsh.omp.profile) }}" | Invoke-Expression
         }
+
+  - name: Zoxide
+    eget:
+      package: ajeetdsouza/zoxide
+      state: ${{ shell | enabled('zoxide') | ternary('present', 'absent') }}
+      args:
+        - --to=${{ facts.local_bin_path | join(item.bin) }}
+    with:
+      bin: "${{ (facts.os_family == 'windows') | ternary('zoxide.exe', 'zoxide') }}"
+    tags:
+      - shell
+      - shell.zoxide
+
+  - name: Configure Zoxide
+    blockinfile:
+      create: false
+      state: ${{ shell | enabled('zoxide') | ternary('present', 'absent') }}
+      dest: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}"
+      block: |
+        if (Get-Command zoxide -ErrorAction SilentlyContinue) {
+          Invoke-Expression (& { ( zoxide init powershell | Out-String ) })
+        }
+    tags:
+      - shell
+      - shell.zoxide

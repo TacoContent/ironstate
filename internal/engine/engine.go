@@ -372,6 +372,15 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 		}
 
 		flatContext := mergeFlatContext(opts.Facts, state.UserFacts, leaf.PackageVars, leaf.PackageInputs, leaf.PackagePackage, opts.Vars, state.Registry)
+		// A leaf materialized from 'with'/'items' only had its loop 'item'
+		// (and, nested, 'parent') in scope during tasks.expandLoop's soft
+		// pass, which defers whole expressions that also need 'facts'/
+		// 'vars' (not yet known then) - e.g. '${{ facts.x | join(item.y) }}'.
+		// Re-add it here so this leaf's real strict pass below can finish
+		// resolving those deferred expressions with both in scope at once.
+		for k, v := range leaf.ItemCtx {
+			flatContext[k] = v
+		}
 
 		// 'when' is a bare-expression condition (deliberately not
 		// '${{ }}'-wrapped - see internal/conditions) evaluated directly

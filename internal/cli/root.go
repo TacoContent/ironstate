@@ -161,7 +161,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		if err != nil {
 			return NewLoadError(err)
 		}
-		model.SetVarPath(vars, key, value)
+		model.SetVarPath(vars, key, model.CoerceVarValue(value))
 	}
 	docMap["vars"] = vars
 

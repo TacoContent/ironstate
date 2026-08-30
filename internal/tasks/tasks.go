@@ -40,6 +40,7 @@ type Leaf struct {
 	PackagePackage  map[string]any
 	Module          string
 	Item            map[string]any
+	ItemCtx         map[string]any // {"item": <loop value>[, "parent": <outer loop's ItemCtx>]}; nil outside any loop
 }
 
 // Options carries the inputs Expand-TaskTree needs beyond the task list
@@ -208,6 +209,7 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 			PackagePackage:  sc.packagePackage,
 			Module:          moduleName,
 			Item:            model.AsMap(item[moduleName]),
+			ItemCtx:         sc.parentItemCtx,
 		})
 	}
 

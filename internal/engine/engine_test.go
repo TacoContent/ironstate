@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -31,6 +32,7 @@ type fakeHandler struct {
 	// internal/handlers.runExternalCommand actually consults).
 	seenBecome                 ironexec.Become
 	ambientBecomeDuringInstall ironexec.Become
+	seenItem                   map[string]any
 }
 
 func (h *fakeHandler) Test(item map[string]any, name string, ctx Context) (bool, error) {
@@ -43,6 +45,7 @@ func (h *fakeHandler) Install(item map[string]any, name string, ctx Context) (Ex
 	h.installCall++
 	h.seenBecome = ctx.Become
 	h.ambientBecomeDuringInstall = ironexec.CurrentBecome()
+	h.seenItem = item
 	return h.installExec, h.installErr
 }
 func (h *fakeHandler) Uninstall(item map[string]any, name string, ctx Context) (ExecResult, error) {
@@ -85,6 +88,9 @@ func withFailedWhen(fw ...any) func(*tasks.Leaf) {
 func withContinueOnError() func(*tasks.Leaf) { return func(l *tasks.Leaf) { l.ContinueOnError = true } }
 func withBecome(v any) func(*tasks.Leaf)     { return func(l *tasks.Leaf) { l.Become = v } }
 func withLooped() func(*tasks.Leaf)          { return func(l *tasks.Leaf) { l.Looped = true } }
+func withItemCtx(v map[string]any) func(*tasks.Leaf) {
+	return func(l *tasks.Leaf) { l.ItemCtx = v }
+}
 
 func baseOpts(handlers map[string]Handler) Options {
 	return Options{
@@ -364,6 +370,34 @@ func TestRunLeavesIDRegistersResultForLaterTemplateUse(t *testing.T) {
 	// (fakeHandler doesn't consume 'message', but the resolve must not error out
 	// and the item map must carry the resolved value.)
 	_ = results
+}
+
+// TestRunLeavesLoopItemResolvesAlongsideFacts guards against a regression
+// where a 'with'/'items' loop's 'item' was only in scope for
+// tasks.expandLoop's own soft pass, so an expression combining both
+// 'item.*' and 'facts.*'/'vars.*' in one '${{ }}' span (deferred by that
+// soft pass, since 'facts' wasn't known yet) came back as a silently
+// missing 'item' - e.g. nil - once the real per-leaf strict pass ran here
+// with facts/vars in scope but no leaf.ItemCtx merged in.
+func TestRunLeavesLoopItemResolvesAlongsideFacts(t *testing.T) {
+	h := &fakeHandler{installed: false, installExec: ExecResult{RC: 0}}
+	opts := baseOpts(map[string]Handler{"widget": h})
+	opts.Apply = true
+	opts.Facts = map[string]any{"os_family": "windows"}
+
+	_, _, err := RunLeaves([]tasks.Leaf{
+		leaf("widget", map[string]any{
+			"state": "present",
+			"path":  "${{ facts.os_family | join(item.bin) }}",
+		}, withItemCtx(map[string]any{"item": map[string]any{"bin": "gping.exe"}})),
+	}, opts, NewState())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join("windows", "gping.exe")
+	if got := h.seenItem["path"]; got != want {
+		t.Fatalf("path = %#v, want %q (facts and loop item resolved together)", got, want)
+	}
 }
 
 func TestRunLeavesLoopedIDAccumulatesResults(t *testing.T) {

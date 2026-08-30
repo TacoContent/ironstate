@@ -34,6 +34,24 @@ func TestParseVarOverrideRejectsEmptyKey(t *testing.T) {
 	}
 }
 
+func TestCoerceVarValueBooleans(t *testing.T) {
+	if got := CoerceVarValue("true"); got != true {
+		t.Fatalf("CoerceVarValue(true) = %#v, want bool true", got)
+	}
+	if got := CoerceVarValue("false"); got != false {
+		t.Fatalf("CoerceVarValue(false) = %#v, want bool false", got)
+	}
+}
+
+func TestCoerceVarValueLeavesOtherStringsAlone(t *testing.T) {
+	cases := []string{"22", "nvim", "Eclipse.Temurin.21", "True", "FALSE", ""}
+	for _, c := range cases {
+		if got := CoerceVarValue(c); got != c {
+			t.Fatalf("CoerceVarValue(%q) = %#v, want unchanged string", c, got)
+		}
+	}
+}
+
 func TestSetVarPathTopLevel(t *testing.T) {
 	vars := map[string]any{}
 	SetVarPath(vars, "editor", "nvim")

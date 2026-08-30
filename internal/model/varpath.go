@@ -20,6 +20,23 @@ func ParseVarOverride(raw string) (path, value string, err error) {
 	return key, val, nil
 }
 
+// CoerceVarValue turns a --var override's raw string value into a real
+// bool when it's exactly "true" or "false", leaving every other value as
+// the literal string. This lets --var satisfy filters like 'enabled' that
+// gate a leaf on a genuine bool (a package-id string such as
+// "Eclipse.Temurin.21" must still read as an "off" scalar, so only the
+// unambiguous true/false spellings are coerced - nothing else is guessed).
+func CoerceVarValue(raw string) any {
+	switch raw {
+	case "true":
+		return true
+	case "false":
+		return false
+	default:
+		return raw
+	}
+}
+
 // SetVarPath sets value at a '.'-separated dotted path inside vars,
 // creating any missing intermediate map[string]any levels along the way.
 // A path segment that already holds a non-map value is overwritten with

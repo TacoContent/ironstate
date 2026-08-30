@@ -21,3 +21,4 @@ tasks:
     when: 
       - ansible_os_family == "windows"
       - monitoring | enabled("windows_exporter")
+

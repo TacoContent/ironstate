@@ -29,6 +29,9 @@ tasks:
     #   - build
     desc: Push the built binary to the remote server
     cmds: 
+      - echo "Starting the push process..."
+      - echo "Push to local bin directory"
+      - cp ./dist/ironstate_windows_amd64_v1/ironstate.exe ~/.local/bin/ironstate.exe
       - echo "Pushing the built binary to the remote server..."
       - scp ./dist/ironstate_darwin_amd64_v1/ironstate {{.MACOS_USER}}@{{.MACOS_IP}}:/Users/{{.MACOS_USER}}/.local/bin/
       - echo "Pushing the built binary to the WSL distributions..."
