@@ -1,0 +1,8 @@
+[wsl2]
+# guiApplications=false
+memory={{ memory | default('4GB') }} # Limit RAM (Adjust based on your total RAM, e.g., 4GB or 8GB)
+processors={{ processors | default('4') }} # Limit to 4 CPU cores so Windows always has free threads
+# Force a pure cgroup v2 hierarchy. systemd >= 256 (e.g. Ubuntu's systemd 259)
+# fails to spawn its per-user executor under WSL's default hybrid v1+v2 cgroups,
+# producing "Failed to start the systemd user session" + a long startup timeout.
+kernelCommandLine=cgroup_no_v1=all
