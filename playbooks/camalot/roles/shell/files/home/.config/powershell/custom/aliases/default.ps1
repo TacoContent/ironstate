@@ -86,3 +86,7 @@ function map {
     $cmd = $args[0]
     $input | ForEach-Object { & $cmd $_ }
 }
+
+if (Get-Command terraform -ErrorAction SilentlyContinue) {
+    Set-Alias -Name tf -Value terraform
+}

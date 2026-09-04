@@ -7,7 +7,7 @@ tasks:
       - languages.golang
     winget:
       package: "GoLang.Go"
-      state: ${{ languages.golang | enabled() | ternary('latest', 'absent') }}
+      state: ${{ languages.golang | enabled() | ternary('present', 'absent') }}
 
   - name: Install Golangci-lint
     tags: 
@@ -15,15 +15,30 @@ tasks:
       - languages.golang
     eget:
       package: "golangci/golangci-lint"
-      state: ${{ languages.golang | enabled() | ternary('latest', 'absent') }}
+      state: ${{ languages.golang | enabled() | ternary('present', 'absent') }}
+      args:
+        - --to=${{ facts.local_bin_path | join(item.bin) }}
+    with:
+      bin: "${{ (facts.os_family == 'windows') | ternary('golangci-lint.exe', 'golangci-lint') }}"
+
+  - name: Cleanup GoReleaser
+    tags: 
+      - languages
+      - languages.golang
+    winget:
+      package: "goreleaser.goreleaser"
+      state: absent
 
   - name: Install GoReleaser
     tags: 
       - languages
       - languages.golang
-    winget:
-      package: "GoReleaser.GoReleaser"
-      state: ${{ languages.golang | enabled() | ternary('latest', 'absent') }}
-      when:
-        - facts.os_family == 'windows'
-        - languages.golang | enabled()
+    eget:
+      package: "goreleaser/goreleaser"
+      state: ${{ languages.golang | enabled() | ternary('present', 'absent') }}
+      args:
+        - --to=${{ facts.local_bin_path | join(item.bin) }}
+    with:
+      bin: "${{ (facts.os_family == 'windows') | ternary('goreleaser.exe', 'goreleaser') }}"
+    when:
+      - languages.golang | enabled()

@@ -14,7 +14,7 @@ import (
 // optional PowerShell dependency (shell.host: pwsh — see
 // docs/plans/go-rewrite.md §11).
 var checkedCommands = []string{
-	"winget", "choco", "brew", "apt-get", "pipx", "npm", "cargo", "go", "gem", "eget", "pwsh",
+	"winget", "choco", "brew", "apt-get", "pipx", "npm", "cargo", "go", "gem", "eget", "xget", "pwsh",
 }
 
 func newDoctorCommand() *cobra.Command {

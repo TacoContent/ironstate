@@ -2,7 +2,7 @@ package exec
 
 // Package exec wraps external command invocation behind a small
 // interface (docs/plans/go-rewrite.md §4.8) so every CLI-backed handler
-// (winget, chocolatey, pipx, npm, cargo, go, gem, eget) is unit-testable
+// (winget, chocolatey, pipx, npm, cargo, go, gem, eget, xget) is unit-testable
 // with a fake Runner asserting the exact argv built, without touching a
 // real package manager.
 
