@@ -200,6 +200,9 @@
 [pager]
   branch = false
 
+[url "ssh://git@github.com"]
+      insteadOf = "https://github.com"
+
 {% for profile in git.profiles | default([]) %}
 {% for gitdir in profile.gitdirs %}
 [includeIf "{{ gitdir }}"]
