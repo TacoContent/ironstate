@@ -6,7 +6,7 @@ tasks:
     tags:
       - ssh
       - ssh.ssh-list
-    eget:
+    xget:
       package: akinoiro/ssh-list
       state: ${{ ssh.ssh_list | default(true) | ternary('present', 'absent') }}
       args:
@@ -18,7 +18,7 @@ tasks:
     tags:
       - development
       - git
-    eget:
+    xget:
       package: byawitz/ggh
       state: ${{ ssh.ggh | default(true) | ternary('present', 'absent') }}
       args:

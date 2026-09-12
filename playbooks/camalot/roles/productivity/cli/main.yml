@@ -2,7 +2,7 @@
 
 tasks:
   - name: ripgrep
-    eget:
+    xget:
       package: BurntSushi/ripgrep
       state: ${{ productivity | enabled("ripgrep") | ternary("present", "absent") }}
       args:
@@ -18,7 +18,7 @@ tasks:
 
   - name: gping
     when: productivity.cli | enabled('gping')
-    eget:
+    xget:
       package: orf/gping
       state: ${{ productivity | enabled("cli", "gping") | ternary("present", "absent") }}
       args:
@@ -31,7 +31,7 @@ tasks:
       - productivity.cli.gping
 
   - name: fd
-    eget:
+    xget:
       package: sharkdp/fd
       state: ${{ productivity | enabled("cli", "fd") | ternary("present", "absent") }}
       args:
@@ -46,7 +46,7 @@ tasks:
       bin: "${{ (facts.os_family == 'windows') | ternary('fd.exe', 'fd') }}"
 
   - name: bat
-    eget:
+    xget:
       package: sharkdp/bat
       state: ${{ productivity | enabled("cli", "bat") | ternary("present", "absent") }}
       args:
@@ -61,7 +61,7 @@ tasks:
       bin: "${{ (facts.os_family == 'windows') | ternary('bat.exe', 'bat') }}"
 
   - name: eza
-    eget:
+    xget:
       package: ogham/exa
       state: ${{ productivity | enabled("cli", "eza") | ternary("present", "absent") }}
       args:
@@ -76,7 +76,7 @@ tasks:
       bin: "${{ (facts.os_family == 'windows') | ternary('eza.exe', 'eza') }}"
 
   - name: btop++
-    eget:
+    xget:
       package: aristocratos/btop
       state: ${{ productivity | enabled("cli", "btop") | ternary("present", "absent") }}
       args:

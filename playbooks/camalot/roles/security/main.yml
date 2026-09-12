@@ -6,7 +6,7 @@ tasks:
     tags: 
       - security
       - security.pass-cli
-    eget:
+    xget:
       package: reyamira/pass-cli
       state: ${{ security | enabled('pass_cli') | ternary('present', 'absent') }}
       args:
@@ -18,7 +18,7 @@ tasks:
     tags:
       - security
       - security.cotp
-    eget:
+    xget:
       package: replydev/cotp
       state: ${{ security | enabled('cotp') | ternary('present', 'absent') }}
       args:
@@ -29,7 +29,7 @@ tasks:
     tags: 
       - security
       - security.gauth
-    eget:
+    xget:
       package: pcarrier/gauth
       state: ${{ security | enabled('gauth') | ternary('present', 'absent') }}
       args:
@@ -57,7 +57,7 @@ tasks:
     tags: 
       - security
       - security.syft
-    eget:
+    xget:
       package: anchore/syft
       state: ${{ security | enabled('syft') | ternary('present', 'absent') }}
       args:
@@ -69,7 +69,7 @@ tasks:
     tags: 
       - security
       - security.grype
-    eget:
+    xget:
       package: anchore/grype
       state: ${{ security | enabled('grype') | ternary('present', 'absent') }}
       args:

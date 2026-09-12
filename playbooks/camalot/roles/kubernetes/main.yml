@@ -21,7 +21,7 @@ tasks:
     tags: 
       - kubernetes
     when: ${{ kubernetes.kdash.enabled | default(false) }}
-    eget:
+    xget:
       package: kdash-rs/kdash
       state: ${{ kubernetes.kdash.state }}
       args:
@@ -33,7 +33,7 @@ tasks:
     tags: 
       - kubernetes
     when: ${{ kubernetes.stern.enabled | default(false) }}
-    eget:
+    xget:
       package: stern/stern
       state: ${{ kubernetes.stern.state }}
       args:
@@ -45,7 +45,7 @@ tasks:
     tags: 
       - kubernetes
     when: ${{ kubernetes.k9s.enabled | default(false) }}
-    eget:
+    xget:
       package: derailed/k9s
       state: ${{ kubernetes.k9s.state }}
       args:
@@ -57,7 +57,7 @@ tasks:
     tags: 
       - kubernetes
     when: ${{ kubernetes.popeye.enabled | default(false) }}
-    eget:
+    xget:
       package: derailed/popeye
       state: ${{ kubernetes.popeye.state }}
       args:

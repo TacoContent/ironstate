@@ -165,7 +165,7 @@ tasks:
         }
 
   - name: Zoxide
-    eget:
+    xget:
       package: ajeetdsouza/zoxide
       state: ${{ shell | enabled('zoxide') | ternary('present', 'absent') }}
       args:

@@ -61,7 +61,7 @@ tasks:
       - development
       - development.github
       - development.github.act
-    eget:
+    xget:
       package: nektos/act
       state: "${{ development.github | enabled('act') | ternary('present', 'absent') }}"
 
@@ -84,7 +84,7 @@ tasks:
       - development
       - development.github
       - development.github.gistui
-    eget:
+    xget:
       package: akunzai/gistui
       state: "${{ development.github | enabled('gistui') | ternary('present', 'absent') }}"
       args:

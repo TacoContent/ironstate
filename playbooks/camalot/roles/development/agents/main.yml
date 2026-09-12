@@ -8,7 +8,7 @@ tasks:
       - development.agents
       - development.agents.opencode
     when: development.agents | enabled('opencode')
-    eget:
+    xget:
       package: anomalyco/opencode
       state: ${{ development.agents.opencode | ternary('present', 'absent') }}
       args:

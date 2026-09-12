@@ -13,7 +13,7 @@ tasks:
     tags: 
       - languages
       - languages.golang
-    eget:
+    xget:
       package: "golangci/golangci-lint"
       state: ${{ languages.golang | enabled() | ternary('present', 'absent') }}
       args:
@@ -33,7 +33,7 @@ tasks:
     tags: 
       - languages
       - languages.golang
-    eget:
+    xget:
       package: "goreleaser/goreleaser"
       state: ${{ languages.golang | enabled() | ternary('present', 'absent') }}
       args:

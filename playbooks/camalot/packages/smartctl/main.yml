@@ -12,7 +12,7 @@ tasks:
       command: Get-Command smartctlx | Select-Object -ExpandProperty Source
 
   - name: Install smartctl exporter
-    eget:
+    xget:
       package: smartmontools/smartctl_exporter
       state: latest
       args:

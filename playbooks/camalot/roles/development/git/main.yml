@@ -14,7 +14,7 @@ tasks:
     tags:
       - git
       - development
-    eget:
+    xget:
       package: dandavison/delta
       state: present
       args:

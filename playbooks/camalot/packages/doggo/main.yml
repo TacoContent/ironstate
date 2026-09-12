@@ -6,7 +6,7 @@ tasks:
       - dns
       - network
       - cli
-    eget:
+    xget:
       package: mr-karan/doggo
       state: ${{ package.state }}
       args:

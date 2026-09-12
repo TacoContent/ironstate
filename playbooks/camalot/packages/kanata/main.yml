@@ -5,7 +5,7 @@ tasks:
     tags: 
       - keyboard
       - kanata
-    eget:
+    xget:
       package: jtroo/kanata
       state: ${{ package.state }}
       args:

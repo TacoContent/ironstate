@@ -1561,7 +1561,7 @@ tasks:
 
 # packages/kanata/main.yml
 tasks:
-  - eget:
+  - xget:
       package: jtroo/kanata
       state: present     # this dependency stays installed even if the package is 'absent'
       args: [--to=~/.local/bin/kanata, --upgrade-only, --asset=".zip"]

@@ -5,9 +5,9 @@ tasks:
     tags: 
       - tui
       - cli
-    eget:
+    xget:
       package: charmbracelet/gum
-      state: present
+      state: ${{ package.state }}
       args:
         - --to=${{ facts.local_bin_path | join("gum.exe") }}
         - --upgrade-only
@@ -16,7 +16,7 @@ tasks:
     tags: 
       - json
       - cli
-    eget:
+    xget:
       package: jqlang/jq
       state: ${{ package.state }}
       args:
@@ -27,7 +27,7 @@ tasks:
     tags: 
       - yaml
       - cli
-    eget:
+    xget:
       package: mikefarah/yq
       state: ${{ package.state }}
       args:
@@ -38,7 +38,7 @@ tasks:
   - name: Install Bat
     tags:
       - cli
-    eget:
+    xget:
       package: sharkdp/bat
       state: ${{ package.state }}
       args:
@@ -48,7 +48,7 @@ tasks:
   - name: Install FD
     tags: 
       - cli
-    eget:
+    xget:
       package: sharkdp/fd
       state: ${{ package.state }}
       args:
@@ -59,7 +59,7 @@ tasks:
   - name: Install Andcli
     tags: 
       - cli
-    eget:
+    xget:
       package: tjblackheart/andcli
       state: ${{ package.state }}
       args:
@@ -70,7 +70,7 @@ tasks:
     tags:
       - clipboard
       - cli
-    eget:
+    xget:
       package: Slackadays/Clipboard
       state: ${{ package.state }}
       args:
@@ -81,7 +81,7 @@ tasks:
     tags: 
       - env
       - cli
-    eget:
+    xget:
       package: GBerghoff/envdiff
       state: ${{ package.state }}
       args:
@@ -93,7 +93,7 @@ tasks:
     tags:
       - env
       - cli
-    eget:
+    xget:
       package: ankddev/envfetch
       state: ${{ package.state }}
       args:
@@ -105,7 +105,7 @@ tasks:
     tags: 
       - env
       - cli
-    eget:
+    xget:
       package: mikeleppane/envx
       state: ${{ package.state }}
       args:
@@ -116,7 +116,7 @@ tasks:
     tags: 
       - json
       - cli
-    eget:
+    xget:
       package: antonmedv/fx
       state: ${{ package.state }}
       args:
@@ -170,7 +170,7 @@ tasks:
   - name: Install Dust
     tags: 
       - cli
-    eget:
+    xget:
       package: bootandy/dust
       state: present
       args:
@@ -181,7 +181,7 @@ tasks:
     tags:
       - system-info
       - cli
-    eget:
+    xget:
       package: fastfetch-cli/fastfetch
       state: present
       args:
@@ -193,7 +193,7 @@ tasks:
     tags: 
       - process
       - cli
-    eget:
+    xget:
       package: dalance/procs/
       state: present
       args:
@@ -204,7 +204,7 @@ tasks:
     tags:
       - text
       - cli
-    eget:
+    xget:
       package: chmln/sd
       state: present
       args:
@@ -216,7 +216,7 @@ tasks:
       - security
       - cli
       - totp
-    eget:
+    xget:
       package: yitsushi/totp-cli
       state: present
       args:
@@ -228,7 +228,7 @@ tasks:
     tags: 
       - hosts
       - cli
-    eget:
+    xget:
       package: guumaster/hostctl
       state: present
       args:
@@ -239,7 +239,7 @@ tasks:
   - tags: 
       - weather
       - cli
-    eget:
+    xget:
       package: Tairesh/rustormy
       state: present
       args:
@@ -251,7 +251,7 @@ tasks:
     tags: 
       - network
       - cli
-    eget:
+    xget:
       package: hanshuaikang/NBping
       state: present
       args:

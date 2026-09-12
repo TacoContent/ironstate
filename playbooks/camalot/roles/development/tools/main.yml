@@ -11,7 +11,7 @@ tasks:
       - development
       - git
       - changelog
-    eget:
+    xget:
       package: orhun/git-cliff
       state: present
       args:
@@ -23,7 +23,7 @@ tasks:
       - development
       - git
       - versioning
-    eget:
+    xget:
       package: caarlos0/svu
       state: present
       args:
@@ -35,7 +35,7 @@ tasks:
     tags: 
       - development
       - development.tools.shellcheck
-    eget:
+    xget:
       package: koalaman/shellcheck
       state: present
       args:

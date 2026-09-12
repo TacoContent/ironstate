@@ -2,11 +2,20 @@
 tasks:
   - name: Install eget
     when: true
-    eget:
+    xget:
       package: zyedidia/eget
       state: latest
       args:
         - --to=~/.local/bin/eget.exe
+        - --upgrade-only
+
+  - name: Install xget
+    when: true
+    xget:
+      package: camalot/xget
+      state: latest
+      args:
+        - --to=~/.local/bin/xget.exe
         - --upgrade-only
 
   - name: Install Chocolatey
