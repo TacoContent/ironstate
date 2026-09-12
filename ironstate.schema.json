@@ -39,26 +39,16 @@
     "state": {
       "description": "'present' installs if missing; 'absent' uninstalls if installed; 'latest' always (re-)installs / re-extracts. Inside a package's main.yml, this may instead be a single template expression such as '${{ package.state }}' or '${{ inputs.<key> }}'.",
       "default": "present",
-      "oneOf": [
-        { "type": "string", "enum": ["present", "absent", "latest"] },
-        { "$ref": "#/$defs/templateString" }
-      ]
+      "oneOf": [{ "type": "string", "enum": ["present", "absent", "latest"] }, { "$ref": "#/$defs/templateString" }]
     },
     "tags": {
       "description": "Tags for use with ironstate.ps1 -Tags (flat matching - a leaf's effective tags are its own plus every ancestor task's, accumulated). Inside a package's main.yml, this may instead be a single template expression such as '${{ package.tags }}', which resolves to the package reference's own 'tags' array (replacing this field wholesale, not appending).",
       "default": [],
-      "oneOf": [
-        { "type": "array", "items": { "type": "string" } },
-        { "$ref": "#/$defs/templateString" }
-      ]
+      "oneOf": [{ "type": "array", "items": { "type": "string" } }, { "$ref": "#/$defs/templateString" }]
     },
     "when": {
       "description": "Condition(s) gating this task/action and everything nested under it (AND'd with every ancestor task's own 'when'). A single expression string, or a list of expressions (implicit AND) - matches Ansible. Bare dotted/indexed identifiers (e.g. 'foo.rc', 'foo.results[0].rc') resolve against facts/vars/id-registered results/facts (no '${{ }}' wrapper); operators: == != < <= > >=, and, or, not, in/not in, is/is not, and a '|' filter pipeline (e.g. 'value | default(\"x\") == \"x\"'). See README.md for the full grammar.",
-      "oneOf": [
-        { "type": "string" },
-        { "type": "boolean" },
-        { "type": "array", "items": { "anyOf": [ { "type": "string" }, { "type": "boolean" } ] } }
-      ]
+      "oneOf": [{ "type": "string" }, { "type": "boolean" }, { "type": "array", "items": { "anyOf": [{ "type": "string" }, { "type": "boolean" }] } }]
     },
     "taskItem": {
       "type": "object",
@@ -77,10 +67,7 @@
         },
         "failed_when": {
           "description": "Condition(s) overriding whether this leaf counts as failed - same grammar as 'when' (a single expression, or a list, implicit AND), evaluated against this leaf's own 'rc'/'stdout'/'stdout_lines'/'stderr'/'stderr_lines'/'changed' as bare names (e.g. 'failed_when: rc != 0'). Without it, a leaf fails by default exactly when its handler reports a non-zero 'rc' (a thrown error also counts as 'rc: 1'). See 'continue_on_error' for what happens when a leaf fails.",
-          "oneOf": [
-            { "type": "string" },
-            { "type": "array", "items": { "type": "string" } }
-          ]
+          "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
         },
         "continue_on_error": {
           "type": "boolean",
@@ -89,10 +76,7 @@
         },
         "items": {
           "description": "Materializes this task once per entry (Ansible 'loop'-style) *before* anything else about it is evaluated - name, tags, when, id, its module fields, or a nested 'actions'/'include'. Each copy gets '${{ item }}'/'${{ item.<key> }}' resolved against that one entry. Wins over 'with' if both are set. May also be a single '${{ vars.* }}'/'${{ facts.* }}' template expression that resolves to a list (e.g. '${{ vars.ssh.authorized_keys }}') - resolved before task-tree flattening, so the loop still sees a real list at run time.",
-          "oneOf": [
-            { "type": "array" },
-            { "$ref": "#/$defs/templateString" }
-          ]
+          "oneOf": [{ "type": "array" }, { "$ref": "#/$defs/templateString" }]
         },
         "with": {
           "description": "A single reference value made available as '${{ item }}'/'${{ item.<key> }}' - like 'items' but materializes exactly one copy, without iterating. Ignored if 'items' is also set."
@@ -109,6 +93,7 @@
         "cargo": { "$ref": "#/$defs/basicPackageItem" },
         "go": { "$ref": "#/$defs/goItem" },
         "eget": { "$ref": "#/$defs/egetItem" },
+        "xget": { "$ref": "#/$defs/xgetItem" },
         "git": { "$ref": "#/$defs/gitItem" },
         "cron": { "$ref": "#/$defs/cronItem" },
         "cron_unix": { "$ref": "#/$defs/cronUnixItem" },
@@ -203,6 +188,24 @@
         "args": {
           "type": "array",
           "description": "Extra arguments passed to eget. '--to=' paths support '~' expansion.",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "xgetItem": {
+      "type": "object",
+      "description": "A GitHub release binary fetched with xget.",
+      "additionalProperties": false,
+      "required": ["package"],
+      "properties": {
+        "package": {
+          "type": "string",
+          "description": "GitHub repo in owner/name form, e.g. camalot/xget."
+        },
+        "state": { "$ref": "#/$defs/state" },
+        "args": {
+          "type": "array",
+          "description": "Extra arguments passed to xget. '--to=' paths support '~' expansion.",
           "items": { "type": "string" }
         }
       }
@@ -703,12 +706,7 @@
       "type": "object",
       "description": "Manages one line in a text file, modeled on Ansible's lineinfile module.",
       "additionalProperties": false,
-      "anyOf": [
-        { "required": ["path"] },
-        { "required": ["dest"] },
-        { "required": ["destfile"] },
-        { "required": ["name"] }
-      ],
+      "anyOf": [{ "required": ["path"] }, { "required": ["dest"] }, { "required": ["destfile"] }, { "required": ["name"] }],
       "properties": {
         "path": {
           "type": "string",
@@ -793,12 +791,7 @@
       },
       "additionalProperties": {
         "description": "Any other field becomes '<PascalCaseKey> <value>' (booleans render as yes/no). A list-valued field is singularized (trailing 's' dropped from the PascalCased key, e.g. 'identity_files' -> 'IdentityFile') and repeated once per entry, since directives like 'IdentityFile' have no plural form.",
-        "oneOf": [
-          { "type": "string" },
-          { "type": "number" },
-          { "type": "boolean" },
-          { "type": "array", "items": { "oneOf": [ { "type": "string" }, { "type": "number" } ] } }
-        ]
+        "oneOf": [{ "type": "string" }, { "type": "number" }, { "type": "boolean" }, { "type": "array", "items": { "oneOf": [{ "type": "string" }, { "type": "number" }] } }]
       }
     },
     "sshHostBlockItem": {
@@ -813,10 +806,7 @@
         },
         "hosts": {
           "description": "One or more host entries to render, in order. May also be a single '${{ vars.* }}'/'${{ facts.* }}' template expression that resolves to a list.",
-          "oneOf": [
-            { "type": "array", "items": { "$ref": "#/$defs/sshHostEntryItem" } },
-            { "$ref": "#/$defs/templateString" }
-          ]
+          "oneOf": [{ "type": "array", "items": { "$ref": "#/$defs/sshHostEntryItem" } }, { "$ref": "#/$defs/templateString" }]
         },
         "defaults": {
           "type": "object",
@@ -987,10 +977,7 @@
         },
         "filter": {
           "description": "Condition(s) a mount must satisfy to be kept, evaluated per-mount against just that mount's own 'device'/'fstype'/'options'/'path'/'source' fields. A single expression string, or a list of expressions (implicit AND) - same bare-expression grammar as 'when'/'that' (e.g. 'device not in [\"none\", \"drivers\"]', 'fstype == \"NTFS\"').",
-          "oneOf": [
-            { "type": "string" },
-            { "type": "array", "items": { "type": "string" } }
-          ]
+          "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
         },
         "state": { "$ref": "#/$defs/state" }
       }
@@ -1003,10 +990,7 @@
       "properties": {
         "that": {
           "description": "Condition(s) that must all be true. A single expression string, or a list of expressions (implicit AND) - matches 'when'.",
-          "oneOf": [
-            { "type": "string" },
-            { "type": "array", "items": { "type": "string" } }
-          ]
+          "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
         },
         "fail_msg": {
           "type": "string",
@@ -1039,24 +1023,15 @@
       "type": "object",
       "description": "Blocks until every async job named in 'for' has finished and/or 'condition' becomes true (both, if both given - implicit AND), polling every 'interval' seconds, up to 'timeout' seconds. Fails ('rc: 1') if the timeout elapses first, or if any awaited async job itself failed. 'condition' uses the same bare-expression grammar as 'when'/'that', evaluated against facts/vars/id-registered results captured when this task runs (not re-gathered each poll) - only useful when driven by a filter that itself checks live state (e.g. a script filter), or combined with 'for'. Always actually runs, even without '-Apply'.",
       "additionalProperties": false,
-      "anyOf": [
-        { "required": ["for"] },
-        { "required": ["condition"] }
-      ],
+      "anyOf": [{ "required": ["for"] }, { "required": ["condition"] }],
       "properties": {
         "for": {
           "description": "Async job id(s) (see the 'async' module's 'id') to wait for completion of. A single string, or a list (waits for all of them).",
-          "oneOf": [
-            { "type": "string" },
-            { "type": "array", "items": { "type": "string" } }
-          ]
+          "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
         },
         "condition": {
           "description": "Condition(s) that must all be true before continuing - same grammar as 'when'/'that'. A single expression string, or a list of expressions (implicit AND).",
-          "oneOf": [
-            { "type": "string" },
-            { "type": "array", "items": { "type": "string" } }
-          ]
+          "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
         },
         "timeout": {
           "type": "number",
@@ -1160,7 +1135,10 @@
           "description": "'Password' additionally requires 'user_id' and 'password_env'. A stored task password can't be read back, so idempotency can't detect a drifted password - only 'state: latest' is guaranteed to re-apply one."
         },
         "run_level": { "type": "string", "enum": ["Limited", "Highest"], "default": "Limited", "description": "'Highest' runs elevated (\"Run with highest privileges\" in Task Scheduler's UI)." },
-        "password_env": { "type": "string", "description": "Name of an environment variable (populated via this repo's own .env/.secrets loading - see README.md) holding the account's password. Only used when 'logon_type' is 'Password'; never write a plaintext password here." }
+        "password_env": {
+          "type": "string",
+          "description": "Name of an environment variable (populated via this repo's own .env/.secrets loading - see README.md) holding the account's password. Only used when 'logon_type' is 'Password'; never write a plaintext password here."
+        }
       }
     },
     "scheduledTaskSettingsItem": {

@@ -1,0 +1,9 @@
+---
+
+tasks:
+
+  - name: Terraform Install
+    winget:
+      package: hashicorp.terraform
+    when: development.terraform | enabled()
+

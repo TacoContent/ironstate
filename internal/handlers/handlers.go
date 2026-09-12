@@ -4,7 +4,7 @@ package handlers
 // implemented so far (docs/plans/go-rewrite.md §10): log, path, fact,
 // assert, file, copy, symlinks, blockinfile, ssh_host_block, zip (Phase 3);
 // winget, chocolatey, homebrew, apt, pacman, yum, apk, snap, flatpak,
-// scoop, macports, pipx, npm, cargo, go, gem, eget,
+// scoop, macports, pipx, npm, cargo, go, gem, eget, xget,
 // shell, registry, scheduled_task, template (Phase 4).
 //
 // Deviation from the master plan's §3 layout (one Go package per module
@@ -24,7 +24,8 @@ import "github.com/TacoContent/ironstate/internal/engine"
 // registered Handler (Phase 4 fills in the rest). Order matches
 // internal/tasks/realfixture_test.go's realModuleNames.
 var AllModuleNames = []string{
-	"winget", "chocolatey", "homebrew", "brew", "apt", "pacman", "yum", "apk", "snap", "flatpak", "scoop", "macports", "gem", "pipx", "npm", "cargo", "go", "eget",
+	"winget", "chocolatey", "homebrew", "brew", "apt", "pacman", "yum", "apk", "snap", "flatpak", "scoop", "macports", "gem", "pipx", 
+	"npm", "cargo", "go", "eget", "xget",
 	"git", "cron", "cron_unix", "cron_file", "iptables", "ufw", "advfirewall", "firewall", "zip", "symlinks", "file", "copy", "template", "shell", "blockinfile", "lineinfile",
 	"ssh_host_block", "log", "fail", "path", "fact", "mount_facts", "registry", "scheduled_task", "group", "user",
 	"assert", "async", "wait_for", "service",
@@ -67,6 +68,7 @@ func All() map[string]engine.Handler {
 		"cargo":          cargoHandler{},
 		"go":             goHandler{},
 		"gem":            rubyGemHandler{},
+		"xget":           xgetHandler{},
 		"eget":           egetHandler{},
 		"git":            gitHandler{},
 		"cron":           cronHandler{},

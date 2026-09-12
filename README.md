@@ -48,20 +48,20 @@ go install github.com/TacoContent/ironstate/cmd/ironstate@latest
 
 This installs to `$(go env GOPATH)/bin` (make sure it's on `PATH`). Since this skips the release build's `-ldflags`, `ironstate version` reports `dev`/`none`/`unknown` instead of a real version/commit/date - functionally identical otherwise.
 
-### Using [zyedidia/eget](https://github.com/zyedidia/eget)
+### Using [camalot/xget](https://github.com/camalot/xget)
 
-`eget` is a small, cross-platform Go binary that downloads and installs a release from GitHub Releases. It can be used to install `ironstate` without a shell script:
+`xget` is a small, cross-platform Go binary that downloads and installs a release from GitHub Releases. It can be used to install `ironstate` without a shell script:
 
 #### linux/macOS
 
 ```shell
-eget TacoContent/ironstate --to=~/.local/bin
+xget TacoContent/ironstate --to=~/.local/bin
 ```
 
 #### Windows (PowerShell)
 
 ```powershell
-eget TacoContent/ironstate --to=$env:USERPROFILE\.local\bin
+xget TacoContent/ironstate --to=$env:USERPROFILE\.local\bin
 ```
 
 ### Build from source
@@ -240,7 +240,7 @@ tasks:
       # override: '/DIR="path"' # passes override arguments to the installer
 
   - tags: [cloud, cli]
-    eget:
+    xget:
       package: rclone/rclone
       state: present
       args:
@@ -296,7 +296,7 @@ internal/
 │                            command-availability threading, table/JSON/summary output)
 ├── handlers/               ← one file per module: winget, chocolatey, homebrew, apt, pacman, yum, apk,
 │                            snap, flatpak, scoop, macports, pipx, npm, cargo, go,
-│                            gem, eget, git, iptables, ufw, advfirewall, firewall, zip, symlinks, file,
+│                            gem, eget, xget, git, iptables, ufw, advfirewall, firewall, zip, symlinks, file,
 │                            copy, shell, blockinfile, lineinfile,
 │                            ssh_host_block, log, fail, path, fact, mount_facts, assert, async, wait_for,
 │                            registry, scheduled_task, template
@@ -359,6 +359,7 @@ $ ironstate doctor --filters-dir path/to/your/playbook/filters
 [ok]      cargo    C:\Users\you\.cargo\bin\cargo.exe
 [ok]      go       C:\Program Files\Go\bin\go.exe
 [missing] gem      not found on PATH
+[ok]      xget     C:\Users\you\.local\bin\xget.exe
 [ok]      eget     C:\Users\you\.local\bin\eget.exe
 [ok]      pwsh     C:\Program Files\PowerShell\7\pwsh.exe
 
@@ -366,7 +367,7 @@ script filters discovered under path/to/your/playbook/filters:
   my_custom_filter
 ```
 
-A `[missing]` line isn't necessarily a problem - it only matters for the specific package-manager modules (`winget`/`chocolatey`/`homebrew`/`apt`/`pacman`/`yum`/`apk`/`snap`/`flatpak`/`scoop`/`macports`/`pipx`/`npm`/`cargo`/`go`/`gem`/`eget`) or `shell.host: pwsh` tasks your own `main.yml` actually uses; `doctor` checks a fixed list of every module this build knows about; `bin` availability is otherwise re-checked per-module at dispatch time regardless (see [Architecture](#architecture)).
+A `[missing]` line isn't necessarily a problem - it only matters for the specific package-manager modules (`winget`/`chocolatey`/`homebrew`/`apt`/`pacman`/`yum`/`apk`/`snap`/`flatpak`/`scoop`/`macports`/`pipx`/`npm`/`cargo`/`go`/`gem`/`eget`/`xget`) or `shell.host: pwsh` tasks your own `main.yml` actually uses; `doctor` checks a fixed list of every module this build knows about; `bin` availability is otherwise re-checked per-module at dispatch time regardless (see [Architecture](#architecture)).
 
 ## Task/action model
 
@@ -444,7 +445,7 @@ tasks:
       state: present
 
   - name: install ${{ item.package }}
-    eget:
+    xget:
       package: ${{ item.package }}
       state: ${{ item.state }}
       args: ${{ item.args }}
@@ -457,7 +458,7 @@ tasks:
         state: absent
 ```
 
-The second example's `another/tool` entry has no `args` - resolving `${{ item.args }}` for that iteration warns and **omits the field entirely** (falls back to `eget`'s own default), rather than substituting an empty string of the wrong type. This omit-on-unresolved behavior applies to any field whose *entire* value is a single unresolved `${{ }}` reference, not just `item.*` - see [Template expressions](#template-expressions).
+The second example's `another/tool` entry has no `args` - resolving `${{ item.args }}` for that iteration warns and **omits the field entirely** (falls back to `xget`'s own default), rather than substituting an empty string of the wrong type. This omit-on-unresolved behavior applies to any field whose *entire* value is a single unresolved `${{ }}` reference, not just `item.*` - see [Template expressions](#template-expressions).
 
 Note that `with` never iterates, even if the value you give it happens to be a list - it's always exactly one copy, with `item` bound to that whole value. If you want one copy per list entry, that's what `items` is for.
 
@@ -725,6 +726,7 @@ tasks:
 | `cargo` | Rust crates (`cargo install`) |
 | `go` | Go binaries (`go install`) |
 | `eget` | GitHub release binaries (`eget`) |
+| `xget` | GitHub release binaries (`xget`) |
 | `git` | Manage git checkouts (`git`) - see [docs/handlers/git.md](docs/handlers/git.md) |
 | `cron` | Cross-platform cron wrapper (Unix cron or Windows scheduled tasks) - see [docs/handlers/cron.md](docs/handlers/cron.md) |
 | `cron_unix` | Manage Unix cron entries via `crontab` - see [docs/handlers/cron_unix.md](docs/handlers/cron_unix.md) |
@@ -1179,7 +1181,7 @@ tasks:
 
 ### `path`
 
-Adds/removes directories on the current user's persistent `PATH` (User scope - no admin required). Also patches the *current* process's `PATH` for entries it actually adds/removes, so later tasks in the same run (e.g. a binary an `eget` task just installed) are immediately on `PATH` without a new shell.
+Adds/removes directories on the current user's persistent `PATH` (User scope - no admin required). Also patches the *current* process's `PATH` for entries it actually adds/removes, so later tasks in the same run (e.g. a binary an `xget` task just installed) are immediately on `PATH` without a new shell.
 
 | Field | Required | Description |
 | --- | --- | --- |
@@ -1465,7 +1467,7 @@ A leaf with **no effective tags at all** (neither its own nor any ancestor task'
 
 ## Includes
 
-A related set of items (an eget binary, a symlink to it, a config file to copy, a setup script...) can be defined once as a package under `packages/<name>/main.yml`, using the same `tasks:` shape as `main.yml` (the explicit form, so it has a `tasks:` key to merge on). Pull it into a run with an `include:` action, wherever you'd write any other action:
+A related set of items (an xget binary, a symlink to it, a config file to copy, a setup script...) can be defined once as a package under `packages/<name>/main.yml`, using the same `tasks:` shape as `main.yml` (the explicit form, so it has a `tasks:` key to merge on). Pull it into a run with an `include:` action, wherever you'd write any other action:
 
 ```yaml
 # main.yml
@@ -1486,7 +1488,7 @@ tasks:
 # packages/kanata/main.yml
 tasks:
   - tags: [keyboard, kanata]
-    eget:
+    xget:
       package: jtroo/kanata
       state: present
       args: [--to=~/.local/bin/kanata, --upgrade-only, --asset=".zip"]
