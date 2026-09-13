@@ -26,6 +26,8 @@ playbooks/
 .*.taskfile.yml
 
 rsrc_*.syso
+ironstate.exe
+ironstate.1
 
 
 # Created by https://www.toptal.com/developers/gitignore/api/windows,powershell,visualstudiocode,go
