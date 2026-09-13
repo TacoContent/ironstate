@@ -3,7 +3,7 @@ module github.com/TacoContent/ironstate
 go 1.27.0
 
 require (
-	github.com/TacoContent/ironstate/sdk v0.0.0
+	github.com/TacoContent/ironstate/sdk v0.3.1
 	github.com/briandowns/spinner v1.23.2
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.8.0

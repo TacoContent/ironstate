@@ -3,7 +3,7 @@ module github.com/TacoContent/ironstate/sdk
 go 1.27.0
 
 require (
-	github.com/TacoContent/ironstate v0.0.0
+	github.com/TacoContent/ironstate v0.3.1
 	github.com/hashicorp/go-plugin v1.8.0
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.11
