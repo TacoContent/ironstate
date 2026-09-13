@@ -794,6 +794,9 @@ func TestFirewallWrapperRejectsUnknownBackend(t *testing.T) {
 }
 
 func TestCronWrapperUsesScheduledTaskOnWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows group scan behavior")
+	}
 	backend, err := cronBackend(map[string]any{}, engine.Context{Flat: map[string]any{"platform": "windows"}})
 	if err != nil {
 		t.Fatal(err)
