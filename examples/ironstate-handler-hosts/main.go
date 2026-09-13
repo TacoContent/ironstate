@@ -13,7 +13,9 @@ import (
 	"github.com/TacoContent/ironstate/sdk/plugin"
 )
 
-const writeFileCommand = "--ironstate-hosts-write"
+// pluginBecomeCommand is an internal re-entry marker used only when become
+// asks this plugin to perform its final privileged file write.
+const pluginBecomeCommand = "--ironstate-plugin-become"
 
 type hostsHandler struct{}
 
@@ -213,7 +215,7 @@ func writeWithBecome(path, contents string, become handler.Become) error {
 	if err != nil {
 		return err
 	}
-	wrappedExecutable, args, err := becomeexec.WrapForBecome(become, executable, []string{writeFileCommand, path, temporaryPath})
+	wrappedExecutable, args, err := becomeexec.WrapForBecome(become, executable, []string{pluginBecomeCommand, path, temporaryPath})
 	if err != nil {
 		return err
 	}
@@ -225,7 +227,7 @@ func writeWithBecome(path, contents string, become handler.Become) error {
 }
 
 func writeHelper(args []string) int {
-	if len(args) != 3 || args[0] != writeFileCommand {
+	if len(args) != 3 || args[0] != pluginBecomeCommand {
 		return 2
 	}
 	contents, err := os.ReadFile(args[2])
@@ -293,7 +295,7 @@ func failedResult(err error) handler.ExecResult {
 }
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == writeFileCommand {
+	if len(os.Args) > 1 && os.Args[1] == pluginBecomeCommand {
 		os.Exit(writeHelper(os.Args[1:]))
 	}
 	plugin.Serve(map[string]handler.Handler{

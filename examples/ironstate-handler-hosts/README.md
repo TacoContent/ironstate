@@ -33,6 +33,8 @@ tasks:
 
 `Install` removes existing entries for the hostname before adding the requested mapping, preserving comments and unrelated entries. `Uninstall` removes the requested IP/hostname mapping. Both operations are idempotent. `become: true` uses the SDK's `sudo` wrapper and re-enters the plugin for the privileged file write.
 
+The plugin's internal privileged re-entry uses `--ironstate-plugin-become <destination> <temporary-file>`. This flag is not a playbook option, is only recognized by the plugin executable itself, and is used exclusively for `become` writes. It does not need a plugin-specific name because the elevated process is launched from the same plugin binary; the generic convention is shared by external plugins that use this pattern.
+
 The handler also implements `FactProducer`, returning the resolved mapping under the task's `name`, and `ScanCapable`, which discovers entries from the default or `hosts_path` scan context.
 
 ## Host acceptance
