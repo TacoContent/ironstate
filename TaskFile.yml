@@ -23,6 +23,7 @@ tasks:
       - mkdir -p bin
       - go mod tidy
       - golangci-lint run ./...
+      - govulncheck ./...
       - goreleaser build --snapshot --clean
       - go vet ./cmd/ironstate
       - gofmt -l .
