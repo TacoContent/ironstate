@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 
@@ -66,6 +67,9 @@ func TestIsLinuxBuiltinUser(t *testing.T) {
 }
 
 func TestUserHandlerScanFiltersBuiltinAccountsOnWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows group scan behavior")
+	}
 	rec := &recordingRunner{responses: []ironexec.Result{{RC: 0, Stdout: `[{"Name":"Administrator","SID":"S-1-5-21-1-2-3-500"},{"Name":"ryan","SID":"S-1-5-21-1-2-3-1001"}]`}}}
 	withRunner(t, rec)
 

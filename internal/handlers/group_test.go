@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"runtime"
 	"testing"
 
 	ironexec "github.com/TacoContent/ironstate/internal/exec"
@@ -65,6 +66,9 @@ func TestIsLinuxBuiltinGroup(t *testing.T) {
 }
 
 func TestGroupHandlerScanFiltersBuiltinGroupsOnWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows group scan behavior")
+	}
 	rec := &recordingRunner{responses: []ironexec.Result{{RC: 0, Stdout: `[{"Name":"Administrators","SID":"S-1-5-32-544"},{"Name":"devs","SID":"S-1-5-21-1-2-3-1001"}]`}}}
 	withRunner(t, rec)
 

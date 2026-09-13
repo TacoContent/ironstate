@@ -27,7 +27,7 @@ func init() {
 func linuxMounts() ([]MountFact, error) {
 	var lastErr error
 	for _, source := range linuxMountSources {
-		f, err := os.Open(source)
+		f, err := os.Open(source) //nolint:gosec // source is selected from the fixed linuxMountSources list
 		if err != nil {
 			lastErr = err
 			continue

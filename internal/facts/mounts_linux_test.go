@@ -15,15 +15,15 @@ func TestParseMountsFileParsesFields(t *testing.T) {
 		"/dev/sda1 / ext4 rw,relatime 0 0\n" +
 		"\n" +
 		"tmpfs /run tmpfs rw,nosuid,size=1633736k 0 0\n"
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // path is a t.TempDir()-derived fixture created by this test
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	mounts, err := parseMountsFile(f, path)
 	if err != nil {
@@ -45,7 +45,7 @@ func TestLinuxMountsFallsBackToNextSource(t *testing.T) {
 	dir := t.TempDir()
 	fstab := filepath.Join(dir, "does-not-exist")
 	mtab := filepath.Join(dir, "mtab")
-	if err := os.WriteFile(mtab, []byte("/dev/sda1 / ext4 rw 0 0\n"), 0o644); err != nil {
+	if err := os.WriteFile(mtab, []byte("/dev/sda1 / ext4 rw 0 0\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
