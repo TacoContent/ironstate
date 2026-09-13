@@ -26,6 +26,8 @@ tasks:
       - echo "Building the project..."
       - mkdir -p bin
       - go mod tidy
+      - cd sdk && go mod tidy && cd ..
+      - cd examples/ironstate-handler-hosts && go mod tidy && cd ../../
       - golangci-lint run ./...
       - goreleaser build --snapshot --clean --id ironstate-windows --id ironstate-unix
       - go vet ./...
