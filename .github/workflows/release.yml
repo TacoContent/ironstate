@@ -125,19 +125,6 @@ jobs:
           SDK_TAG: sdk/${{ needs.version.outputs.tag }}
 
           
-      - name: Generate man page
-        run: |
-          if [[ "${DRY_RUN}" == "true" ]]; then
-            echo "Dry run: skipping man page generation"
-          else
-            pandoc docs/_man/ironstate.md -s -t man -o ironstate.1
-            git add ironstate.1
-            git commit -m "docs: update man page for ${GC_TAG}"
-          fi
-        env:
-          GC_TAG: ${{ needs.version.outputs.tag }}
-          DRY_RUN: ${{ inputs.dry-run }}
-
       - shell: bash
         run: |
           set -euo pipefail
@@ -194,6 +181,9 @@ jobs:
           GC_TAG: ${{ needs.version.outputs.tag }}
           SDK_TAG: sdk/${{ needs.version.outputs.tag }}
           DRY_RUN: ${{ inputs.dry-run }}
+      - name: Generate man page
+        run: |
+          pandoc docs/_man/ironstate.md -s -t man -o ironstate.1
 
       - uses: anchore/sbom-action/download-syft@v0
       - uses: sigstore/cosign-installer@v4.1.2
