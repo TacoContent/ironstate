@@ -285,14 +285,11 @@ Packages:
   plugin's `main()` calls. Wraps `go-plugin`'s `plugin.Serve` with ironstate's
   handshake config (magic cookie, protocol version) and a gRPC server that adapts
   `sdk/handler.Handler` calls to the wire messages in §5.
-- `sdk/becomeexec` — a small helper mirroring `internal/exec/become.go`'s
-  elevation-wrapping behavior, so a plugin's `Install`/`Uninstall` that shells out gets
-  the same `become` semantics builtins get, without duplicating that logic ad hoc per
-  plugin. This is a thin delegation wrapper, not a reimplementation — it must reuse
-  whatever `internal/exec/become.go` already does per platform (its Windows-vs-POSIX
-  handling, whatever that is today) rather than inventing new elevation behavior for
-  plugins alone. Flagged as needing an explicit read of that file's current behavior
-  during Phase 1 implementation, not assumed here.
+- `sdk/becomeexec` — a small self-contained helper mirroring
+  `internal/exec/become.go`'s elevation-wrapping behavior, so a plugin's
+  `Install`/`Uninstall` that shells out gets the same `become` semantics builtins get
+  without importing the root module. Keeping this helper independent is required for
+  the nested SDK module to be published and consumed without a root-module cycle.
 - `sdk/testing` — fake `Context` builder and a fake command-`Runner` (mirroring
   `internal/exec.Runner`'s shape) so a plugin's tests never need a real subprocess or a
   real ironstate host, matching this repo's own existing handler-test conventions
@@ -630,10 +627,8 @@ taken on faith) before critiquing the design. Disposition recorded for each find
    lockfile wins for version selection and a checksum mismatch hard-fails rather than
    silently falling through.
 2. `sdk/becomeexec` was a one-bullet mention despite being the SDK piece most likely to
-   have OS-specific edge cases — §6 now states it must delegate to whatever
-   `internal/exec/become.go` already does per platform rather than inventing new
-   elevation behavior, and flags that its actual current behavior needs to be read (not
-   assumed) during Phase 1.
+  have OS-specific edge cases — §6 now requires a self-contained implementation that
+  mirrors the root behavior without creating a dependency cycle.
 
 ### Findings not adopted, with reasoning
 
