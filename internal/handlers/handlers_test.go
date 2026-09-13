@@ -18,6 +18,22 @@ func testCtx() engine.Context {
 	return engine.Context{Flat: map[string]any{}, Apply: true}
 }
 
+func TestAllIncludesNamespacedBuiltinAliases(t *testing.T) {
+	all := All()
+	if all["ironstate.builtin.shell"] == nil {
+		t.Fatal("namespaced shell alias was not registered")
+	}
+	found := false
+	for _, name := range AllModuleNames {
+		if name == "ironstate.builtin.shell" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("namespaced shell alias was not recognized during task expansion")
+	}
+}
+
 func TestLogHandlerFlatShorthandInstall(t *testing.T) {
 	h := logHandler{}
 	item := map[string]any{"message": "hello", "level": "info"}

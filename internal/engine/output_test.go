@@ -127,6 +127,7 @@ func TestPrintJSONRedactsRegisteredSecrets(t *testing.T) {
 			RC:     0,
 			Stdout: "super-secret-value\n",
 			Stderr: "super-secret-value",
+			Extra:  map[string]any{"source": "plugin"},
 		},
 	}}
 	if err := PrintJSON(&buf, results); err != nil {
@@ -138,5 +139,8 @@ func TestPrintJSONRedactsRegisteredSecrets(t *testing.T) {
 	}
 	if !strings.Contains(out, "***") {
 		t.Fatalf("PrintJSON should redact registered secrets, got:\n%s", out)
+	}
+	if !strings.Contains(out, `"extra": {`) || !strings.Contains(out, `"source": "plugin"`) {
+		t.Fatalf("PrintJSON dropped Exec.Extra:\n%s", out)
 	}
 }

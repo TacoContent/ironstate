@@ -1,6 +1,6 @@
 # External handler plugins
 
-Status: PROPOSED (not yet implemented)
+Status: IN PROGRESS (Phases 0-1 and 3-5 complete; Phase 2 host callbacks remain)
 Owner: unassigned
 Target: unscheduled — phased rollout, see §14
 
@@ -374,11 +374,11 @@ Multiple versions of the same plugin can coexist side by side; `manifest.json` p
 version means `plugin list`/`plugin info` never has to re-launch a plugin just to
 describe it.
 
-An optional **per-playbook-tree lockfile** (`plugins.lock.yaml`, sitting next to
+An optional **per-playbook-tree lockfile** (`ironstate.lock.yaml`, sitting next to
 `main.yml` the way `hosts/`/`variables/` already do) pins the exact resolved
 version + checksum for reproducibility across machines/CI, analogous to `go.sum`. If
 present, `plugins:` resolution is checked against it rather than "whatever's newest
-installed." Precedence when a per-version `manifest.json` and `plugins.lock.yaml`
+installed." Precedence when a per-version `manifest.json` and `ironstate.lock.yaml`
 disagree (e.g. the lockfile pins a version that's no longer installed, or an installed
 version's checksum no longer matches its manifest): the lockfile always wins for *which
 version to run*, and a checksum mismatch against the manifest is a hard failure (not a
@@ -494,12 +494,12 @@ end to end, not just in a monorepo subdirectory.
 
 | Phase | Scope | Key files/dirs touched |
 |---|---|---|
-| 0 — Spike | Validate `go-plugin` round-trip (launch, handshake, one RPC call) cross-platform incl. Windows, before committing to the design above. | throwaway spike, not shipped |
-| 1 — SDK & protocol | `sdk/` module: `handler`, `plugin`, `becomeexec`, `testing` packages; `.proto` + generated stubs; protocol version constant. | `sdk/**`, `go.work` |
-| 2 — Host loader & registry merge | `internal/pluginhost` (discovery, launch, adapter to `engine.Handler`, `HandlerHostCallback` registration via `GRPCBroker`); `handlers.Registry` merging builtins + loaded plugins; builtin `ironstate.builtin.<name>` aliases; **fix pre-existing gap**: `internal/engine/output.go`'s `jsonResult`/`jsonExecResult` silently drops `ExecResult.Extra` from `--output json` today (found during review) — needs fixing here so plugin-contributed `Extra`/facts don't appear to be "a plugin bug" when it's actually an existing limitation. | `internal/pluginhost/**`, `internal/handlers/handlers.go`, `internal/cli/root.go`, `internal/engine/output.go` |
-| 3 — Install/CLI & playbook syntax | `ironstate plugin install/list/info/update/uninstall`; `plugins:` YAML parsing + resolution-before-run; optional lockfile. | `internal/cli/plugin.go` (new), `internal/model/**`, `internal/pluginhost/store.go` |
-| 4 — `doctor` integration | Plugin/handler-name validation checks + actionable messages. | `internal/cli/doctor.go` |
-| 5 — Isolated testing/debug | `ironstate plugin test`; log forwarding at trace level (via go-plugin's built-in hclog bridge — no bespoke logging pipeline needed). | `internal/cli/plugin.go` |
+| 0 — Spike | Complete: validated a `go-plugin` gRPC round-trip (launch, handshake, one RPC call) on Windows before committing to the design above. The retained contract test lives in `internal/pluginhost`. | `internal/pluginhost/transport_spike_test.go` |
+| 1 — SDK & protocol | Complete: the public `handler`, `plugin`, `becomeexec`, and `testing` SDK packages are implemented; the versioned `.proto` has generated Go/gRPC stubs; protocol version and handshake configuration are centralized in `sdk/plugin`. A real subprocess gRPC acceptance test validates `Serve`, handler discovery, dispatch, and structured results. | `sdk/**`, `go.work` |
+| 2 — Host loader & registry merge | In progress: implemented the gRPC adapter, process launch/handshake/handler discovery, qualified handler naming, explicit client cleanup, `handlers.Registry`, builtin `ironstate.builtin.<name>` aliases, JSON `ExecResult.Extra` preservation, and apply-time loading/cleanup integration. Remaining: host callback brokering. | `internal/pluginhost/**`, `internal/handlers/handlers.go`, `internal/cli/root.go`, `internal/engine/output.go` |
+| 3 — Install/CLI & playbook syntax | Complete: `plugins: - use: organization.plugin@version` parsing; versioned user-cache manifest store; checksum lockfile; `plugin install/list/info/update/uninstall` commands; exact/latest resolution before task expansion; explicit `--allow-plugin-install`; and lifecycle-safe registry loading. | `internal/cli/plugin.go`, `internal/model/**`, `internal/pluginhost/store.go`, `internal/pluginhost/lock.go` |
+| 4 — `doctor` integration | Complete: `doctor --playbook <path>` loads the supplied hierarchy, resolves lock-pinned or declared plugin versions, verifies lockfile checksums, launches each plugin to validate its handshake, and reports missing/undeclared qualified handlers with install/update commands. | `internal/cli/doctor.go`, `internal/cli/doctor_test.go` |
+| 5 — Isolated testing/debug | Complete: `ironstate plugin test <org>.<name> --handler <name> --item <yaml\|json> [--apply]` resolves the latest installed version, validates its declared handler, runs `Test`/`Describe`, conditionally runs `Install` or `Uninstall` from `state`, and emits a structured `ExecResult`. Plugin subprocess logs are forwarded through go-plugin's trace-level `hclog` bridge. | `internal/cli/plugin.go`, `internal/pluginhost/loader.go` |
 | 6 — Bench & timing report (scoped down from "profile/monitor/visualize", see §2) | `ironstate plugin bench`; opt-in pprof helper in `sdk/testing`; per-leaf JSON timing extending existing `--output json`. | `internal/cli/plugin.go`, `sdk/testing` |
 | 7 — Documentation | Author guide (`docs/plugins.md`), README "external plugin handlers" section, CLI reference. | `docs/plugins.md`, `README.md` |
 | 8 — Sample plugin | `examples/ironstate-handler-hosts/**`, its own docs/tests, used as the end-to-end acceptance test for phases 1–5. | `examples/ironstate-handler-hosts/**` |

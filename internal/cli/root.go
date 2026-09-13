@@ -5,6 +5,7 @@ package cli
 
 import (
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/TacoContent/ironstate/internal/model"
 	"github.com/TacoContent/ironstate/internal/packages"
 	"github.com/TacoContent/ironstate/internal/pathutil"
+	"github.com/TacoContent/ironstate/internal/pluginhost"
 	"github.com/TacoContent/ironstate/internal/tasks"
 	"github.com/TacoContent/ironstate/internal/template"
 	"github.com/TacoContent/ironstate/internal/ui"
@@ -50,11 +52,13 @@ func newRootCommand() (*cobra.Command, error) {
 	flags.String("output", "table", "result output format: table|json")
 	flags.BoolP("verbose", "v", false, "verbose output")
 	flags.Bool("no-color", false, "disable colored output")
+	flags.Bool("allow-plugin-install", false, "allow playbook-declared plugins to be installed automatically")
 
 	cmd.AddCommand(newVersionCommand())
 	cmd.AddCommand(newFiltersCommand())
 	cmd.AddCommand(newDoctorCommand())
 	cmd.AddCommand(newInitCommand())
+	cmd.AddCommand(newPluginCommand())
 
 	return cmd, nil
 }
@@ -189,6 +193,23 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	if err := template.ResolveInPlace(docMap, softCtx, fset, "site", true); err != nil {
 		return NewLoadError(err)
 	}
+	declaredPlugins, err := model.Plugins(docMap)
+	if err != nil {
+		return NewLoadError(err)
+	}
+	allowPluginInstall, err := cmd.Flags().GetBool("allow-plugin-install")
+	if err != nil {
+		return NewLoadError(err)
+	}
+	registry, pluginClients, err := loadPluginRegistry(declaredPlugins, repoRoot, allowPluginInstall)
+	if err != nil {
+		return NewLoadError(err)
+	}
+	defer func() {
+		for _, client := range pluginClients {
+			_ = client.Close()
+		}
+	}()
 
 	progress.Message("expanding playbook tasks")
 	taskList, err := model.TaskList(docMap)
@@ -198,7 +219,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 
 	root := repoRoot
 	leaves, err := tasks.Expand(taskList, tasks.Options{
-		ModuleNames:  handlers.AllModuleNames,
+		ModuleNames:  registry.ModuleNames(),
 		PackagesRoot: root,
 		Facts:        hostFacts,
 		Vars:         vars,
@@ -218,7 +239,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	var factsErr error
 	start := time.Now()
 	results, stopped, err := engine.Run(filtered, engine.Options{
-		Handlers: handlers.All(),
+		Handlers: registry.Handlers(),
 		Facts:    hostFacts,
 		Vars:     vars,
 		Filters:  fset,
@@ -261,4 +282,70 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		return NewRunError(fmt.Errorf("run stopped due to a failed task"))
 	}
 	return nil
+}
+
+func loadPluginRegistry(declared []model.Plugin, repoRoot string, allowInstall bool) (*handlers.Registry, []*pluginhost.Client, error) {
+	registry := handlers.NewRegistry()
+	if len(declared) == 0 {
+		return registry, nil, nil
+	}
+	store, err := pluginhost.DefaultStore()
+	if err != nil {
+		return nil, nil, err
+	}
+	lock, err := pluginhost.LoadLockFile(repoRoot)
+	if err != nil {
+		return nil, nil, err
+	}
+	clients := make([]*pluginhost.Client, 0, len(declared))
+	closeClients := func() {
+		for _, client := range clients {
+			_ = client.Close()
+		}
+	}
+	for _, declaredPlugin := range declared {
+		version := declaredPlugin.Version
+		locked, isLocked := pluginhost.LockedPlugin{}, false
+		if lock != nil {
+			locked, isLocked = lock.Plugins[declaredPlugin.Namespace]
+			if isLocked {
+				version = locked.Version
+			}
+		}
+		manifest, err := store.ResolveVersion(declaredPlugin.Namespace, version)
+		if err != nil && allowInstall {
+			manifest, err = installDeclaredPlugin(store, declaredPlugin.Namespace, version)
+		}
+		if err != nil {
+			closeClients()
+			return nil, nil, fmt.Errorf("plugin %s@%s is not installed; run: ironstate plugin install %s@%s", declaredPlugin.Namespace, version, declaredPlugin.Namespace, version)
+		}
+		if isLocked {
+			if err := pluginhost.VerifyChecksum(manifest, locked); err != nil {
+				closeClients()
+				return nil, nil, err
+			}
+		}
+		binary, err := store.BinaryPath(declaredPlugin.Namespace, manifest.Version)
+		if err != nil {
+			closeClients()
+			return nil, nil, err
+		}
+		client, err := pluginhost.Launch(exec.Command(binary)) //nolint:gosec // path comes from a validated per-user plugin manifest
+		if err != nil {
+			closeClients()
+			return nil, nil, fmt.Errorf("launch plugin %s@%s: %w", declaredPlugin.Namespace, manifest.Version, err)
+		}
+		external, err := client.QualifiedHandlers(declaredPlugin.Namespace)
+		if err == nil {
+			err = registry.Merge(external)
+		}
+		if err != nil {
+			_ = client.Close()
+			closeClients()
+			return nil, nil, err
+		}
+		clients = append(clients, client)
+	}
+	return registry, clients, nil
 }

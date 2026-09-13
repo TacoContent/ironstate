@@ -154,11 +154,12 @@ type jsonResult struct {
 }
 
 type jsonExecResult struct {
-	RC          int      `json:"rc"`
-	Stdout      string   `json:"stdout"`
-	StdoutLines []string `json:"stdout_lines"`
-	Stderr      string   `json:"stderr"`
-	StderrLines []string `json:"stderr_lines"`
+	RC          int            `json:"rc"`
+	Stdout      string         `json:"stdout"`
+	StdoutLines []string       `json:"stdout_lines"`
+	Stderr      string         `json:"stderr"`
+	StderrLines []string       `json:"stderr_lines"`
+	Extra       map[string]any `json:"extra,omitempty"`
 }
 
 // PrintJSON renders results as a JSON array on w - the '--output json'
@@ -180,6 +181,7 @@ func PrintJSON(w io.Writer, results []Result) error {
 				StdoutLines: redactStrings(r.Exec.StdoutLines),
 				Stderr:      secrets.Redact(r.Exec.Stderr),
 				StderrLines: redactStrings(r.Exec.StderrLines),
+				Extra:       r.Exec.Extra,
 			},
 		}
 	}
