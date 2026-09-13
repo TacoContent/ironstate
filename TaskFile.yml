@@ -46,9 +46,9 @@ tasks:
     deps:
       - manpage
     env:
-      XGET_DRY_RUN: "true"
+      IRONSTATE_DRY_RUN: "true"
       # cgo cross-compilation for android needs the NDK, which is only present in CI.
-      XGET_SKIP_ANDROID: '{{.SKIP_ANDROID | default "true"}}'
+      IRONSTATE_SKIP_ANDROID: '{{.SKIP_ANDROID | default "true"}}'
     cmds:
       - goreleaser release --clean --skip=validate,announce,sign,sbom
       - echo "--- dist/scoop/ironstate.json ---"
