@@ -70,7 +70,6 @@ func fishVersion() string { return versionFrom(fishRunner) }
 func nuVersion() string   { return versionFrom(nuRunner) }
 func pwshVersion() string { return versionFrom(pwshRunner) }
 
-
 // stringOrNil reports a version fact as null (rather than "") once it's
 // absent - so 'facts.pwsh_version'/etc. are directly usable in a
 // template without an extra 'is defined'/empty-string check.

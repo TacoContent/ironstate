@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/TacoContent/ironstate/internal/conditions"
 	ironexec "github.com/TacoContent/ironstate/internal/exec"
@@ -156,13 +157,14 @@ type ScanCapable interface {
 // Result is one dispatched leaf's outcome — ports Invoke-PackageItem's
 // returned PSCustomObject, plus the 'Failed' field Invoke-Tasks adds.
 type Result struct {
-	Module  string
-	Package string
-	State   string
-	Action  Action
-	Apply   bool
-	Exec    ExecResult
-	Failed  bool
+	Module   string
+	Package  string
+	State    string
+	Action   Action
+	Apply    bool
+	Exec     ExecResult
+	Failed   bool
+	Duration time.Duration
 }
 
 // State threads the growing id-registry, user-defined facts, and
@@ -395,6 +397,7 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 		if !whenOK {
 			continue
 		}
+		started := time.Now()
 
 		// A 'fact' with an embedded 'shell' computes its value from that
 		// command's own not-yet-run result - defer 'value's template
@@ -436,12 +439,13 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 			msg := err.Error()
 			Danger("[%s] %s: resolving template fields threw: %s", module, label, msg)
 			result := Result{
-				Module:  module,
-				Package: label,
-				Action:  ActionInstall,
-				Apply:   opts.Apply,
-				Exec:    ExecResult{RC: 1, Stderr: msg, StderrLines: []string{msg}, StdoutLines: []string{}},
-				Failed:  true,
+				Module:   module,
+				Package:  label,
+				Action:   ActionInstall,
+				Apply:    opts.Apply,
+				Exec:     ExecResult{RC: 1, Stderr: msg, StderrLines: []string{msg}, StdoutLines: []string{}},
+				Failed:   true,
+				Duration: time.Since(started),
 			}
 			results = append(results, result)
 			if leaf.ContinueOnError {
@@ -478,6 +482,7 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 			}
 		}
 		result.Failed = failed
+		result.Duration = time.Since(started)
 		results = append(results, result)
 
 		if failed {

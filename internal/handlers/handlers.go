@@ -23,13 +23,13 @@ import "github.com/TacoContent/ironstate/internal/engine"
 // flattening recognizes every leaf shape even before every module has a
 // registered Handler (Phase 4 fills in the rest). Order matches
 // internal/tasks/realfixture_test.go's realModuleNames.
-var AllModuleNames = []string{
-	"winget", "chocolatey", "homebrew", "brew", "apt", "pacman", "yum", "apk", "snap", "flatpak", "scoop", "macports", "gem", "pipx", 
+var AllModuleNames = withBuiltinAliases([]string{
+	"winget", "chocolatey", "homebrew", "brew", "apt", "pacman", "yum", "apk", "snap", "flatpak", "scoop", "macports", "gem", "pipx",
 	"npm", "cargo", "go", "eget", "xget",
 	"git", "cron", "cron_unix", "cron_file", "iptables", "ufw", "advfirewall", "firewall", "zip", "symlinks", "file", "copy", "template", "shell", "blockinfile", "lineinfile",
 	"ssh_host_block", "log", "fail", "path", "fact", "mount_facts", "registry", "scheduled_task", "group", "user",
 	"assert", "async", "wait_for", "service",
-}
+})
 
 // All returns every implemented module, ready to hand to
 // engine.Options.Handlers. A leaf whose module isn't in this map (there
@@ -38,7 +38,7 @@ var AllModuleNames = []string{
 // ironstate.ps1's own "no handler registered" behavior for an
 // unrecognized module.
 func All() map[string]engine.Handler {
-	return map[string]engine.Handler{
+	handlers := map[string]engine.Handler{
 		"log":            logHandler{},
 		"fail":           failHandler{},
 		"path":           pathHandler{},
@@ -89,4 +89,17 @@ func All() map[string]engine.Handler {
 		"async":          asyncHandler{},
 		"wait_for":       waitForHandler{},
 	}
+	for name, handler := range handlers {
+		handlers["ironstate.builtin."+name] = handler
+	}
+	return handlers
+}
+
+func withBuiltinAliases(names []string) []string {
+	aliases := make([]string, 0, len(names)*2)
+	aliases = append(aliases, names...)
+	for _, name := range names {
+		aliases = append(aliases, "ironstate.builtin."+name)
+	}
+	return aliases
 }

@@ -11,6 +11,11 @@ vars:
     # optional: true
 
 tasks:
+  lint-linux:
+    desc: Run golangci-lint with Linux build selection (matches Ubuntu CI from Windows)
+    cmds:
+      - pwsh -NoProfile -Command "[Environment]::SetEnvironmentVariable('GOOS','linux','Process'); golangci-lint run ./..."
+
   build:
     desc: Build the project
     cmds:
@@ -18,6 +23,7 @@ tasks:
       - mkdir -p bin
       - go mod tidy
       - golangci-lint run ./...
+      - govulncheck ./...
       - goreleaser build --snapshot --clean
       - go vet ./cmd/ironstate
       - gofmt -l .

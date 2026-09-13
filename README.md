@@ -105,6 +105,36 @@ ironstate version
 
 **Output**: on a real terminal, results print as a colored table with a per-module emoji, a host-facts panel up front, and a final summary block with elapsed time - a "changed" leaf (installed/removed) reads brighter than an already-satisfied skip, and a failure reads in a danger red. `--output json` switches to a plain JSON array on stdout instead (informational/progress lines go to stderr, so this stream stays clean and pipeable, e.g. `... --output json | jq`); colors auto-disable when not attached to a terminal, honor `NO_COLOR`/`IRONSTATE_NO_COLOR`, or can be forced off with `--no-color`.
 
+Each dispatched result in `--output json` also includes `duration_ms`, measuring the leaf's template resolution and handler dispatch time. Installed plugin handlers can be measured independently with:
+
+```text
+ironstate plugin bench acme.hosts --handler ensure_entry --item '{"hostname":"build.local"}' --operation test --iterations 100
+```
+
+The benchmark emits JSON with total, average, minimum, and maximum nanosecond/millisecond timings. Supported operations are `test`, `describe`, `install`, and `uninstall`; use `--apply` only when intentionally benchmarking a mutating operation.
+
+## External handler plugins
+
+Ironstate can load standalone Go handler plugins over a versioned gRPC protocol. Plugins use the naming convention `github.com/<organization>/ironstate-handler-<name>` and are referenced in playbooks as `<organization>.<name>.<handler>`:
+
+```yaml
+plugins:
+  - use: acme.hosts@v1.2.3
+
+tasks:
+  - name: Ensure the build host resolves locally
+    acme.hosts.ensure_entry:
+      path: /etc/hosts
+      ip: 10.0.0.12
+      hostname: build.local
+```
+
+Install and inspect plugins with `ironstate plugin install`, `list`, `info`, `update`, and `uninstall`. Test or benchmark a handler without a full playbook with `ironstate plugin test` and `ironstate plugin bench`. Declared plugins are never fetched silently; use `--allow-plugin-install` only in a trusted automation context. Pin versions and checksums with `ironstate.lock.yaml` for reproducible runs.
+
+Plugin authors implement the public `github.com/TacoContent/ironstate/sdk/handler` interface and start the binary with `sdk/plugin.Serve`. The complete handler contract, runnable example, testing/profiling helpers, security model, lockfile behavior, and CLI reference are in [docs/plugins.md](docs/plugins.md).
+
+The repository includes a real sample plugin at [examples/ironstate-handler-hosts](examples/ironstate-handler-hosts). It manages idempotent hosts-file mappings and is tested through the same subprocess loader used for installed plugins.
+
 ## Playbooks
 
 `ironstate` doesn't hard-code a single site file location - like an Ansible playbook, you create your own directory with a `main.yml` plus whatever `hosts/`, `variables/`, `packages/`/`roles/` overlays it needs, then point `--playbook` at that directory (or its `main.yml` directly). [`playbooks/camalot/`](playbooks/camalot) in this repo is one such playbook, kept here as a real-world worked example (the repo owner's own machine setup) - copy its shape for your own playbook, or start from an empty `main.yml`. Nothing about the `playbooks/` directory name, or `camalot` itself, is special or required by `ironstate` - it's just a sample.
@@ -115,7 +145,7 @@ ironstate version
 
 `ironstate init [playbook-name]` scaffolds that starter shape for you - creates `<playbook-name>/` (or initializes the current directory if no name is given) with:
 
-```
+```text
 <playbook-name>/
 ├── main.yml
 ├── roles/
@@ -137,7 +167,7 @@ ironstate --playbook main.yml
 
 Files are loaded and merged in this order. Each subsequent file's `tasks` list is **appended** to the base file's list; `vars` **deep-merges** key-by-key (an overlay can add or override individual vars without wiping out the base set).
 
-``` tree
+```text
 <playbook>/
 ├── main.yml                              ← base (always loaded)
 ├── hosts/
@@ -151,7 +181,7 @@ Files are loaded and merged in this order. Each subsequent file's `tasks` list i
 
 The **chained overlay** filenames are built from this machine's own facts (see [Facts](#facts)): `hostname`, `os_family`, `platform`, `arch`. Use **any N of them**, joined by `.`, **in any order you like** - so a bare single-characteristic name like `windows.yml`/`ubuntu.yml`/`archlinux.yml` (matching `os_family`) or `amd64.yml` (matching `arch`) works, and so does `amd64.krayt.yml` written arch-before-hostname instead of `krayt.amd64.yml`:
 
-```
+```text
 windows.yml                     # any host where os_family == "windows"
 ubuntu.yml                      # any Linux host whose distro ID is "ubuntu"
 amd64.yml                       # any host where arch == "amd64"
