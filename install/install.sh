@@ -6,25 +6,31 @@
 #   curl -fsSL https://raw.githubusercontent.com/TacoContent/ironstate/develop/install/install.sh | bash
 #   ./install.sh [-d|--dir <path>] [-v|--version <tag>] [-h|--help]
 set -euo pipefail
+SKIP_CHECKSUM=0
 
 REPO="TacoContent/ironstate"
 BINARY="ironstate"
+MAN_PAGE="${BINARY}.1"
 DEFAULT_INSTALL_DIR="$HOME/.local/bin"
+DEFAULT_MAN_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/man/man1"
 
 INSTALL_DIR="$DEFAULT_INSTALL_DIR"
+MAN_DIR="$DEFAULT_MAN_DIR"
 VERSION=""
 
 usage() {
 	cat <<EOF
 Usage: install.sh [options]
 
-Downloads and installs the latest (or a specific) ironstate release binary
+Downloads and installs the latest (or a specific) $REPO release binary
 for this machine's OS/architecture from GitHub Releases
 (https://github.com/${REPO}/releases).
 
 Options:
   -d, --dir <path>       Install directory (default: ${DEFAULT_INSTALL_DIR})
+  -m, --man-dir <path>   Man page install directory (default: ${DEFAULT_MAN_DIR})
   -v, --version <tag>    Install a specific release tag, e.g. v0.1.0 (default: latest)
+	-x, --no-checksum      Skip script checksum verification (not recommended)
   -h, --help             Show this help message
 EOF
 }
@@ -35,9 +41,17 @@ while [ $# -gt 0 ]; do
 		INSTALL_DIR="$2"
 		shift 2
 		;;
+	-m | --man-dir)
+		MAN_DIR="$2"
+		shift 2
+		;;
 	-v | --version)
 		VERSION="$2"
 		shift 2
+		;;
+	-x | --no-checksum)
+		SKIP_CHECKSUM=1
+		shift
 		;;
 	-h | --help)
 		usage
@@ -59,6 +73,9 @@ need_cmd() {
 }
 need_cmd curl
 need_cmd tar
+need_cmd uname
+need_cmd unzip
+need_cmd mktemp
 
 TAG=""
 ASSET=""
@@ -76,6 +93,9 @@ issue_block() {
 - uname -m: ${arch_raw}
 - Detected OS: ${os:-<unrecognized>}
 - Detected Arch: ${arch:-<unrecognized>}
+- Install Path: ${INSTALL_DIR}
+- Expected Script Checksum: $(get_expected_script_checksum || echo "<unknown>")
+- Actual Script Checksum: $(get_script_checksum || echo "<unknown>")
 - Resolved tag: ${TAG:-<none>}
 - Attempted asset: ${ASSET:-<none>}
 EOF
@@ -84,7 +104,7 @@ EOF
 fail_unsupported() {
 	echo "error: $1" >&2
 	echo "" >&2
-	echo "No supported ironstate release was found for this machine." >&2
+	echo "No supported $BINARY release was found for this machine." >&2
 	echo "Please open an issue: https://github.com/${REPO}/issues/new?title=$(printf '%s' "Unsupported platform: ${os_raw}/${arch_raw}" | sed 's/ /+/g')" >&2
 	echo "" >&2
 	echo "Paste the block below into the issue:" >&2
@@ -93,12 +113,79 @@ fail_unsupported() {
 	exit 1
 }
 
+get_script_checksum() {
+	if command -v sha256sum >/dev/null 2>&1; then
+		sha256sum "$0" | awk '{print $1}'
+	elif command -v shasum >/dev/null 2>&1; then
+		shasum -a 256 "$0" | awk '{print $1}'
+	else
+		echo "warning: no sha256sum/shasum found; cannot compute script checksum" >&2
+		return 1
+	fi
+}
+
+# Cached result of the remote checksum lookup so it is fetched at most once per run.
+EXPECTED_SCRIPT_CHECKSUM=""
+EXPECTED_SCRIPT_CHECKSUM_STATE=""
+
+get_expected_script_checksum() {
+	if [ -n "$EXPECTED_SCRIPT_CHECKSUM_STATE" ]; then
+		[ "$EXPECTED_SCRIPT_CHECKSUM_STATE" = "ok" ] || return 1
+		echo "$EXPECTED_SCRIPT_CHECKSUM"
+		return 0
+	fi
+
+	checksum_url="https://raw.githubusercontent.com/${REPO}/main/install/install.sh.sha256"
+	checksum_file="$(mktemp)"
+	if curl -fsSL -o "$checksum_file" "$checksum_url"; then
+		EXPECTED_SCRIPT_CHECKSUM="$(awk '{print $1}' "$checksum_file")"
+		EXPECTED_SCRIPT_CHECKSUM_STATE="ok"
+		rm -f "$checksum_file"
+		echo "$EXPECTED_SCRIPT_CHECKSUM"
+	else
+		EXPECTED_SCRIPT_CHECKSUM_STATE="failed"
+		rm -f "$checksum_file"
+		echo "warning: could not download script checksum from ${checksum_url}" >&2
+		return 1
+	fi
+}
+
+check_script_checksum() {
+	[ "$SKIP_CHECKSUM" -eq 1 ] && return 0
+
+	# download the script checksum from GitHub and compare it to the local checksum
+	# (this is a basic integrity check to ensure the script hasn't been tampered with)
+	expected_checksum="$(get_expected_script_checksum)"
+	if [ -z "$expected_checksum" ]; then
+		echo "warning: could not determine expected script checksum; use --no-checksum to skip this check" >&2
+		return 1
+	fi
+	
+	actual_checksum="$(get_script_checksum)"
+	if [ "$actual_checksum" != "$expected_checksum" ]; then
+		echo "error: script checksum mismatch (expected ${expected_checksum}, got ${actual_checksum})" >&2
+		return 1
+	fi
+}
+
+os_extension="tar.gz"
+BINARY_FILE="$BINARY"
 os_raw="$(uname -s)"
+os_name="$(uname -o 2>/dev/null || echo "")"
 case "$os_raw" in
 Linux) os="linux" ;;
 Darwin) os="darwin" ;;
+# when MINGW32_NT or MSYS_NT, treat as Windows
+MINGW* | MSYS* | CYGWIN*)
+	os="windows"
+	os_extension="zip"
+	BINARY_FILE="${BINARY}.exe"
+	;;
 *) os="" ;;
 esac
+
+# check for android specifically
+[ "$os_name" = "Android" ] && os="android"
 
 arch_raw="$(uname -m)"
 case "$arch_raw" in
@@ -122,8 +209,10 @@ if [ -z "$TAG" ]; then
 	fail_unsupported "could not determine the latest release tag from the GitHub API"
 fi
 
+check_script_checksum || fail_unsupported "script integrity check failed; use --no-checksum to skip this check"
+
 VERSION_NUM="${TAG#v}"
-ASSET="${BINARY}_${VERSION_NUM}_${os}_${arch}.tar.gz"
+ASSET="${BINARY}_${VERSION_NUM}_${os}_${arch}.${os_extension}"
 URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
 CHECKSUMS_URL="https://github.com/${REPO}/releases/download/${TAG}/checksums.txt"
 
@@ -156,13 +245,32 @@ else
 fi
 
 echo "Extracting..."
-tar -xzf "$tmpdir/$ASSET" -C "$tmpdir" "$BINARY"
+if [ "$os_extension" = "tar.gz" ]; then
+	tar -xzf "$tmpdir/$ASSET" -C "$tmpdir" "$BINARY_FILE"
+	# older releases may not bundle a man page
+	tar -xzf "$tmpdir/$ASSET" -C "$tmpdir" "$MAN_PAGE" 2>/dev/null || true
+elif [ "$os_extension" = "zip" ]; then
+	unzip -q "$tmpdir/$ASSET" "$BINARY_FILE" -d "$tmpdir"
+	unzip -q "$tmpdir/$ASSET" "$MAN_PAGE" -d "$tmpdir" 2>/dev/null || true
+else
+	echo "error: unsupported archive format: $os_extension" >&2
+	exit 1
+fi
 
 mkdir -p "$INSTALL_DIR"
-cp "$tmpdir/$BINARY" "$INSTALL_DIR/$BINARY"
-chmod +x "$INSTALL_DIR/$BINARY"
+cp "$tmpdir/$BINARY_FILE" "$INSTALL_DIR/$BINARY_FILE"
+chmod +x "$INSTALL_DIR/$BINARY_FILE"
 
-echo "Installed ${BINARY} ${TAG} to ${INSTALL_DIR}/${BINARY}"
+echo "Installed ${BINARY} ${TAG} to ${INSTALL_DIR}/${BINARY_FILE}"
+
+if [ -f "$tmpdir/$MAN_PAGE" ]; then
+	if mkdir -p "$MAN_DIR" 2>/dev/null && cp "$tmpdir/$MAN_PAGE" "$MAN_DIR/$MAN_PAGE" 2>/dev/null; then
+		chmod 644 "$MAN_DIR/$MAN_PAGE"
+		echo "Installed man page to ${MAN_DIR}/${MAN_PAGE}"
+	else
+		echo "warning: could not install man page to ${MAN_DIR}" >&2
+	fi
+fi
 case ":$PATH:" in
 *":${INSTALL_DIR}:"*) ;;
 *)
