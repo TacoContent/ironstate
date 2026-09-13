@@ -1,23 +1,68 @@
 version: 2
 
 project_name: ironstate
+metadata:
+  mod_timestamp: "{{ .CommitTimestamp }}"
+
+release:
+  prerelease: auto
+  # IRONSTATE_DRY_RUN=true builds everything and writes the package manifests to
+  # dist/ without creating a GitHub release or pushing to the tap repos.
+  disable: '{{ envOrDefault "IRONSTATE_DRY_RUN" "false" }}'
 
 before:
   hooks:
     - go mod tidy
 
 builds:
-  - id: ironstate
+  - id: ironstate-windows
     main: ./cmd/ironstate
     binary: ironstate
     env:
       - CGO_ENABLED=0
     goos:
       - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/TacoContent/ironstate/internal/cli.version={{.Version}}
+      - -X github.com/TacoContent/ironstate/internal/cli.commit={{.ShortCommit}}
+      - -X github.com/TacoContent/ironstate/internal/cli.date={{.Date}}
+    hooks:
+      pre:
+        - go tool go-winres make --in winres/winres.json --arch={{ .Arch }} --product-version={{ .Version }} --file-version={{ .Version }} --out ./cmd/ironstate/rsrc
+
+      post:
+        - rm -f cmd/ironstate/rsrc_*.syso
+  - id: ironstate-unix
+    main: ./cmd/ironstate
+    binary: ironstate
+    env:
+      - CGO_ENABLED=0
+    goos:
       - linux
       - darwin
     goarch:
       - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/TacoContent/ironstate/internal/cli.version={{.Version}}
+      - -X github.com/TacoContent/ironstate/internal/cli.commit={{.ShortCommit}}
+      - -X github.com/TacoContent/ironstate/internal/cli.date={{.Date}}
+  - id: ironstate-android
+    main: ./cmd/ironstate
+    binary: ironstate
+    skip: '{{ envOrDefault "IRONSTATE_SKIP_ANDROID" "false" }}'
+    env:
+      - CGO_ENABLED=1
+      - CC={{ envOrDefault "ANDROID_NDK_LATEST_HOME" "" }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang
+      - CXX={{ envOrDefault "ANDROID_NDK_LATEST_HOME" "" }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang++
+    goos:
+      - android
+    goarch:
       - arm64
     ldflags:
       - -s -w
@@ -29,33 +74,21 @@ archives:
   - id: ironstate
     formats: [zip]
     format_overrides:
+      - goos: android
+        formats: [tar.gz]
       - goos: linux
         formats: [tar.gz]
       - goos: darwin
         formats: [tar.gz]
-    # Files land at the archive root (ironstate.exe, not
-    # ironstate_<version>_<os>_<arch>/ironstate.exe) - explicit rather than
-    # relying on goreleaser's own default.
     wrap_in_directory: false
     files:
       - README.md
-      - LICENSE*
-      - ironstate.schema.json
+      - LICENSE
+      - ironstate.1
 
 checksum:
   name_template: checksums.txt
 
-# Keyless cosign signing of the checksums file (covers every archive via
-# its hash list) via GitHub Actions OIDC identity — docs/plans/go-rewrite.md
-# §8. Requires `cosign` on the runner (installed by
-# sigstore/cosign-installer in .github/workflows/release.yml) and
-# `id-token: write` permission on the workflow.
-#
-# cosign v3's 'sign-blob' dropped '--output-signature'/'--output-certificate'
-# (deprecated, silently ignored) in favor of a single '--bundle' file
-# combining both - matches goreleaser's own documented cosign recipe
-# (https://goreleaser.com/customization/sign/sign/#signing-with-cosign).
-# Verify with: cosign verify-blob --bundle checksums.txt.sigstore.json checksums.txt
 signs:
   - cmd: cosign
     signature: "${artifact}.sigstore.json"
@@ -67,36 +100,34 @@ signs:
     artifacts: checksum
     output: true
 
-# SBOM per artifact — docs/plans/go-rewrite.md §7. Requires `syft` on the
-# runner (installed via anchore/sbom-action/download-syft in
-# .github/workflows/release.yml).
 sboms:
   - id: ironstate-sbom
     artifacts: archive
 
 snapshot:
-  version_template: "{{ .Tag }}-next"
+  version_template: "{{ .Version }}-SNAPSHOT-{{.ShortCommit}}"
 
 # winget:
 #   - name: ironstate
-#     skip_upload: '{{ if eq (envOrDefault "XGET_DRY_RUN" "false") "true" }}true{{ else }}auto{{ end }}'
+#     skip_upload: '{{ if eq (envOrDefault "IRONSTATE_DRY_RUN" "false") "true" }}true{{ else }}auto{{ end }}'
 #     publisher: camalot
 #     author: Ryan Conrad
 #     package_name: ironstate
 #     package_identifier: camalot.ironstate
 #     # Explicit so the manifests can also be rendered with the release pipe disabled.
-#     url_template: "https://github.com/camalot/xget/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
-#     short_description: 'ironstate is a declarative, Ansible-style task runner driven by YAML.'
-#     description: 'ironstate is a declarative, Ansible-style task runner driven by YAML.'
+#     url_template: "https://github.com/tacocontent/ironstate/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+#     short_description: ironstate is a tool for managing infrastructure as code.
+#     description: ironstate is a tool for managing infrastructure as code.
 #     license: MIT
 #     commit_msg_template: "chore(winget): update manifest {{ .ProjectName }}@{{ .Version }}"
 #     license_url: https://github.com/tacocontent/ironstate/blob/main/LICENSE
 #     copyright: "Copyright © 2026 Ryan Conrad"
 #     release_notes: "{{.Changelog}}"
 #     tags:
-#       - machine-state
-#       - system-configuration
+#       - installer
+#       - github
 #       - cli
+#       - system-state
 #     repository:
 #       owner: camalot
 #       name: scoop
@@ -112,10 +143,10 @@ snapshot:
 #       name: scoop
 #       branch: main
 #       token: '{{ .Env.XGET_APP_TOKEN }}'
-#     skip_upload: '{{ if eq (envOrDefault "XGET_DRY_RUN" "false") "true" }}true{{ else }}auto{{ end }}'
+#     skip_upload: '{{ if eq (envOrDefault "IRONSTATE_DRY_RUN" "false") "true" }}true{{ else }}auto{{ end }}'
 #     commit_msg_template: "chore(homebrew): update manifest {{ .ProjectName }}@{{ .Version }}"
 #     homepage: https://github.com/tacocontent/ironstate
-#     description: 'ironstate is a declarative, Ansible-style task runner driven by YAML.'
+#     description: ironstate is a tool for managing infrastructure as code.
 #     url:
 #       template: "https://github.com/tacocontent/ironstate/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
 #     binaries:
@@ -144,18 +175,20 @@ snapshot:
 #       name: scoop
 #       branch: main
 #       token: '{{ .Env.XGET_APP_TOKEN }}'
-#     skip_upload: '{{ if eq (envOrDefault "XGET_DRY_RUN" "false") "true" }}true{{ else }}auto{{ end }}'
+#     skip_upload: '{{ if eq (envOrDefault "IRONSTATE_DRY_RUN" "false") "true" }}true{{ else }}auto{{ end }}'
 #     url_template: "https://github.com/tacocontent/ironstate/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
 
 #     commit_msg_template: "chore(scoop): update manifest {{ .ProjectName }}@{{ .Version }}"
 #     homepage: https://github.com/tacocontent/ironstate
-#     description: 'ironstate is a declarative, Ansible-style task runner driven by YAML.'
+#     description: ironstate is a tool for managing infrastructure as code.
 #     license: MIT
 #     commit_author:
 #       name: xget-bot[bot]
 #       email: 325102936+xget-bot[bot]@users.noreply.github.com
 
 changelog:
+  # if release-notes are passed, then disable generation
+  disable: '{{ if ne (envOrDefault "IRONSTATE_RELEASE_NOTES" "") "" }}true{{ else }}false{{ end }}'
   sort: asc
   filters:
     exclude:

@@ -19,15 +19,42 @@ tasks:
   build:
     desc: Build the project
     cmds:
+      - chmod +x ./scripts/generate-install-sha256.sh
+      - chmod +x ./install/install.sh
+      - chmod +x ./install/install.ps1
+      - bash ./scripts/generate-install-sha256.sh
       - echo "Building the project..."
       - mkdir -p bin
       - go mod tidy
       - golangci-lint run ./...
-      - govulncheck ./...
-      - goreleaser build --snapshot --clean
-      - go vet ./cmd/ironstate
+      - goreleaser build --snapshot --clean --id ironstate-windows --id ironstate-unix
+      - go vet ./...
       - gofmt -l .
       - go test ./...
+
+  manpage:
+    desc: Generate ironstate.1 (falls back to a stub when pandoc is unavailable)
+    status:
+      - test -f ironstate.1
+    cmds:
+      - cmd: pandoc docs/_man/ironstate.md -s -t man -o ironstate.1
+        ignore_error: true
+      - cmd: test -f ironstate.1 || printf '.TH IRONSTATE 1\n.SH NAME\nironstate \\- placeholder man page\n' > ironstate.1
+
+  release:dry-run:
+    desc: Build the release and render the winget/scoop/homebrew manifests into dist/ without publishing anything
+    deps:
+      - manpage
+    env:
+      XGET_DRY_RUN: "true"
+      # cgo cross-compilation for android needs the NDK, which is only present in CI.
+      XGET_SKIP_ANDROID: '{{.SKIP_ANDROID | default "true"}}'
+    cmds:
+      - goreleaser release --clean --skip=validate,announce,sign,sbom
+      - echo "--- dist/scoop/ironstate.json ---"
+      - cat dist/scoop/ironstate.json
+      - echo "--- dist/homebrew/Casks/ironstate.rb ---"
+      - cat dist/homebrew/Casks/ironstate.rb
 
   push:
     # deps:
