@@ -7,10 +7,12 @@ import (
 	"os/exec"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/TacoContent/ironstate/internal/engine"
+	"github.com/TacoContent/ironstate/internal/filters"
 	"github.com/TacoContent/ironstate/internal/model"
 	"github.com/TacoContent/ironstate/internal/pluginhost"
 )
@@ -23,13 +25,133 @@ type pluginTestClient interface {
 var pluginTestStore = pluginhost.DefaultStore
 
 var pluginTestLaunch = func(command *exec.Cmd) (pluginTestClient, error) {
-	return pluginhost.Launch(command)
+	return pluginhost.LaunchWithCallbacks(command, filters.New())
 }
 
 func newPluginCommand() *cobra.Command {
 	command := &cobra.Command{Use: "plugin", Short: "Manage external handler plugins"}
-	command.AddCommand(newPluginInstallCommand(), newPluginListCommand(), newPluginInfoCommand(), newPluginUpdateCommand(), newPluginUninstallCommand(), newPluginTestCommand())
+	command.AddCommand(newPluginInstallCommand(), newPluginListCommand(), newPluginInfoCommand(), newPluginUpdateCommand(), newPluginUninstallCommand(), newPluginTestCommand(), newPluginBenchCommand())
 	return command
+}
+
+func newPluginBenchCommand() *cobra.Command {
+	var handlerName, rawItem, operation string
+	var iterations int
+	var apply bool
+	command := &cobra.Command{
+		Use:   "bench <organization.plugin>",
+		Short: "Benchmark an installed external handler",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
+			if iterations < 1 {
+				return fmt.Errorf("iterations must be at least 1")
+			}
+			if err := validatePluginBenchOperation(operation); err != nil {
+				return err
+			}
+			namespace, _, err := parsePluginReference(args[0])
+			if err != nil {
+				return err
+			}
+			item, err := parsePluginTestItem(rawItem)
+			if err != nil {
+				return err
+			}
+			store, err := pluginTestStore()
+			if err != nil {
+				return err
+			}
+			manifest, err := store.ResolveVersion(namespace, "latest")
+			if err != nil {
+				return fmt.Errorf("plugin %s is not installed; run: ironstate plugin install %s@latest", namespace, namespace)
+			}
+			binary, err := store.BinaryPath(namespace, manifest.Version)
+			if err != nil {
+				return err
+			}
+			client, err := pluginTestLaunch(exec.Command(binary)) //nolint:gosec // path comes from a validated per-user plugin manifest
+			if err != nil {
+				return fmt.Errorf("launch plugin %s@%s: %w", namespace, manifest.Version, err)
+			}
+			defer func() { _ = client.Close() }()
+			handler, ok := client.Handlers()[handlerName]
+			if !ok {
+				return fmt.Errorf("handler %q is not declared by plugin %s@%s", handlerName, namespace, manifest.Version)
+			}
+			return runPluginBench(command, handler, handlerName, item, operation, iterations, apply)
+		},
+	}
+	command.Flags().StringVar(&handlerName, "handler", "", "plugin handler name")
+	command.Flags().StringVar(&rawItem, "item", "", "handler item as a YAML or JSON mapping")
+	command.Flags().StringVar(&operation, "operation", "test", "operation to benchmark: test|describe|install|uninstall")
+	command.Flags().IntVar(&iterations, "iterations", 10, "number of operation calls")
+	command.Flags().BoolVar(&apply, "apply", false, "allow install or uninstall operations to make changes")
+	_ = command.MarkFlagRequired("handler")
+	_ = command.MarkFlagRequired("item")
+	return command
+}
+
+func validatePluginBenchOperation(operation string) error {
+	switch strings.ToLower(operation) {
+	case "test", "describe", "install", "uninstall":
+		return nil
+	default:
+		return fmt.Errorf("unsupported benchmark operation %q; choose test, describe, install, or uninstall", operation)
+	}
+}
+
+type pluginBenchResult struct {
+	Handler    string  `json:"handler"`
+	Operation  string  `json:"operation"`
+	Iterations int     `json:"iterations"`
+	Apply      bool    `json:"apply"`
+	TotalNS    int64   `json:"total_ns"`
+	TotalMS    float64 `json:"total_ms"`
+	AverageNS  float64 `json:"average_ns"`
+	AverageMS  float64 `json:"average_ms"`
+	MinNS      int64   `json:"min_ns"`
+	MaxNS      int64   `json:"max_ns"`
+}
+
+func runPluginBench(command *cobra.Command, handler engine.Handler, handlerName string, item map[string]any, operation string, iterations int, apply bool) error {
+	ctx := engine.Context{Flat: map[string]any{}, Apply: apply}
+	durations := make([]time.Duration, 0, iterations)
+	for i := 0; i < iterations; i++ {
+		started := time.Now()
+		var err error
+		switch strings.ToLower(operation) {
+		case "test":
+			_, err = handler.Test(item, "", ctx)
+		case "describe":
+			_, err = handler.Describe(item, engine.ActionInstall, ctx)
+		case "install":
+			_, err = handler.Install(item, "", ctx)
+		case "uninstall":
+			_, err = handler.Uninstall(item, "", ctx)
+		}
+		if err != nil {
+			return fmt.Errorf("benchmark %s iteration %d: %w", operation, i+1, err)
+		}
+		durations = append(durations, time.Since(started))
+	}
+	var total time.Duration
+	min, max := durations[0], durations[0]
+	for _, duration := range durations {
+		total += duration
+		if duration < min {
+			min = duration
+		}
+		if duration > max {
+			max = duration
+		}
+	}
+	result := pluginBenchResult{
+		Handler: handlerName, Operation: strings.ToLower(operation), Iterations: iterations, Apply: apply,
+		TotalNS: total.Nanoseconds(), TotalMS: float64(total) / float64(time.Millisecond),
+		AverageNS: float64(total.Nanoseconds()) / float64(iterations), AverageMS: float64(total) / float64(iterations) / float64(time.Millisecond),
+		MinNS: min.Nanoseconds(), MaxNS: max.Nanoseconds(),
+	}
+	return json.NewEncoder(command.OutOrStdout()).Encode(result)
 }
 
 func newPluginInstallCommand() *cobra.Command {

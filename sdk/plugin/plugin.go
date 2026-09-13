@@ -21,6 +21,9 @@ const (
 	ProtocolVersion = 1
 	// HandlerServiceName is the go-plugin service name for handler plugins.
 	HandlerServiceName = "handler"
+	// HostCallbackIDKey is internal request metadata used to route a handler
+	// call back to the host's callback gRPC service.
+	HostCallbackIDKey = "__ironstate_host_callback_id"
 )
 
 var handshakeConfig = pluginlib.HandshakeConfig{
@@ -38,6 +41,13 @@ func HandshakeConfig() pluginlib.HandshakeConfig {
 // HandlerPluginClient from an external handler binary.
 func ClientPluginSet() pluginlib.PluginSet {
 	return pluginlib.PluginSet{HandlerServiceName: grpcPlugin{}}
+}
+
+// BrokeredHandlerClient exposes the callback broker used by the host to
+// serve HandlerHostCallback for an individual handler call.
+type BrokeredHandlerClient interface {
+	pluginpb.HandlerPluginClient
+	CallbackBroker() *pluginlib.GRPCBroker
 }
 
 // Serve starts an external handler plugin. It does not return.
@@ -58,18 +68,26 @@ type grpcPlugin struct {
 	handlers map[string]handler.Handler
 }
 
-func (p grpcPlugin) GRPCServer(_ *pluginlib.GRPCBroker, server *grpc.Server) error {
-	pluginpb.RegisterHandlerPluginServer(server, handlerServer{handlers: p.handlers})
+func (p grpcPlugin) GRPCServer(broker *pluginlib.GRPCBroker, server *grpc.Server) error {
+	pluginpb.RegisterHandlerPluginServer(server, handlerServer{handlers: p.handlers, broker: broker})
 	return nil
 }
 
-func (grpcPlugin) GRPCClient(_ context.Context, _ *pluginlib.GRPCBroker, connection *grpc.ClientConn) (any, error) {
-	return pluginpb.NewHandlerPluginClient(connection), nil
+func (grpcPlugin) GRPCClient(_ context.Context, broker *pluginlib.GRPCBroker, connection *grpc.ClientConn) (any, error) {
+	return brokeredHandlerClient{HandlerPluginClient: pluginpb.NewHandlerPluginClient(connection), broker: broker}, nil
 }
+
+type brokeredHandlerClient struct {
+	pluginpb.HandlerPluginClient
+	broker *pluginlib.GRPCBroker
+}
+
+func (c brokeredHandlerClient) CallbackBroker() *pluginlib.GRPCBroker { return c.broker }
 
 type handlerServer struct {
 	pluginpb.UnimplementedHandlerPluginServer
 	handlers map[string]handler.Handler
+	broker   *pluginlib.GRPCBroker
 }
 
 func (s handlerServer) ListHandlers(_ context.Context, _ *pluginpb.ListHandlersRequest) (*pluginpb.ListHandlersResponse, error) {
@@ -163,7 +181,7 @@ func (s handlerServer) Scan(_ context.Context, request *pluginpb.ScanRequest) (*
 	if !ok {
 		return nil, status.Error(codes.Unimplemented, "handler does not support scanning")
 	}
-	items, err := scanner.Scan(contextValue(request.GetContext()))
+	items, err := scanner.Scan(contextValue(request.GetContext(), s.broker))
 	if err != nil {
 		return nil, handlerError(err)
 	}
@@ -183,7 +201,7 @@ func (s handlerServer) requestValues(request *pluginpb.HandlerRequest) (handler.
 	if err != nil {
 		return nil, nil, "", handler.Context{}, err
 	}
-	return h, structMap(request.GetItem()), request.GetName(), contextValue(request.GetContext()), nil
+	return h, structMap(request.GetItem()), request.GetName(), contextValue(request.GetContext(), s.broker), nil
 }
 
 func (s handlerServer) handler(name string) (handler.Handler, error) {
@@ -194,15 +212,78 @@ func (s handlerServer) handler(name string) (handler.Handler, error) {
 	return h, nil
 }
 
-func contextValue(value *pluginpb.Context) handler.Context {
+func contextValue(value *pluginpb.Context, broker *pluginlib.GRPCBroker) handler.Context {
 	if value == nil {
 		return handler.Context{Flat: map[string]any{}}
 	}
+	flat := structMap(value.GetFlat())
+	callbackID := callbackID(flat)
+	delete(flat, HostCallbackIDKey)
 	return handler.Context{
-		Flat:   structMap(value.GetFlat()),
-		Apply:  value.GetApply(),
-		Become: handler.Become{Enabled: value.GetBecome().GetEnabled(), User: value.GetBecome().GetUser()},
+		Flat:      flat,
+		Apply:     value.GetApply(),
+		Become:    handler.Become{Enabled: value.GetBecome().GetEnabled(), User: value.GetBecome().GetUser()},
+		Callbacks: newHostCallbacks(broker, callbackID),
 	}
+}
+
+func callbackID(flat map[string]any) uint32 {
+	switch value := flat[HostCallbackIDKey].(type) {
+	case float64:
+		if value > 0 && value <= float64(^uint32(0)) {
+			return uint32(value)
+		}
+	case int:
+		if value > 0 {
+			return uint32(value)
+		}
+	}
+	return 0
+}
+
+func newHostCallbacks(broker *pluginlib.GRPCBroker, id uint32) handler.HostCallbacks {
+	if broker == nil || id == 0 {
+		return nil
+	}
+	return hostCallbacks{broker: broker, id: id}
+}
+
+type hostCallbacks struct {
+	broker *pluginlib.GRPCBroker
+	id     uint32
+}
+
+func (c hostCallbacks) withClient(fn func(pluginpb.HandlerHostCallbackClient) error) error {
+	connection, err := c.broker.Dial(c.id)
+	if err != nil {
+		return err
+	}
+	defer connection.Close()
+	return fn(pluginpb.NewHandlerHostCallbackClient(connection))
+}
+
+func (c hostCallbacks) RenderTemplate(value string, variables map[string]any) (string, error) {
+	var rendered string
+	err := c.withClient(func(client pluginpb.HandlerHostCallbackClient) error {
+		response, err := client.RenderTemplate(context.Background(), &pluginpb.RenderTemplateRequest{Template: value, Variables: mustStruct(variables)})
+		if err == nil {
+			rendered = response.GetRendered()
+		}
+		return err
+	})
+	return rendered, err
+}
+
+func (c hostCallbacks) EvaluateCondition(expression string, variables map[string]any) (bool, error) {
+	var result bool
+	err := c.withClient(func(client pluginpb.HandlerHostCallbackClient) error {
+		response, err := client.EvaluateCondition(context.Background(), &pluginpb.EvaluateConditionRequest{Expression: expression, Variables: mustStruct(variables)})
+		if err == nil {
+			result = response.GetResult()
+		}
+		return err
+	})
+	return result, err
 }
 
 func structMap(value *structpb.Struct) map[string]any {
@@ -210,6 +291,14 @@ func structMap(value *structpb.Struct) map[string]any {
 		return map[string]any{}
 	}
 	return value.AsMap()
+}
+
+func mustStruct(value map[string]any) *structpb.Struct {
+	converted, err := structpb.NewStruct(value)
+	if err != nil {
+		return &structpb.Struct{}
+	}
+	return converted
 }
 
 func execResult(value handler.ExecResult) (*pluginpb.ExecResult, error) {

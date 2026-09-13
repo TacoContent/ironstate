@@ -90,6 +90,32 @@ func TestRunPluginTestDryRunDoesNotMutate(t *testing.T) {
 	}
 }
 
+func TestRunPluginBenchEmitsTimingSummary(t *testing.T) {
+	handler := &pluginTestHandler{}
+	command := newPluginBenchCommand()
+	var output bytes.Buffer
+	command.SetOut(&output)
+	if err := runPluginBench(command, handler, "ensure_entry", map[string]any{"state": "present"}, "test", 3, false); err != nil {
+		t.Fatalf("runPluginBench returned error: %v", err)
+	}
+	var result pluginBenchResult
+	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
+		t.Fatalf("decode benchmark result: %v", err)
+	}
+	if result.Handler != "ensure_entry" || result.Operation != "test" || result.Iterations != 3 || result.TotalNS < 0 || result.AverageNS < 0 || result.MinNS > result.MaxNS || result.AverageNS < float64(result.MinNS) || result.AverageNS > float64(result.MaxNS) {
+		t.Fatalf("benchmark result = %+v", result)
+	}
+	if handler.tests != 3 {
+		t.Fatalf("handler test calls = %d, want 3", handler.tests)
+	}
+}
+
+func TestValidatePluginBenchOperation(t *testing.T) {
+	if err := validatePluginBenchOperation("wat"); err == nil {
+		t.Fatal("accepted unsupported benchmark operation")
+	}
+}
+
 func TestPluginTestCommandRejectsUndeclaredHandler(t *testing.T) {
 	store := pluginTestStoreFixture(t)
 	originalStore, originalLaunch := pluginTestStore, pluginTestLaunch

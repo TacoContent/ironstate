@@ -19,9 +19,17 @@ type Become struct {
 // Context supplies task-wide state to a handler. Flat contains the resolved
 // facts, vars, package, inputs, and registry namespaces for the current task.
 type Context struct {
-	Flat   map[string]any
-	Apply  bool
-	Become Become
+	Flat      map[string]any
+	Apply     bool
+	Become    Become
+	Callbacks HostCallbacks
+}
+
+// HostCallbacks are optional services provided by the ironstate host for
+// handlers that need the host's template and condition implementations.
+type HostCallbacks interface {
+	RenderTemplate(template string, variables map[string]any) (string, error)
+	EvaluateCondition(expression string, variables map[string]any) (bool, error)
 }
 
 // ExecResult is a handler's normalized command result.

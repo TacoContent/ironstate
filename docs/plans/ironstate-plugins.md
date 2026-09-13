@@ -1,6 +1,6 @@
 # External handler plugins
 
-Status: IN PROGRESS (Phases 0-1 and 3-5 complete; Phase 2 host callbacks remain)
+Status: COMPLETE (Phases 0-8 complete)
 Owner: unassigned
 Target: unscheduled — phased rollout, see §14
 
@@ -496,13 +496,13 @@ end to end, not just in a monorepo subdirectory.
 |---|---|---|
 | 0 — Spike | Complete: validated a `go-plugin` gRPC round-trip (launch, handshake, one RPC call) on Windows before committing to the design above. The retained contract test lives in `internal/pluginhost`. | `internal/pluginhost/transport_spike_test.go` |
 | 1 — SDK & protocol | Complete: the public `handler`, `plugin`, `becomeexec`, and `testing` SDK packages are implemented; the versioned `.proto` has generated Go/gRPC stubs; protocol version and handshake configuration are centralized in `sdk/plugin`. A real subprocess gRPC acceptance test validates `Serve`, handler discovery, dispatch, and structured results. | `sdk/**`, `go.work` |
-| 2 — Host loader & registry merge | In progress: implemented the gRPC adapter, process launch/handshake/handler discovery, qualified handler naming, explicit client cleanup, `handlers.Registry`, builtin `ironstate.builtin.<name>` aliases, JSON `ExecResult.Extra` preservation, and apply-time loading/cleanup integration. Remaining: host callback brokering. | `internal/pluginhost/**`, `internal/handlers/handlers.go`, `internal/cli/root.go`, `internal/engine/output.go` |
+| 2 — Host loader & registry merge | Complete: gRPC adapter, process launch/handshake/handler discovery, qualified handler naming, explicit client cleanup, `handlers.Registry`, builtin `ironstate.builtin.<name>` aliases, JSON `ExecResult.Extra` preservation, apply-time loading/cleanup integration, and per-call bidirectional host callback brokering for template rendering and condition evaluation. | `internal/pluginhost/**`, `internal/handlers/handlers.go`, `internal/cli/root.go`, `internal/engine/output.go`, `sdk/handler`, `sdk/plugin` |
 | 3 — Install/CLI & playbook syntax | Complete: `plugins: - use: organization.plugin@version` parsing; versioned user-cache manifest store; checksum lockfile; `plugin install/list/info/update/uninstall` commands; exact/latest resolution before task expansion; explicit `--allow-plugin-install`; and lifecycle-safe registry loading. | `internal/cli/plugin.go`, `internal/model/**`, `internal/pluginhost/store.go`, `internal/pluginhost/lock.go` |
 | 4 — `doctor` integration | Complete: `doctor --playbook <path>` loads the supplied hierarchy, resolves lock-pinned or declared plugin versions, verifies lockfile checksums, launches each plugin to validate its handshake, and reports missing/undeclared qualified handlers with install/update commands. | `internal/cli/doctor.go`, `internal/cli/doctor_test.go` |
 | 5 — Isolated testing/debug | Complete: `ironstate plugin test <org>.<name> --handler <name> --item <yaml\|json> [--apply]` resolves the latest installed version, validates its declared handler, runs `Test`/`Describe`, conditionally runs `Install` or `Uninstall` from `state`, and emits a structured `ExecResult`. Plugin subprocess logs are forwarded through go-plugin's trace-level `hclog` bridge. | `internal/cli/plugin.go`, `internal/pluginhost/loader.go` |
-| 6 — Bench & timing report (scoped down from "profile/monitor/visualize", see §2) | `ironstate plugin bench`; opt-in pprof helper in `sdk/testing`; per-leaf JSON timing extending existing `--output json`. | `internal/cli/plugin.go`, `sdk/testing` |
-| 7 — Documentation | Author guide (`docs/plugins.md`), README "external plugin handlers" section, CLI reference. | `docs/plugins.md`, `README.md` |
-| 8 — Sample plugin | `examples/ironstate-handler-hosts/**`, its own docs/tests, used as the end-to-end acceptance test for phases 1–5. | `examples/ironstate-handler-hosts/**` |
+| 6 — Bench & timing report (complete; scoped down from "profile/monitor/visualize", see §2) | `ironstate plugin bench` measures a selected handler operation over repeated calls and emits JSON totals/min/max/average timings; `sdk/testing.Profile` provides opt-in CPU/heap pprof capture; dispatched leaves expose `duration_ms` in `--output json`. | `internal/cli/plugin.go`, `internal/engine/engine.go`, `internal/engine/output.go`, `sdk/testing` |
+| 7 — Documentation | Complete: author/user guide in `docs/plugins.md`, README overview and entry point, and CLI reference covering install/list/info/update/uninstall/test/bench, doctor validation, lockfiles, profiling, compatibility, and security boundaries. | `docs/plugins.md`, `README.md` |
+| 8 — Sample plugin | Complete: independent `ironstate-handler-hosts` module with idempotent hosts-file operations, FactProducer/ScanCapable implementations, unit tests, documentation, and a production-loader subprocess acceptance test covering discovery and Test/Install/Uninstall round trips. | `examples/ironstate-handler-hosts/**`, `internal/pluginhost/sample_hosts_test.go` |
 
 Rollback/blast-radius note: every phase is additive on top of the existing
 `handlers.All()`/`tasks.Expand`/`engine.Run` seam — no existing bare module name or

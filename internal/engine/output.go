@@ -144,13 +144,14 @@ func PrintSummary(w io.Writer, stats Stats, elapsed time.Duration) error {
 // snake_case exec sub-fields, matching internal/expr's/YAML's own
 // convention elsewhere in this codebase.
 type jsonResult struct {
-	Module  string         `json:"module"`
-	Package string         `json:"package"`
-	State   string         `json:"state"`
-	Action  Action         `json:"action"`
-	Apply   bool           `json:"apply"`
-	Failed  bool           `json:"failed"`
-	Exec    jsonExecResult `json:"exec"`
+	Module     string         `json:"module"`
+	Package    string         `json:"package"`
+	State      string         `json:"state"`
+	Action     Action         `json:"action"`
+	Apply      bool           `json:"apply"`
+	Failed     bool           `json:"failed"`
+	DurationMS float64        `json:"duration_ms"`
+	Exec       jsonExecResult `json:"exec"`
 }
 
 type jsonExecResult struct {
@@ -169,12 +170,13 @@ func PrintJSON(w io.Writer, results []Result) error {
 	out := make([]jsonResult, len(results))
 	for i, r := range results {
 		out[i] = jsonResult{
-			Module:  secrets.Redact(r.Module),
-			Package: secrets.Redact(r.Package),
-			State:   secrets.Redact(r.State),
-			Action:  r.Action,
-			Apply:   r.Apply,
-			Failed:  r.Failed,
+			Module:     secrets.Redact(r.Module),
+			Package:    secrets.Redact(r.Package),
+			State:      secrets.Redact(r.State),
+			Action:     r.Action,
+			Apply:      r.Apply,
+			Failed:     r.Failed,
+			DurationMS: float64(r.Duration) / float64(time.Millisecond),
 			Exec: jsonExecResult{
 				RC:          r.Exec.RC,
 				Stdout:      secrets.Redact(r.Exec.Stdout),

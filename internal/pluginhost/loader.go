@@ -11,6 +11,7 @@ import (
 	pluginlib "github.com/hashicorp/go-plugin"
 
 	"github.com/TacoContent/ironstate/internal/engine"
+	"github.com/TacoContent/ironstate/internal/expr"
 	sdkplugin "github.com/TacoContent/ironstate/sdk/plugin"
 	pluginpb "github.com/TacoContent/ironstate/sdk/proto"
 )
@@ -24,6 +25,16 @@ type Client struct {
 // Launch starts command, verifies its plugin handshake, and discovers its
 // declared handlers. The returned client must be closed when the run ends.
 func Launch(command *exec.Cmd) (*Client, error) {
+	return launch(command, nil)
+}
+
+// LaunchWithCallbacks starts a plugin and makes the host's expression
+// services available during handler calls.
+func LaunchWithCallbacks(command *exec.Cmd, filters expr.Filters) (*Client, error) {
+	return launch(command, filters)
+}
+
+func launch(command *exec.Cmd, filters expr.Filters) (*Client, error) {
 	if command == nil {
 		return nil, fmt.Errorf("plugin command is required")
 	}
@@ -64,13 +75,26 @@ func Launch(command *exec.Cmd) (*Client, error) {
 		client.Kill()
 		return nil, fmt.Errorf("list plugin handlers: %w", err)
 	}
+	var callbacks *callbackBroker
+	if filters != nil {
+		brokered, ok := dispensed.(sdkplugin.BrokeredHandlerClient)
+		if !ok {
+			client.Kill()
+			return nil, fmt.Errorf("plugin handler service does not support host callbacks")
+		}
+		callbacks = &callbackBroker{broker: brokered.CallbackBroker(), filters: filters}
+	}
 	handlers := make(map[string]engine.Handler, len(listed.GetHandlerNames()))
 	for _, name := range listed.GetHandlerNames() {
 		if name == "" {
 			client.Kill()
 			return nil, fmt.Errorf("plugin declared an empty handler name")
 		}
-		handlers[name] = NewHandler(remote, name)
+		if callbacks == nil {
+			handlers[name] = NewHandler(remote, name)
+		} else {
+			handlers[name] = newHandlerWithCallbacks(remote, name, callbacks)
+		}
 	}
 	return &Client{client: client, handlers: handlers}, nil
 }

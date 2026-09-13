@@ -2,6 +2,7 @@ package engine
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -142,5 +143,19 @@ func TestPrintJSONRedactsRegisteredSecrets(t *testing.T) {
 	}
 	if !strings.Contains(out, `"extra": {`) || !strings.Contains(out, `"source": "plugin"`) {
 		t.Fatalf("PrintJSON dropped Exec.Extra:\n%s", out)
+	}
+}
+
+func TestPrintJSONIncludesPerLeafDuration(t *testing.T) {
+	var buf bytes.Buffer
+	if err := PrintJSON(&buf, []Result{{Module: "shell", Duration: 1500 * time.Microsecond}}); err != nil {
+		t.Fatalf("PrintJSON error: %v", err)
+	}
+	var decoded []map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("decode JSON: %v", err)
+	}
+	if got, want := decoded[0]["duration_ms"], 1.5; got != want {
+		t.Fatalf("duration_ms = %v, want %v", got, want)
 	}
 }

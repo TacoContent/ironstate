@@ -13,6 +13,7 @@ import (
 
 	"github.com/TacoContent/ironstate/internal/config"
 	"github.com/TacoContent/ironstate/internal/engine"
+	"github.com/TacoContent/ironstate/internal/expr"
 	"github.com/TacoContent/ironstate/internal/facts"
 	"github.com/TacoContent/ironstate/internal/filters"
 	"github.com/TacoContent/ironstate/internal/handlers"
@@ -201,7 +202,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return NewLoadError(err)
 	}
-	registry, pluginClients, err := loadPluginRegistry(declaredPlugins, repoRoot, allowPluginInstall)
+	registry, pluginClients, err := loadPluginRegistry(declaredPlugins, repoRoot, allowPluginInstall, fset)
 	if err != nil {
 		return NewLoadError(err)
 	}
@@ -284,7 +285,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func loadPluginRegistry(declared []model.Plugin, repoRoot string, allowInstall bool) (*handlers.Registry, []*pluginhost.Client, error) {
+func loadPluginRegistry(declared []model.Plugin, repoRoot string, allowInstall bool, fset expr.Filters) (*handlers.Registry, []*pluginhost.Client, error) {
 	registry := handlers.NewRegistry()
 	if len(declared) == 0 {
 		return registry, nil, nil
@@ -331,7 +332,7 @@ func loadPluginRegistry(declared []model.Plugin, repoRoot string, allowInstall b
 			closeClients()
 			return nil, nil, err
 		}
-		client, err := pluginhost.Launch(exec.Command(binary)) //nolint:gosec // path comes from a validated per-user plugin manifest
+		client, err := pluginhost.LaunchWithCallbacks(exec.Command(binary), fset) //nolint:gosec // path comes from a validated per-user plugin manifest
 		if err != nil {
 			closeClients()
 			return nil, nil, fmt.Errorf("launch plugin %s@%s: %w", declaredPlugin.Namespace, manifest.Version, err)
