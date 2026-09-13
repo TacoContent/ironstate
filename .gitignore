@@ -38,6 +38,9 @@ ironstate.1
 # https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
 #
 
+go.work.sum
+go.work
+
 # binary output directories
 /bin/
 /dist/
