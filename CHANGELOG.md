@@ -1,4 +1,98 @@
 
+## [v0.3.1](https://github.com/tacocontent/ironstate/releases/tag/v0.3.1) - 2026-09-13
+
+### 🐛 BUG FIXES
+
+#### _GENERAL_
+
+- Added sdk/v<version> module tag -[@camalot](https://github.com/camalot)
+
+- Update workflow to correctly update the go.mod for sdk -[@camalot](https://github.com/camalot)
+
+- Put manpage generation back where it was now that it is ignored -[@camalot](https://github.com/camalot)
+
+- Removed becomeexec cyclic publication issue -[@camalot](https://github.com/camalot)
+
+
+### 💼 OTHER
+
+#### _GENERAL_
+
+- Merge branch 'develop' of github.com:TacoContent/ironstate into develop -[@camalot](https://github.com/camalot)
+
+- Develop' of github.com:TacoContent/ironstate: -[@camalot](https://github.com/camalot)
+
+- Ignore the ironstate.1 file -[@camalot](https://github.com/camalot)
+
+- Merge branch 'develop' of github.com:TacoContent/ironstate into develop -[@camalot](https://github.com/camalot)
+
+- Develop' of github.com:TacoContent/ironstate: -[@camalot](https://github.com/camalot)
+
+
+### 📚 DOCUMENTATION
+
+#### _GENERAL_
+
+- docs: update changelog for v0.3.0 -[@camalot](https://github.com/camalot)
+
+- docs: update man page for v0.3.0 -[@camalot](https://github.com/camalot)
+
+- Update changelog for v0.3.1 -[@github-actions[bot]](https://github.com/github-actions[bot])
+
+- docs: update changelog for v0.3.1 -[@camalot](https://github.com/camalot)
+
+
+### ⚙️ MISCELLANEOUS TASKS
+
+#### _GENERAL_
+
+- Finalize SDK module sdk/v0.3.1 -[@github-actions[bot]](https://github.com/github-actions[bot])
+
+- chore: finalize SDK module sdk/v0.3.1 -[@camalot](https://github.com/camalot)
+
+
+### ◀️ REVERT
+
+#### _GENERAL_
+
+- Revert "chore: finalize SDK module sdk/v0.3.1 -[@github-actions[bot]](https://github.com/github-actions[bot])
+
+- This reverts commit 584c039f62711511f0e86894e3df47161f00d98e. -[@github-actions[bot]](https://github.com/github-actions[bot])
+
+- Revert "docs: update changelog for v0.3.1 -[@github-actions[bot]](https://github.com/github-actions[bot])
+
+- This reverts commit 4b814c675367eddb6b3ba641b17f854cdeca1f8b. -[@github-actions[bot]](https://github.com/github-actions[bot])
+
+- Revert "docs: update changelog for v0.3.1 -[@camalot](https://github.com/camalot)
+
+- Revert "chore: finalize SDK module sdk/v0.3.1 -[@camalot](https://github.com/camalot)
+
+
+## GitHub
+
+### 💛 Contributors
+
+
+- [@camalot](https://github.com/camalot)
+- [@github-actions[bot]](https://github.com/github-actions[bot])
+## 📈 Commit Statistics
+
+
+- `21` commits contributed to the release.
+- `0` days have passed between the first and last commit.
+- `7` commits parsed as conventional.
+- `0` linked issues detected in commits.
+
+
+![Statistics](https://quickchart.io/chart?c={type:'bar',data:{labels:['Commits','Contributors','Days%20Between%20Commits','Conventional%20Commits','Referenced%20Links','Days%20Since%20Last%20Release'],datasets:[{label:'Release',data:[21,2,0,7,0,0]}]}})
+
+
+
+---
+
+
+**Full Changelog**: https://github.com/tacocontent/ironstate/compare/v0.3.0...v0.3.1
+
 ## [v0.3.0](https://github.com/tacocontent/ironstate/releases/tag/v0.3.0) - 2026-09-13
 
 ### 🚀 FEATURES
