@@ -74,7 +74,7 @@ tasks:
         );
         $modules | ForEach-Object {
           if ( !(Get-Module -ListAvailable -Name "$_") ) {
-            Install-Module $_ -Scope CurrentUser -Force;
+            Install-Module $_ -Scope CurrentUser -Force --ErrorAction SilentlyContinue;
           }
         };
         $modules | ForEach-Object { Import-Module -Name $_; }
@@ -129,11 +129,27 @@ tasks:
           }
         }
 
-  - name: Install Oh-My-Posh
-    winget:
-      package: JanDeDobbeleer.OhMyPosh
-      source: winget
+  - name: Install Oh-My-Posh (Windows)
+    xget:
+      package: JanDeDobbeleer/oh-my-posh
       state: ${{ shell.pwsh | enabled('omp') | ternary('present', 'absent') }}
+      args:
+        - --to=${{ facts.local_bin_path | join('oh-my-posh.exe') }}
+        - --upgrade-only
+        - --non-interactive
+      when: 
+        - facts.os_family == 'windows'
+
+  - name: Install Oh-My-Posh
+    xget:
+      package: JanDeDobbeleer/oh-my-posh
+      state: ${{ shell.pwsh | enabled('omp') | ternary('present', 'absent') }}
+      args:
+        - --to=${{ facts.local_bin_path | join('oh-my-posh.exe') }}
+        - --upgrade-only
+        - --non-interactive
+      when: 
+        - facts.os_family != 'windows'
 
   - name: Set up Oh-My-Posh Bin Path
     path:

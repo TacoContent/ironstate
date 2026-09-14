@@ -31,6 +31,7 @@ func TestSampleHostsPluginRoundTrip(t *testing.T) {
 	defer cancel()
 	build := exec.CommandContext(ctx, "go", "build", "-o", binary, ".") //nolint:gosec // fixed test tool and repository-local package
 	build.Dir = sampleDir
+	build.Env = append(os.Environ(), "GOWORK=off")
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build sample plugin: %v\n%s", err, output)
 	}

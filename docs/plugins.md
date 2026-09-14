@@ -36,7 +36,7 @@ go mod init github.com/acme/ironstate-handler-hosts
 go get github.com/TacoContent/ironstate/sdk@latest
 ```
 
-A minimal plugin has a handler implementation and a `main` package:
+A minimal plugin has a handler implementation and a `main` package at the module root:
 
 ```go
 package main

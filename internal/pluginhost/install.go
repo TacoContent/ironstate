@@ -22,12 +22,12 @@ func Install(ctx context.Context, store *Store, namespace, version string) (Mani
 		version = "latest"
 	}
 	parts := strings.Split(namespace, ".")
-	module := "github.com/" + parts[0] + "/ironstate-handler-" + parts[1]
+	module := pluginModulePath(parts[0], parts[1])
 	resolved, err := resolveModuleVersion(ctx, module, version)
 	if err != nil {
 		return Manifest{}, err
 	}
-	if err := runGo(ctx, "install", module+"@"+resolved); err != nil {
+	if err := runGo(ctx, "install", pluginInstallTarget(module, resolved)); err != nil {
 		return Manifest{}, err
 	}
 	binary, err := installedBinaryPath(ctx, parts[1])
@@ -54,6 +54,14 @@ func Install(ctx context.Context, store *Store, namespace, version string) (Mani
 		HandlerNames:    names,
 		ProtocolVersion: sdkplugin.ProtocolVersion,
 	}, binary)
+}
+
+func pluginModulePath(organization, name string) string {
+	return "github.com/" + organization + "/ironstate-handler-" + name
+}
+
+func pluginInstallTarget(module, version string) string {
+	return module + "@" + version
 }
 
 func resolveModuleVersion(ctx context.Context, module, version string) (string, error) {
