@@ -38,7 +38,6 @@ func (macportsHandler) Emoji() string { return "📦" }
 
 func (macportsHandler) RequiredTools() []string { return []string{"port"} }
 
-
 // macportsPackageList reads 'package' (aliasing 'name') as either a
 // single string or a list of strings.
 func macportsPackageList(item map[string]any) []string {

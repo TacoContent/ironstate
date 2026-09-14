@@ -12,7 +12,7 @@ import (
 // declares the 'choco' binary through RequiredTools().
 type chocolateyHandler struct{}
 
-func (chocolateyHandler) Emoji() string { return "🍫" }
+func (chocolateyHandler) Emoji() string           { return "🍫" }
 func (chocolateyHandler) RequiredTools() []string { return []string{"choco"} }
 
 func (chocolateyHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
