@@ -52,16 +52,10 @@ This installs to `$(go env GOPATH)/bin` (make sure it's on `PATH`). Since this s
 
 `xget` is a small, cross-platform Go binary that downloads and installs a release from GitHub Releases. It can be used to install `ironstate` without a shell script:
 
-#### linux/macOS
+#### linux/macOS/windows
 
 ```shell
 xget TacoContent/ironstate --to=~/.local/bin
-```
-
-#### Windows (PowerShell)
-
-```powershell
-xget TacoContent/ironstate --to=$env:USERPROFILE\.local\bin
 ```
 
 ### Build from source

@@ -1,7 +1,7 @@
 ---
 
 plugins:
-  - use: camalot.hosts@v1.0.0
+  - use: camalot.hosts@latest
 
 tasks:
   - name: Example Task
