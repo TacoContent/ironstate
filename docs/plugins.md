@@ -18,12 +18,12 @@ plugins:
 
 tasks:
   - name: Ensure the build host resolves locally
-    acme.hosts.ensure_entry:
+    acme.hosts.entry:
       ip: 10.0.0.12
       hostname: build.local
 ```
 
-The plugin identity and the handler name are separate. `acme.hosts` identifies the installed binary; `ensure_entry` identifies one handler served by that binary.
+The plugin identity and the handler name are separate. `acme.hosts` identifies the installed binary; `entry` identifies one handler served by that binary.
 
 ## Create a plugin
 
@@ -51,6 +51,8 @@ import (
 )
 
 type hostsHandler struct{}
+
+func (hostsHandler) Emoji() string { return "📇" }
 
 func (hostsHandler) Test(item map[string]any, _ string, _ handler.Context) (bool, error) {
     path, entry, err := spec(item)
@@ -107,7 +109,7 @@ func spec(item map[string]any) (string, string, error) {
 
 func main() {
     plugin.Serve(map[string]handler.Handler{
-        "ensure_entry": hostsHandler{},
+        "entry": hostsHandler{},
     })
 }
 ```
@@ -138,6 +140,7 @@ Callbacks are optional. Handlers should check `ctx.Callbacks != nil` before usin
 
 Optional capabilities:
 
+- Implement `handler.EmojiProvider` to set the glyph used in CLI progress and result tables. A missing or empty value uses the default `🏷️` glyph.
 - Implement `handler.FactProducer` to expose `ExecResult.Extra["value"]` as a named fact.
 - Implement `handler.ScanCapable` to participate in future/current scan workflows with `ScanRole` and `Scan`.
 
@@ -185,11 +188,11 @@ Run a handler without a full playbook. The item accepts YAML or JSON:
 
 ```shell
 ironstate plugin test acme.hosts \
-  --handler ensure_entry \
+  --handler entry \
   --item '{"path":"/tmp/hosts","ip":"10.0.0.12","hostname":"build.local"}'
 
 ironstate plugin test acme.hosts \
-  --handler ensure_entry \
+  --handler entry \
   --item 'path: /tmp/hosts\nip: 10.0.0.12\nhostname: build.local' \
   --apply
 ```
@@ -198,7 +201,7 @@ Benchmark one operation over repeated calls. The plugin process is launched once
 
 ```shell
 ironstate plugin bench acme.hosts \
-  --handler ensure_entry \
+  --handler entry \
   --item '{"path":"/tmp/hosts","ip":"10.0.0.12","hostname":"build.local"}' \
   --operation test \
   --iterations 100

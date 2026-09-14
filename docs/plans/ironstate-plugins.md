@@ -151,7 +151,7 @@ can be checked against it.)
   use as the key.
 - A single plugin binary may expose **one or more handler names** (analogous to a
   single Ansible collection shipping several modules). Each is addressed in a playbook
-  as `<org>.<name>.<handler>:`, e.g. `acme.hosts.ensure_entry:`. This matches the
+  as `<org>.<name>.<handler>:`, e.g. `acme.hosts.entry:`. This matches the
   example given in the original request (`<org>.<name>.my_custom_handler:`) and avoids
   forcing a 1-binary-1-handler split that would otherwise multiply the number of
   separate Go modules a plugin author has to publish and version together.
@@ -300,7 +300,7 @@ A plugin's `main.go` ends up close to:
 ```go
 func main() {
     plugin.Serve(map[string]handler.Handler{
-        "ensure_entry": hostsHandler{},
+        "entry": hostsHandler{},
     })
 }
 ```
@@ -392,7 +392,7 @@ plugins:
 
 ```yaml
 - name: pin a hostname to the build server
-  acme.hosts.ensure_entry:
+  acme.hosts.entry:
     ip: 10.0.0.12
     hostname: build.local
 ```

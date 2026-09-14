@@ -51,14 +51,14 @@ func TestPluginTestCommandDryRunAndApply(t *testing.T) {
 
 	handler := &pluginTestHandler{}
 	pluginTestLaunch = func(*exec.Cmd) (pluginTestClient, error) {
-		return pluginTestFakeClient{handlers: map[string]engine.Handler{"ensure_entry": handler}}, nil
+		return pluginTestFakeClient{handlers: map[string]engine.Handler{"entry": handler}}, nil
 	}
 
 	command := newPluginTestCommand()
 	var stdout, stderr bytes.Buffer
 	command.SetOut(&stdout)
 	command.SetErr(&stderr)
-	command.SetArgs([]string{"acme.hosts", "--handler", "ensure_entry", "--item", `{"state":"absent"}`, "--apply"})
+	command.SetArgs([]string{"acme.hosts", "--handler", "entry", "--item", `{"state":"absent"}`, "--apply"})
 	if err := command.Execute(); err != nil {
 		t.Fatalf("Execute returned error: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestRunPluginTestDryRunDoesNotMutate(t *testing.T) {
 	command := newPluginTestCommand()
 	command.SetOut(new(bytes.Buffer))
 	command.SetErr(new(bytes.Buffer))
-	if err := runPluginTest(command, handler, "ensure_entry", map[string]any{"state": "present"}, false); err != nil {
+	if err := runPluginTest(command, handler, "entry", map[string]any{"state": "present"}, false); err != nil {
 		t.Fatalf("runPluginTest returned error: %v", err)
 	}
 	if handler.tests != 1 || handler.describes != 1 || handler.installs != 0 || handler.uninstalls != 0 || handler.apply {
@@ -95,14 +95,14 @@ func TestRunPluginBenchEmitsTimingSummary(t *testing.T) {
 	command := newPluginBenchCommand()
 	var output bytes.Buffer
 	command.SetOut(&output)
-	if err := runPluginBench(command, handler, "ensure_entry", map[string]any{"state": "present"}, "test", 3, false); err != nil {
+	if err := runPluginBench(command, handler, "entry", map[string]any{"state": "present"}, "test", 3, false); err != nil {
 		t.Fatalf("runPluginBench returned error: %v", err)
 	}
 	var result pluginBenchResult
 	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
 		t.Fatalf("decode benchmark result: %v", err)
 	}
-	if result.Handler != "ensure_entry" || result.Operation != "test" || result.Iterations != 3 || result.TotalNS < 0 || result.AverageNS < 0 || result.MinNS > result.MaxNS || result.AverageNS < float64(result.MinNS) || result.AverageNS > float64(result.MaxNS) {
+	if result.Handler != "entry" || result.Operation != "test" || result.Iterations != 3 || result.TotalNS < 0 || result.AverageNS < 0 || result.MinNS > result.MaxNS || result.AverageNS < float64(result.MinNS) || result.AverageNS > float64(result.MaxNS) {
 		t.Fatalf("benchmark result = %+v", result)
 	}
 	if handler.tests != 3 {

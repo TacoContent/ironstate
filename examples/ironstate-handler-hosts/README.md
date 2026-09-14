@@ -2,7 +2,7 @@
 
 A real sample external handler plugin for ironstate. It manages an idempotent `IP hostname` mapping in the local hosts file.
 
-The sample exposes the `ensure_entry` handler, so its fully qualified playbook key is `acme.hosts.ensure_entry` when installed as `acme.hosts`.
+The sample exposes the `` handler, so its fully qualified playbook key is `acme.hosts.entry` when installed as `acme.hosts`.
 
 ## Development
 
@@ -23,7 +23,7 @@ plugins:
 
 tasks:
   - name: Ensure the build host resolves locally
-    acme.hosts.ensure_entry:
+    acme.hosts.entry:
       path: /etc/hosts
       ip: 10.0.0.12
       hostname: build.local

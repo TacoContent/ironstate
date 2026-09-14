@@ -50,6 +50,13 @@ type Handler interface {
 	Uninstall(item map[string]any, name string, ctx Context) (ExecResult, error)
 }
 
+// EmojiProvider optionally supplies the glyph used for this handler in host
+// progress and result-table output. An absent or empty value uses the host's
+// default glyph.
+type EmojiProvider interface {
+	Emoji() string
+}
+
 // FactProducer optionally exposes a named result as a later-task fact.
 type FactProducer interface {
 	FactName(item map[string]any) (name string, ok bool)

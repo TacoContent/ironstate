@@ -19,6 +19,8 @@ const pluginBecomeCommand = "--ironstate-plugin-become"
 
 type hostsHandler struct{}
 
+func (hostsHandler) Emoji() string { return "📇" }
+
 type hostsSpec struct {
 	Path     string
 	IP       string
@@ -140,7 +142,7 @@ func (hostsHandler) Scan(ctx handler.Context) ([]handler.ScanItem, error) {
 		}
 		for _, hostname := range fields[1:] {
 			items = append(items, handler.ScanItem{
-				Module: "ensure_entry",
+				Module: "entry",
 				Name:   hostname,
 				Config: map[string]any{"path": path, "ip": fields[0], "hostname": hostname},
 			})
@@ -299,6 +301,6 @@ func main() {
 		os.Exit(writeHelper(os.Args[1:]))
 	}
 	plugin.Serve(map[string]handler.Handler{
-		"ensure_entry": hostsHandler{},
+		"entry": hostsHandler{},
 	})
 }

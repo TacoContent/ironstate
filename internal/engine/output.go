@@ -49,7 +49,11 @@ func PrintTable(w io.Writer, results []Result) error {
 	rows := make([]row, len(results))
 	for i, r := range results {
 		status, colorFn := statusCell(r)
-		rows[i] = row{ui.ModuleEmoji(r.Module), secrets.Redact(r.Module), secrets.Redact(r.Package), secrets.Redact(r.State), status, colorFn}
+		emoji := r.Emoji
+		if emoji == "" {
+			emoji = ui.DefaultEmoji
+		}
+		rows[i] = row{emoji, secrets.Redact(r.Module), secrets.Redact(r.Package), secrets.Redact(r.State), status, colorFn}
 		widths[0] = max(widths[0], len(rows[i].module))
 		widths[1] = max(widths[1], len(rows[i].pkg))
 		widths[2] = max(widths[2], len(rows[i].state))

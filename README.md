@@ -108,7 +108,7 @@ ironstate version
 Each dispatched result in `--output json` also includes `duration_ms`, measuring the leaf's template resolution and handler dispatch time. Installed plugin handlers can be measured independently with:
 
 ```text
-ironstate plugin bench acme.hosts --handler ensure_entry --item '{"hostname":"build.local"}' --operation test --iterations 100
+ironstate plugin bench acme.hosts --handler entry --item '{"hostname":"build.local"}' --operation test --iterations 100
 ```
 
 The benchmark emits JSON with total, average, minimum, and maximum nanosecond/millisecond timings. Supported operations are `test`, `describe`, `install`, and `uninstall`; use `--apply` only when intentionally benchmarking a mutating operation.
@@ -123,7 +123,7 @@ plugins:
 
 tasks:
   - name: Ensure the build host resolves locally
-    acme.hosts.ensure_entry:
+    acme.hosts.entry:
       path: /etc/hosts
       ip: 10.0.0.12
       hostname: build.local

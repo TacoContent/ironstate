@@ -66,6 +66,7 @@ message ListHandlersRequest {}
 
 message ListHandlersResponse {
   repeated string handler_names = 1;
+  map<string, string> handler_emojis = 2;
 }
 
 message FactNameRequest {

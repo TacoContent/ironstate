@@ -14,9 +14,9 @@ import (
 
 func TestQualifiedModulesFindsNestedQualifiedHandlers(t *testing.T) {
 	modules := qualifiedModules([]any{map[string]any{
-		"actions": []any{map[string]any{"acme.hosts.ensure_entry": map[string]any{}}},
+		"actions": []any{map[string]any{"acme.hosts.entry": map[string]any{}}},
 	}})
-	if len(modules) != 1 || modules[0] != "acme.hosts.ensure_entry" {
+	if len(modules) != 1 || modules[0] != "acme.hosts.entry" {
 		t.Fatalf("qualifiedModules = %#v", modules)
 	}
 }

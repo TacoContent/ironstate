@@ -18,6 +18,8 @@ const helperEnvironment = "IRONSTATE_SDK_PLUGIN_HELPER"
 
 type fixtureHandler struct{}
 
+func (fixtureHandler) Emoji() string { return "fixture" }
+
 func (fixtureHandler) Test(item map[string]any, _ string, _ handler.Context) (bool, error) {
 	enabled, _ := item["enabled"].(bool)
 	return enabled, nil
@@ -67,6 +69,9 @@ func TestServeDispatchesHandlerOverGRPC(t *testing.T) {
 	}
 	if len(listed.GetHandlerNames()) != 1 || listed.GetHandlerNames()[0] != "fixture" {
 		t.Fatalf("handler names = %v, want [fixture]", listed.GetHandlerNames())
+	}
+	if listed.GetHandlerEmojis()["fixture"] != "fixture" {
+		t.Fatalf("handler emoji = %q, want fixture", listed.GetHandlerEmojis()["fixture"])
 	}
 
 	item, err := structpb.NewStruct(map[string]any{"enabled": true})

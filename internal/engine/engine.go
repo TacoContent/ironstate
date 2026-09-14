@@ -104,6 +104,12 @@ type Handler interface {
 	Uninstall(item map[string]any, name string, ctx Context) (ExecResult, error)
 }
 
+// EmojiProvider optionally supplies the glyph used for a handler's progress
+// and result-table output. An absent or empty value uses ui.DefaultEmoji.
+type EmojiProvider interface {
+	Emoji() string
+}
+
 // FactProducer is an optional extra a Handler implements when its Install
 // result should be merged into state.UserFacts the same way the built-in
 // 'fact' module's own value is (see applyFactResult) — the general
@@ -158,6 +164,7 @@ type ScanCapable interface {
 // returned PSCustomObject, plus the 'Failed' field Invoke-Tasks adds.
 type Result struct {
 	Module   string
+	Emoji    string
 	Package  string
 	State    string
 	Action   Action
@@ -665,7 +672,7 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 		return Result{}, fmt.Errorf("%s %s: %w", module, label, err)
 	}
 
-	emoji := ui.ModuleEmoji(module)
+	emoji := handlerEmoji(handler)
 	exec := ExecResult{StdoutLines: []string{}, StderrLines: []string{}}
 	if action == ActionSkip {
 		if verbose {
@@ -731,12 +738,21 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 
 	return Result{
 		Module:  module,
+		Emoji:   emoji,
 		Package: displayLabel,
 		State:   state,
 		Action:  action,
 		Apply:   apply,
 		Exec:    exec,
 	}, nil
+}
+
+func handlerEmoji(handler Handler) string {
+	provider, ok := handler.(EmojiProvider)
+	if !ok || provider.Emoji() == "" {
+		return ui.DefaultEmoji
+	}
+	return provider.Emoji()
 }
 
 // resolvePackageAction's 'state' recognizes ansible's own present/absent

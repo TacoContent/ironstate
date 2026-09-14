@@ -45,9 +45,12 @@ func TestSampleHostsPluginRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("qualify sample handlers: %v", err)
 	}
-	handler, ok := qualified["acme.hosts.ensure_entry"]
+	handler, ok := qualified["acme.hosts.entry"]
 	if !ok {
 		t.Fatalf("qualified handlers = %v", qualified)
+	}
+	if provider, ok := handler.(engine.EmojiProvider); !ok || provider.Emoji() != "📇" {
+		t.Fatalf("handler emoji = %#v, want 📇", handler)
 	}
 
 	hostsPath := filepath.Join(t.TempDir(), "hosts")

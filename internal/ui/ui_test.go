@@ -220,11 +220,8 @@ func TestPrintFactsRedactsSecretsInsideNestedValues(t *testing.T) {
 	}
 }
 
-func TestModuleEmoji(t *testing.T) {
-	if e := ModuleEmoji("winget"); e == "" {
-		t.Fatal("ModuleEmoji(\"winget\") returned empty")
-	}
-	if e := ModuleEmoji("totally-unknown-module"); e != "🏷️" {
-		t.Fatalf("ModuleEmoji(unknown) = %q, want bullet", e)
+func TestDefaultEmoji(t *testing.T) {
+	if DefaultEmoji != "🏷️" {
+		t.Fatalf("DefaultEmoji = %q, want tag", DefaultEmoji)
 	}
 }

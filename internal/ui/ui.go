@@ -84,63 +84,8 @@ func BoldGreen(s string) string  { return style(codeBold+codeBrightGreen, s) }
 func BoldYellow(s string) string { return style(codeBold+codeYellow, s) }
 func BrightCyan(s string) string { return style(codeBrightCyan, s) }
 
-// moduleEmoji maps a leaf's module name to a single representative glyph
-// for quick visual scanning - purely decorative, never load-bearing.
-var moduleEmoji = map[string]string{
-	"winget":         "📦",
-	"chocolatey":     "🍫",
-	"pipx":           "🐍",
-	"npm":            "📦",
-	"cargo":          "🦀",
-	"go":             "🐹",
-	"gem":            "💎",
-	"eget":           "📦",
-	"xget":           "📦",
-	"brew":           "🍺",
-	"homebrew":       "🍺",
-	"apt":            "📦",
-	"pacman":         "📦",
-	"dnf":            "📦",
-	"yum":            "📦",
-	"apk":            "📦",
-	"git":            "🌿",
-	"cron":           "⏰",
-	"cron_file":      "⏰",
-	"iptables":       "🧱",
-	"ufw":            "🧱",
-	"advfirewall":    "🧱",
-	"firewall":       "🧱",
-	"zip":            "🗜️",
-	"symlinks":       "🔗",
-	"file":           "📄",
-	"copy":           "📋",
-	"template":       "📝",
-	"shell":          "💻",
-	"blockinfile":    "🧩",
-	"lineinfile":     "📏",
-	"ssh_host_block": "🔐",
-	"log":            "📢",
-	"fail":           "❌",
-	"path":           "📁",
-	"fact":           "🔎",
-	"mount_facts":    "🔎",
-	"registry":       "🗃️",
-	"scheduled_task": "⏰",
-	"assert":         "✅",
-	"async":          "⚡",
-	"wait_for":       "⏳",
-	"user":           "👤",
-	"group":          "👥",
-}
-
-// ModuleEmoji returns module's representative glyph, or a generic bullet
-// for an unrecognized module name.
-func ModuleEmoji(module string) string {
-	if e, ok := moduleEmoji[module]; ok {
-		return e
-	}
-	return "🏷️"
-}
+// DefaultEmoji is used for handlers that do not provide an Emoji method.
+const DefaultEmoji = "🏷️"
 
 // Newline is the line terminator every human-facing multi-line panel
 // (PrintFacts here, engine.PrintTable/PrintSummary) should end each

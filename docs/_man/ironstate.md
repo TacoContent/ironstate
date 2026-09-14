@@ -190,7 +190,7 @@ A playbook may declare external plugins:
 
     tasks:
       - name: Ensure a hosts entry
-        acme.hosts.ensure_entry:
+        acme.hosts.entry:
           path: /etc/hosts
           ip: 10.0.0.12
           hostname: build.local
@@ -276,7 +276,7 @@ Validate a playbook's plugins:
 Install and test an external handler:
 
     ironstate plugin install acme.hosts@v1.2.3
-    ironstate plugin test acme.hosts --handler ensure_entry --item '{"path":"/tmp/hosts","ip":"10.0.0.12","hostname":"build.local"}'
+    ironstate plugin test acme.hosts --handler entry --item '{"path":"/tmp/hosts","ip":"10.0.0.12","hostname":"build.local"}'
 
 # SEE ALSO
 

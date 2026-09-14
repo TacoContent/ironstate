@@ -9,15 +9,15 @@ import (
 
 func TestRegistryMergesExternalHandlerIntoBothViews(t *testing.T) {
 	registry := NewRegistry()
-	if err := registry.Merge(map[string]engine.Handler{"acme.hosts.ensure_entry": logHandler{}}); err != nil {
+	if err := registry.Merge(map[string]engine.Handler{"acme.hosts.entry": logHandler{}}); err != nil {
 		t.Fatalf("Merge returned error: %v", err)
 	}
-	if registry.Handlers()["acme.hosts.ensure_entry"] == nil {
+	if registry.Handlers()["acme.hosts.entry"] == nil {
 		t.Fatal("merged handler missing from dispatch view")
 	}
 	found := false
 	for _, name := range registry.ModuleNames() {
-		if name == "acme.hosts.ensure_entry" {
+		if name == "acme.hosts.entry" {
 			found = true
 		}
 	}

@@ -86,7 +86,7 @@ func TestHostsHandlerFactProducerAndScan(t *testing.T) {
 	if err != nil || len(items) != 1 {
 		t.Fatalf("Scan = %#v, %v; want one item", items, err)
 	}
-	if items[0].Module != "ensure_entry" || items[0].Config["hostname"] != "build.local" {
+	if items[0].Module != "entry" || items[0].Config["hostname"] != "build.local" {
 		t.Fatalf("scanned item = %#v", items[0])
 	}
 }

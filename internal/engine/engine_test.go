@@ -19,6 +19,7 @@ import (
 // calls for (docs/plans/go-rewrite.md §10).
 type fakeHandler struct {
 	installed   bool
+	emoji       string
 	installCall int
 	uninstCall  int
 	testErr     error
@@ -34,6 +35,8 @@ type fakeHandler struct {
 	ambientBecomeDuringInstall ironexec.Become
 	seenItem                   map[string]any
 }
+
+func (h *fakeHandler) Emoji() string { return h.emoji }
 
 func (h *fakeHandler) Test(item map[string]any, name string, ctx Context) (bool, error) {
 	return h.installed, h.testErr
@@ -125,6 +128,29 @@ func TestRunLeavesDryRunDoesNotCallInstall(t *testing.T) {
 	}
 	if results[0].Apply {
 		t.Fatalf("result.Apply should be false in dry-run, got %#v", results[0])
+	}
+}
+
+func TestRunLeavesUsesHandlerEmojiOrDefault(t *testing.T) {
+	custom := &fakeHandler{emoji: "custom"}
+	fallback := &fakeHandler{}
+	results, stopped, err := RunLeaves([]tasks.Leaf{
+		leaf("custom", map[string]any{"state": "present"}),
+		leaf("fallback", map[string]any{"state": "present"}),
+	}, func() Options {
+		opts := baseOpts(map[string]Handler{"custom": custom, "fallback": fallback})
+		opts.NoCommandCheckModules["custom"] = true
+		opts.NoCommandCheckModules["fallback"] = true
+		return opts
+	}(), NewState())
+	if err != nil || stopped {
+		t.Fatalf("err=%v stopped=%v", err, stopped)
+	}
+	if results[0].Emoji != "custom" {
+		t.Fatalf("custom emoji = %q, want custom", results[0].Emoji)
+	}
+	if results[1].Emoji != "🏷️" {
+		t.Fatalf("fallback emoji = %q, want default", results[1].Emoji)
 	}
 }
 

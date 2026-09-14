@@ -13,7 +13,7 @@ func TestStorePluginResolvesListsAndRemovesVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	manifest, err := store.StorePlugin(Manifest{
-		Organization: "acme", Name: "hosts", Version: "v1.2.3", Source: "github.com/acme/ironstate-handler-hosts", HandlerNames: []string{"ensure_entry"},
+		Organization: "acme", Name: "hosts", Version: "v1.2.3", Source: "github.com/acme/ironstate-handler-hosts", HandlerNames: []string{"entry"},
 	}, source)
 	if err != nil {
 		t.Fatalf("StorePlugin: %v", err)

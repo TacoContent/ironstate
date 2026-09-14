@@ -91,9 +91,9 @@ func launch(command *exec.Cmd, filters expr.Filters) (*Client, error) {
 			return nil, fmt.Errorf("plugin declared an empty handler name")
 		}
 		if callbacks == nil {
-			handlers[name] = NewHandler(remote, name)
+			handlers[name] = handlerAdapter{client: remote, name: name, emoji: listed.GetHandlerEmojis()[name]}
 		} else {
-			handlers[name] = newHandlerWithCallbacks(remote, name, callbacks)
+			handlers[name] = handlerAdapter{client: remote, name: name, emoji: listed.GetHandlerEmojis()[name], callbacks: callbacks}
 		}
 	}
 	return &Client{client: client, handlers: handlers}, nil

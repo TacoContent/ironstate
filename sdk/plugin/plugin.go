@@ -92,11 +92,15 @@ type handlerServer struct {
 
 func (s handlerServer) ListHandlers(_ context.Context, _ *pluginpb.ListHandlersRequest) (*pluginpb.ListHandlersResponse, error) {
 	names := make([]string, 0, len(s.handlers))
-	for name := range s.handlers {
+	emojis := make(map[string]string)
+	for name, registered := range s.handlers {
 		names = append(names, name)
+		if provider, ok := registered.(handler.EmojiProvider); ok && provider.Emoji() != "" {
+			emojis[name] = provider.Emoji()
+		}
 	}
 	sort.Strings(names)
-	return &pluginpb.ListHandlersResponse{HandlerNames: names}, nil
+	return &pluginpb.ListHandlersResponse{HandlerNames: names, HandlerEmojis: emojis}, nil
 }
 
 func (s handlerServer) Test(_ context.Context, request *pluginpb.HandlerRequest) (*pluginpb.TestResponse, error) {
