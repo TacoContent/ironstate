@@ -13,6 +13,10 @@ import (
 // groupHandler manages local groups across Windows/Linux/macOS.
 type groupHandler struct{}
 
+func (groupHandler) Emoji() string { return "👥" }
+
+func (groupHandler) RequiredTools() []string { return []string{} }
+
 func groupName(item map[string]any) string {
 	if name := strings.TrimSpace(getString(item, "name")); name != "" {
 		return name

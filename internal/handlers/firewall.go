@@ -13,6 +13,10 @@ import (
 // firewall rule intent into a platform/backend-specific handler.
 type firewallHandler struct{}
 
+func (firewallHandler) Emoji() string { return "🧱" }
+func (firewallHandler) RequiredTools() []string { return []string{} }
+
+
 func firewallBackend(item map[string]any, ctx engine.Context) (string, error) {
 	if explicit := strings.ToLower(strings.TrimSpace(getString(item, "backend"))); explicit != "" && explicit != "auto" {
 		switch explicit {

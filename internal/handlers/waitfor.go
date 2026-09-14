@@ -65,6 +65,10 @@ func pauseSpinnerForPrint(spin *spinner.Spinner, mu *sync.Mutex, fn func(string,
 // if any awaited async job itself failed.
 type waitForHandler struct{}
 
+func (waitForHandler) Emoji() string { return "⏳" }
+func (waitForHandler) RequiredTools() []string { return []string{} }
+
+
 func waitForIDs(item map[string]any) []string {
 	return stringSlice(item["for"])
 }

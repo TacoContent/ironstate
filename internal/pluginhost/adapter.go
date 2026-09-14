@@ -27,13 +27,16 @@ func NewHandler(client pluginpb.HandlerPluginClient, name string) engine.Handler
 }
 
 type handlerAdapter struct {
-	client    pluginpb.HandlerPluginClient
-	name      string
-	emoji     string
-	callbacks *callbackBroker
+	client        pluginpb.HandlerPluginClient
+	name          string
+	emoji         string
+	requiredTools []string
+	callbacks     *callbackBroker
 }
 
 func (h handlerAdapter) Emoji() string { return h.emoji }
+
+func (h handlerAdapter) RequiredTools() []string { return append([]string(nil), h.requiredTools...) }
 
 func (h handlerAdapter) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	ctx, cleanup, err := h.prepare(ctx)

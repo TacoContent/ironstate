@@ -62,8 +62,8 @@ review if the reasoning doesn't hold up:
   third-party software on a user's machine because a plugin's manifest asked for it is
   a supply-chain risk disproportionate to the convenience. Scoped down to: a plugin can
   *declare* required external commands (for `doctor` to check and for
-  `NoCommandCheckModules`/`ModuleCommandNames`-equivalent PATH gating, mirroring what
-  builtins already do), but ironstate never installs them on the plugin's behalf. A
+  handler-declared `RequiredTools()` PATH gating, mirroring what builtins already do),
+  but ironstate never installs them on the plugin's behalf. A
   plugin's own `Install` method remains free to shell out to a package manager the way
   `apt.go`/`winget.go` do today — that's the author's call, made visibly, not
   ironstate's call made invisibly.

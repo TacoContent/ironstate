@@ -24,6 +24,10 @@ import (
 // ironstate.ps1's Handlers/Fact.psm1 delegating to Shell.psm1.
 type factHandler struct{}
 
+func (factHandler) Emoji() string { return "🔎" }
+
+func (factHandler) RequiredTools() []string { return []string{} }
+
 func (factHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	return itemState(item) == "absent", nil
 }

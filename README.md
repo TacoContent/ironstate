@@ -328,7 +328,7 @@ internal/
 └── exec/                   ← external-process Runner abstraction handlers shell out through
 ```
 
-Each `internal/handlers/*.go` file implements the shared `Handler` interface (`Test`/`Describe`/`Install`/`Uninstall` - see `internal/engine/engine.go`). To add a new module: register a handler in `internal/handlers/handlers.go`'s `All()`; add its name to `handlers.AllModuleNames` (task-tree flattening won't recognize the module key in a YAML task at all otherwise - see `internal/tasks.Options.ModuleNames`/`firstModuleKey`); add it to `engine.DefaultNoCommandCheckModules` if it isn't backed by an external CLI; and, for parity, add it to `internal/tasks/realfixture_test.go`'s `realModuleNames`. Optionally add a matching `$defs` entry to `ironstate.schema.json` for editor validation/autocomplete on the new module's fields.
+Each `internal/handlers/*.go` file implements the shared `Handler` interface (`Test`/`Describe`/`Install`/`Uninstall` - see `internal/engine/engine.go`). To add a new module: register a handler in `internal/handlers/handlers.go`'s `All()`; add its name to `handlers.AllModuleNames` (task-tree flattening won't recognize the module key in a YAML task at all otherwise - see `internal/tasks.Options.ModuleNames`/`firstModuleKey`); implement `RequiredTools() []string` when its executables should be checked before dispatch; and, for parity, add it to `internal/tasks/realfixture_test.go`'s `realModuleNames`. Optionally add a matching `$defs` entry to `ironstate.schema.json` for editor validation/autocomplete on the new module's fields.
 
 ### Custom filters
 

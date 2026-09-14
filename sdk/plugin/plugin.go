@@ -93,14 +93,23 @@ type handlerServer struct {
 func (s handlerServer) ListHandlers(_ context.Context, _ *pluginpb.ListHandlersRequest) (*pluginpb.ListHandlersResponse, error) {
 	names := make([]string, 0, len(s.handlers))
 	emojis := make(map[string]string)
+	metadata := make(map[string]*pluginpb.HandlerMetadata)
 	for name, registered := range s.handlers {
 		names = append(names, name)
+		info := &pluginpb.HandlerMetadata{}
 		if provider, ok := registered.(handler.EmojiProvider); ok && provider.Emoji() != "" {
 			emojis[name] = provider.Emoji()
+			info.Emoji = provider.Emoji()
+		}
+		if provider, ok := registered.(handler.RequiredToolsProvider); ok {
+			info.RequiredTools = provider.RequiredTools()
+		}
+		if info.Emoji != "" || len(info.RequiredTools) > 0 {
+			metadata[name] = info
 		}
 	}
 	sort.Strings(names)
-	return &pluginpb.ListHandlersResponse{HandlerNames: names, HandlerEmojis: emojis}, nil
+	return &pluginpb.ListHandlersResponse{HandlerNames: names, HandlerEmojis: emojis, HandlerMetadata: metadata}, nil
 }
 
 func (s handlerServer) Test(_ context.Context, request *pluginpb.HandlerRequest) (*pluginpb.TestResponse, error) {
@@ -288,6 +297,13 @@ func (c hostCallbacks) EvaluateCondition(expression string, variables map[string
 		return err
 	})
 	return result, err
+}
+
+func (c hostCallbacks) Log(message string) error {
+	return c.withClient(func(client pluginpb.HandlerHostCallbackClient) error {
+		_, err := client.Log(context.Background(), &pluginpb.LogRequest{Message: message})
+		return err
+	})
 }
 
 func structMap(value *structpb.Struct) map[string]any {

@@ -13,6 +13,10 @@ import (
 // existing scheduled_task handler on Windows.
 type cronHandler struct{}
 
+func (cronHandler) Emoji() string { return "⏰" }
+
+func (cronHandler) RequiredTools() []string { return []string{} }
+
 func cronBackend(item map[string]any, ctx engine.Context) (string, error) {
 	if explicit := strings.ToLower(strings.TrimSpace(getString(item, "backend"))); explicit != "" && explicit != "auto" {
 		switch explicit {

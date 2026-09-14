@@ -37,6 +37,10 @@ import (
 // the task.
 type apkHandler struct{}
 
+func (apkHandler) Emoji() string { return "📦" }
+
+func (apkHandler) RequiredTools() []string { return []string{"apk"} }
+
 // apkPackageList reads 'package' (aliasing 'name') as either a single
 // string or a list of strings.
 func apkPackageList(item map[string]any) []string {

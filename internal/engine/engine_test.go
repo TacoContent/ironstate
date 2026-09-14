@@ -18,13 +18,14 @@ import (
 // exactly what the "prove the loop end-to-end" Phase 3 exit criterion
 // calls for (docs/plans/go-rewrite.md §10).
 type fakeHandler struct {
-	installed   bool
-	emoji       string
-	installCall int
-	uninstCall  int
-	testErr     error
-	installExec ExecResult
-	installErr  error
+	installed     bool
+	emoji         string
+	requiredTools []string
+	installCall   int
+	uninstCall    int
+	testErr       error
+	installExec   ExecResult
+	installErr    error
 
 	// seenBecome/ambientBecomeDuringInstall let a test assert both halves
 	// of become's plumbing: ctx.Become is the value a handler can read
@@ -37,6 +38,8 @@ type fakeHandler struct {
 }
 
 func (h *fakeHandler) Emoji() string { return h.emoji }
+
+func (h *fakeHandler) RequiredTools() []string { return h.requiredTools }
 
 func (h *fakeHandler) Test(item map[string]any, name string, ctx Context) (bool, error) {
 	return h.installed, h.testErr
@@ -105,7 +108,6 @@ func baseOpts(handlers map[string]Handler) Options {
 		// real handler with no real backing CLI - "winget" is deliberately
 		// left out so TestRunLeavesMissingCommandOnPathProducesNoResultRow
 		// can still exercise the real PATH-check path.
-		NoCommandCheckModules: map[string]bool{"widget": true, "fact": true, "assert": true, "mount_facts": true},
 	}
 }
 
@@ -137,12 +139,7 @@ func TestRunLeavesUsesHandlerEmojiOrDefault(t *testing.T) {
 	results, stopped, err := RunLeaves([]tasks.Leaf{
 		leaf("custom", map[string]any{"state": "present"}),
 		leaf("fallback", map[string]any{"state": "present"}),
-	}, func() Options {
-		opts := baseOpts(map[string]Handler{"custom": custom, "fallback": fallback})
-		opts.NoCommandCheckModules["custom"] = true
-		opts.NoCommandCheckModules["fallback"] = true
-		return opts
-	}(), NewState())
+	}, baseOpts(map[string]Handler{"custom": custom, "fallback": fallback}), NewState())
 	if err != nil || stopped {
 		t.Fatalf("err=%v stopped=%v", err, stopped)
 	}
@@ -707,7 +704,7 @@ func TestRunLeavesMissingHandlerProducesNoResultRow(t *testing.T) {
 }
 
 func TestRunLeavesMissingCommandOnPathProducesNoResultRow(t *testing.T) {
-	h := &fakeHandler{installed: false}
+	h := &fakeHandler{installed: false, requiredTools: []string{"winget"}}
 	opts := baseOpts(map[string]Handler{"winget": h})
 	origLookPath := LookPath
 	LookPath = func(name string) (string, error) { return "", errNotFound }
@@ -721,6 +718,28 @@ func TestRunLeavesMissingCommandOnPathProducesNoResultRow(t *testing.T) {
 	}
 	if len(results) != 0 {
 		t.Fatalf("expected no result row when the backing command isn't on PATH, got %#v", results)
+	}
+}
+
+func TestRunLeavesDoesNotInferToolsFromPluginModuleName(t *testing.T) {
+	h := &fakeHandler{installed: false}
+	opts := baseOpts(map[string]Handler{"camalot.hosts.entry": h})
+	originalLookPath := LookPath
+	lookups := 0
+	LookPath = func(name string) (string, error) {
+		lookups++
+		return "", errNotFound
+	}
+	defer func() { LookPath = originalLookPath }()
+
+	results, stopped, err := RunLeaves([]tasks.Leaf{
+		leaf("camalot.hosts.entry", map[string]any{"state": "present"}),
+	}, opts, NewState())
+	if err != nil || stopped {
+		t.Fatalf("err=%v stopped=%v", err, stopped)
+	}
+	if lookups != 0 || len(results) != 1 {
+		t.Fatalf("lookups=%d results=%#v, want 0 lookups and one result", lookups, results)
 	}
 }
 

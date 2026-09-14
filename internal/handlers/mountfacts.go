@@ -22,6 +22,10 @@ import (
 // Install's gathered mounts into state.UserFacts on its own.
 type mountFactsHandler struct{}
 
+func (mountFactsHandler) Emoji() string { return "🔎" }
+
+func (mountFactsHandler) RequiredTools() []string { return []string{} }
+
 // mountFactsName ports Common.psm1's Get-ItemState default-fallback idiom
 // for this module's one configurable field: 'name' defaults to "mounts",
 // so 'facts.mounts' works with no configuration at all.

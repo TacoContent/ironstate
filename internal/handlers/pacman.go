@@ -38,6 +38,10 @@ import (
 // 'become: <user>') on the task.
 type pacmanHandler struct{}
 
+func (pacmanHandler) Emoji() string { return "📦" }
+
+func (pacmanHandler) RequiredTools() []string { return []string{"pacman"} }
+
 // pacmanPackageList reads 'package' (aliasing 'name') as either a single
 // string or a list of strings.
 func pacmanPackageList(item map[string]any) []string {

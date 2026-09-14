@@ -9,14 +9,17 @@ import (
 )
 
 // homebrewHandler wraps Homebrew (brew) - formulae and casks on macOS and
-// Linux. The dispatch loop remaps the 'homebrew' module's PATH check to
-// the 'brew' binary (see engine.DefaultModuleCommandNames), matching
+// Linux. The handler declares the 'brew' binary through RequiredTools(), matching
 // chocolatey's 'choco' remap; 'brew' is also registered directly in
 // handlers.All() as an alias module key (no remap needed there - the key
 // already matches the binary name), since that's the more common name for
 // the tool itself. Homebrew's top-level commands auto-detect formula vs.
 // cask by name, so no separate flag is needed here.
 type homebrewHandler struct{}
+
+func (homebrewHandler) Emoji() string { return "🍺" }
+
+func (homebrewHandler) RequiredTools() []string { return []string{"brew"} }
 
 func (homebrewHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	pkg := getString(item, "package")

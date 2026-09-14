@@ -16,6 +16,10 @@ import (
 // 'failed_when'/'continue_on_error' machinery already acts on.
 type assertHandler struct{}
 
+func (assertHandler) Emoji() string { return "✅" }
+func (assertHandler) RequiredTools() []string { return []string{} }
+
+
 func (assertHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	return false, nil
 }

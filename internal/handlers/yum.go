@@ -35,6 +35,10 @@ import (
 // the task.
 type yumHandler struct{}
 
+func (yumHandler) Emoji() string { return "📦" }
+
+func (yumHandler) RequiredTools() []string { return []string{"yum"} }
+
 // yumPackageList reads 'package' (aliasing 'name') as either a single
 // string or a list of strings.
 func yumPackageList(item map[string]any) []string {

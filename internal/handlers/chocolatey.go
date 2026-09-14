@@ -9,9 +9,11 @@ import (
 )
 
 // chocolateyHandler ports Handlers/Chocolatey.psm1. The dispatch loop
-// remaps this module's PATH check to the 'choco' binary (see
-// engine.DefaultModuleCommandNames).
+// declares the 'choco' binary through RequiredTools().
 type chocolateyHandler struct{}
+
+func (chocolateyHandler) Emoji() string { return "🍫" }
+func (chocolateyHandler) RequiredTools() []string { return []string{"choco"} }
 
 func (chocolateyHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	pkg := getString(item, "package")

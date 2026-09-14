@@ -11,6 +11,9 @@ import (
 // failHandler ports Handlers/Fail.psm1: if the given 'condition' is true, aborts the current leaf with the given 'message' (or a default message if none is provided). The condition is evaluated in the same context as the leaf's other fields, so it can reference any of them (e.g. a 'vars:' value).
 type failHandler struct{}
 
+func (failHandler) Emoji() string { return "❌" }
+func (failHandler) RequiredTools() []string { return []string{} }
+
 func (f failHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	state := itemState(item)
 	phase := "install"

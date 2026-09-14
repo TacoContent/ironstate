@@ -21,6 +21,10 @@ import (
 // exist for this phase has no message of its own - see logShouldRun.
 type logHandler struct{}
 
+func (logHandler) Emoji() string { return "📢" }
+
+func (logHandler) RequiredTools() []string { return []string{} }
+
 // logResolvedSpec resolves { message, level } for phase ('install'/
 // 'uninstall'): the nested '<phase>: { message, level }' form if the
 // 'phase' key is present at all, else the flat '{ message, level }'

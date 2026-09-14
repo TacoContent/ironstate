@@ -12,6 +12,10 @@ import (
 // goHandler ports Handlers/Go.psm1 (Go binaries via 'go install').
 type goHandler struct{}
 
+func (goHandler) Emoji() string { return "🐹" }
+
+func (goHandler) RequiredTools() []string { return []string{"go"} }
+
 var goBinDirCache string
 
 func goBinDir() string {

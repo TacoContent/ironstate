@@ -14,6 +14,10 @@ import (
 // modeled on Ansible's git module with a focused option set.
 type gitHandler struct{}
 
+func (gitHandler) Emoji() string { return "🌿" }
+
+func (gitHandler) RequiredTools() []string { return []string{"git"} }
+
 func gitRepo(item map[string]any) string {
 	return strings.TrimSpace(getString(item, "repo"))
 }

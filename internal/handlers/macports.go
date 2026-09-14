@@ -26,14 +26,18 @@ import (
 //     so its ports-tree location) varies by installation, so there's no
 //     single well-known path to stat like /var/cache/apt.
 //
-// The dispatch loop remaps this module's PATH check to the 'port' binary
-// (see engine.DefaultModuleCommandNames). port install/uninstall/
+// The handler declares the 'port' binary through RequiredTools(). port install/uninstall/
 // selfupdate/upgrade all require root on a real system - this handler
 // issues plain 'port' commands and relies entirely on the engine's shared
 // 'become'/sudo wrapping (see internal/exec/become.go) rather than
 // handling elevation itself; set 'become: true' (or 'become: <user>') on
 // the task.
 type macportsHandler struct{}
+
+func (macportsHandler) Emoji() string { return "📦" }
+
+func (macportsHandler) RequiredTools() []string { return []string{"port"} }
+
 
 // macportsPackageList reads 'package' (aliasing 'name') as either a
 // single string or a list of strings.

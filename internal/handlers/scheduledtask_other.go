@@ -13,6 +13,10 @@ import (
 // §1's "Windows-only handlers stay Windows-only" scope decision.
 type scheduledTaskHandler struct{}
 
+func (scheduledTaskHandler) Emoji() string { return "⏰" }
+
+func (scheduledTaskHandler) RequiredTools() []string { return []string{} }
+
 var errScheduledTaskUnsupportedOS = fmt.Errorf("the 'scheduled_task' module is only supported on Windows")
 
 func (scheduledTaskHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {

@@ -11,6 +11,10 @@ import (
 
 type cronUnixHandler struct{}
 
+func (cronUnixHandler) Emoji() string { return "⏰" }
+
+func (cronUnixHandler) RequiredTools() []string { return []string{} }
+
 func cronNameMarker(name string) string {
 	return "#Ansible: " + strings.TrimSpace(name)
 }

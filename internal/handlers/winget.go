@@ -13,6 +13,10 @@ import (
 // wingetHandler ports Handlers/Winget.psm1 (Windows Package Manager).
 type wingetHandler struct{}
 
+func (wingetHandler) Emoji() string { return "📦" }
+func (wingetHandler) RequiredTools() []string { return []string{"winget"} }
+
+
 func (wingetHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	pkg := getString(item, "package")
 	result, err := runner.Run("winget", []string{"list", "--id", pkg, "--exact", "--accept-source-agreements"})

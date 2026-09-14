@@ -9,6 +9,11 @@ import (
 // pipxHandler ports Handlers/Pipx.psm1 (Python isolated tools).
 type pipxHandler struct{}
 
+func (pipxHandler) Emoji() string { return "🐍" }
+
+func (pipxHandler) RequiredTools() []string { return []string{"pipx"} }
+
+
 func (pipxHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	pkg := getString(item, "package")
 	result, err := runner.Run("pipx", []string{"list", "--short"})

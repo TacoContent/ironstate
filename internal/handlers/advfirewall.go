@@ -12,6 +12,10 @@ import (
 // 'netsh advfirewall firewall'.
 type advFirewallHandler struct{}
 
+func (advFirewallHandler) Emoji() string { return "🧱" }
+
+func (advFirewallHandler) RequiredTools() []string { return []string{"netsh"} }
+
 func advRuleName(item map[string]any) string {
 	if v := strings.TrimSpace(getString(item, "name")); v != "" {
 		return v

@@ -225,37 +225,26 @@ var Info = func(format string, args ...any) {
 	_, _ = fmt.Fprintln(os.Stderr, secrets.Redact(msg))
 }
 
-// LookPath resolves a module's backing CLI on PATH — overridable so tests
-// never depend on the host machine's real PATH contents.
+// LookPath resolves a handler-declared executable on PATH — overridable so
+// tests never depend on the host machine's real PATH contents.
 var LookPath = func(name string) (string, error) { return exec.LookPath(name) }
 
-// DefaultNoCommandCheckModules lists every module with no external CLI to
-// check for on PATH — ports ironstate.ps1's '$script:NoCommandCheckModules'.
-// Every Phase 3 handler is in this set; Phase 4 adds the package-manager
-// modules, which are NOT in this set (they DO need a PATH check).
-var DefaultNoCommandCheckModules = map[string]bool{
-	"symlinks": true, "zip": true, "copy": true, "shell": true,
-	"blockinfile": true, "lineinfile": true, "log": true, "fail": true, "path": true, "fact": true,
-	"registry": true, "scheduled_task": true, "file": true, "template": true,
-	"assert": true, "ssh_host_block": true, "async": true, "wait_for": true, "firewall": true, "cron": true, "cron_unix": true, "cron_file": true,
-	"group": true, "user": true, "mount_facts": true,
+// RequiredToolsProvider optionally declares executables the host should check
+// before dispatching a handler. It is handler metadata, never inferred from a
+// YAML module key; handlers with no provider perform their own checks.
+type RequiredToolsProvider interface {
+	RequiredTools() []string
 }
-
-// DefaultModuleCommandNames remaps a module's task-tree name to its actual
-// CLI binary name where they differ — ports '$script:ModuleCommandNames'.
-var DefaultModuleCommandNames = map[string]string{"chocolatey": "choco", "homebrew": "brew", "apt": "apt-get", "advfirewall": "netsh", "macports": "port"}
 
 // Options configures RunLeaves/Run's dispatch behavior.
 type Options struct {
-	Handlers              map[string]Handler
-	Facts                 map[string]any
-	Vars                  map[string]any
-	Filters               expr.Filters
-	Apply                 bool
-	Verbose               bool              // when true, also prints a (dim) line for every skipped/unchanged leaf
-	NoCommandCheckModules map[string]bool   // nil -> DefaultNoCommandCheckModules
-	ModuleCommandNames    map[string]string // nil -> DefaultModuleCommandNames
-	Progress              func(stage, detail string, index, total int)
+	Handlers map[string]Handler
+	Facts    map[string]any
+	Vars     map[string]any
+	Filters  expr.Filters
+	Apply    bool
+	Verbose  bool // when true, also prints a (dim) line for every skipped/unchanged leaf
+	Progress func(stage, detail string, index, total int)
 	// OnFactsGathered, if set, is called exactly once by Run - after
 	// every 'fact'/FactProducer leaf has dispatched (the facts-first
 	// phase, in full - see Run), before any other leaf runs - with the
@@ -268,20 +257,6 @@ type Options struct {
 	// RunLeaves alone (called directly, bypassing Run's phase split)
 	// never invokes this.
 	OnFactsGathered func(facts map[string]any)
-}
-
-func (o Options) noCommandCheckModules() map[string]bool {
-	if o.NoCommandCheckModules != nil {
-		return o.NoCommandCheckModules
-	}
-	return DefaultNoCommandCheckModules
-}
-
-func (o Options) moduleCommandNames() map[string]string {
-	if o.ModuleCommandNames != nil {
-		return o.ModuleCommandNames
-	}
-	return DefaultModuleCommandNames
 }
 
 // Run dispatches leaves in two phases — every 'fact' leaf first, in
@@ -339,8 +314,6 @@ func mergeFacts(host, user map[string]any) map[string]any {
 // immediately before it runs, so a later leaf can see an earlier leaf's
 // 'id'/'fact'.
 func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string) ([]Result, bool, error) {
-	noCommandCheck := opts.noCommandCheckModules()
-	moduleCommandNames := opts.moduleCommandNames()
 	runStage := "running tasks"
 	if len(stage) > 0 && strings.TrimSpace(stage[0]) != "" {
 		runStage = stage[0]
@@ -365,17 +338,10 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 			continue
 		}
 
-		if !noCommandCheck[module] {
-			commandName := module
-			if remap, ok := moduleCommandNames[module]; ok {
-				commandName = remap
-			}
-			if _, checked := state.CommandAvailability[module]; !checked {
-				_, err := LookPath(commandName)
-				state.CommandAvailability[module] = err == nil
-			}
-			if !state.CommandAvailability[module] {
-				Warn("'%s' command not found on PATH; skipping.", commandName)
+		if provider, ok := handler.(RequiredToolsProvider); ok {
+			missing := missingRequiredTool(provider.RequiredTools(), state.CommandAvailability)
+			if missing != "" {
+				Warn("required tool '%s' not found on PATH; skipping [%s].", missing, module)
 				continue
 			}
 		}
@@ -513,6 +479,25 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 	}
 
 	return results, false, nil
+}
+
+func missingRequiredTool(tools []string, availability map[string]bool) string {
+	for _, tool := range tools {
+		tool = strings.TrimSpace(tool)
+		if tool == "" {
+			continue
+		}
+		available, checked := availability[tool]
+		if !checked {
+			_, err := LookPath(tool)
+			available = err == nil
+			availability[tool] = available
+		}
+		if !available {
+			return tool
+		}
+	}
+	return ""
 }
 
 func applyFactResult(item map[string]any, result Result, state *State, flatContext map[string]any, filters expr.Filters, label string, hasEmbeddedShell, hasDeferredFactValue bool, deferredFactValue any) {

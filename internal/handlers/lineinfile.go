@@ -14,6 +14,9 @@ import (
 // Ansible's lineinfile module.
 type lineInFileHandler struct{}
 
+func (lineInFileHandler) Emoji() string { return "📏" }
+
+
 func resolveLineInFilePath(item map[string]any) string {
 	for _, key := range []string{"path", "dest", "destfile", "name"} {
 		if raw := getString(item, key); raw != "" {

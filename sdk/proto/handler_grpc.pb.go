@@ -389,6 +389,7 @@ var HandlerPlugin_ServiceDesc = grpc.ServiceDesc{
 const (
 	HandlerHostCallback_RenderTemplate_FullMethodName    = "/ironstate.plugin.v1.HandlerHostCallback/RenderTemplate"
 	HandlerHostCallback_EvaluateCondition_FullMethodName = "/ironstate.plugin.v1.HandlerHostCallback/EvaluateCondition"
+	HandlerHostCallback_Log_FullMethodName               = "/ironstate.plugin.v1.HandlerHostCallback/Log"
 )
 
 // HandlerHostCallbackClient is the client API for HandlerHostCallback service.
@@ -397,6 +398,7 @@ const (
 type HandlerHostCallbackClient interface {
 	RenderTemplate(ctx context.Context, in *RenderTemplateRequest, opts ...grpc.CallOption) (*RenderTemplateResponse, error)
 	EvaluateCondition(ctx context.Context, in *EvaluateConditionRequest, opts ...grpc.CallOption) (*EvaluateConditionResponse, error)
+	Log(ctx context.Context, in *LogRequest, opts ...grpc.CallOption) (*LogResponse, error)
 }
 
 type handlerHostCallbackClient struct {
@@ -427,12 +429,23 @@ func (c *handlerHostCallbackClient) EvaluateCondition(ctx context.Context, in *E
 	return out, nil
 }
 
+func (c *handlerHostCallbackClient) Log(ctx context.Context, in *LogRequest, opts ...grpc.CallOption) (*LogResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LogResponse)
+	err := c.cc.Invoke(ctx, HandlerHostCallback_Log_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HandlerHostCallbackServer is the server API for HandlerHostCallback service.
 // All implementations must embed UnimplementedHandlerHostCallbackServer
 // for forward compatibility.
 type HandlerHostCallbackServer interface {
 	RenderTemplate(context.Context, *RenderTemplateRequest) (*RenderTemplateResponse, error)
 	EvaluateCondition(context.Context, *EvaluateConditionRequest) (*EvaluateConditionResponse, error)
+	Log(context.Context, *LogRequest) (*LogResponse, error)
 	mustEmbedUnimplementedHandlerHostCallbackServer()
 }
 
@@ -448,6 +461,9 @@ func (UnimplementedHandlerHostCallbackServer) RenderTemplate(context.Context, *R
 }
 func (UnimplementedHandlerHostCallbackServer) EvaluateCondition(context.Context, *EvaluateConditionRequest) (*EvaluateConditionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method EvaluateCondition not implemented")
+}
+func (UnimplementedHandlerHostCallbackServer) Log(context.Context, *LogRequest) (*LogResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Log not implemented")
 }
 func (UnimplementedHandlerHostCallbackServer) mustEmbedUnimplementedHandlerHostCallbackServer() {}
 func (UnimplementedHandlerHostCallbackServer) testEmbeddedByValue()                             {}
@@ -506,6 +522,24 @@ func _HandlerHostCallback_EvaluateCondition_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HandlerHostCallback_Log_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LogRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HandlerHostCallbackServer).Log(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HandlerHostCallback_Log_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HandlerHostCallbackServer).Log(ctx, req.(*LogRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // HandlerHostCallback_ServiceDesc is the grpc.ServiceDesc for HandlerHostCallback service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -520,6 +554,10 @@ var HandlerHostCallback_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "EvaluateCondition",
 			Handler:    _HandlerHostCallback_EvaluateCondition_Handler,
+		},
+		{
+			MethodName: "Log",
+			Handler:    _HandlerHostCallback_Log_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

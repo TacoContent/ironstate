@@ -21,6 +21,9 @@ import (
 // stdlib text/template) are supported; either other name is a clear error.
 type templateHandler struct{}
 
+func (templateHandler) Emoji() string { return "📝" }
+func (templateHandler) RequiredTools() []string { return []string{} }
+
 var errTemplateSourceMissing = errors.New("template source missing")
 
 // getTemplateRenderContext ports Get-TemplateRenderContext: layers this

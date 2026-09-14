@@ -2,8 +2,10 @@ package pluginhost
 
 import (
 	"context"
+	"strings"
 
 	"github.com/TacoContent/ironstate/internal/conditions"
+	"github.com/TacoContent/ironstate/internal/engine"
 	"github.com/TacoContent/ironstate/internal/expr"
 	"github.com/TacoContent/ironstate/internal/templateengines"
 	pluginpb "github.com/TacoContent/ironstate/sdk/proto"
@@ -28,4 +30,11 @@ func (s hostCallbackServer) EvaluateCondition(_ context.Context, request *plugin
 		return nil, err
 	}
 	return &pluginpb.EvaluateConditionResponse{Result: result}, nil
+}
+
+func (hostCallbackServer) Log(_ context.Context, request *pluginpb.LogRequest) (*pluginpb.LogResponse, error) {
+	if message := strings.TrimSpace(request.GetMessage()); message != "" {
+		engine.Info("%s", message)
+	}
+	return &pluginpb.LogResponse{}, nil
 }

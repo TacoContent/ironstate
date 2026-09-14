@@ -32,6 +32,10 @@ import (
 // 'become: <user>') on the task.
 type snapHandler struct{}
 
+func (snapHandler) Emoji() string { return "📦" }
+
+func (snapHandler) RequiredTools() []string { return []string{"snap"} }
+
 // snapPackageList reads 'package' (aliasing 'name') as either a single
 // string or a list of strings.
 func snapPackageList(item map[string]any) []string {

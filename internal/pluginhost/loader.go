@@ -3,7 +3,6 @@ package pluginhost
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 
@@ -45,11 +44,7 @@ func launch(command *exec.Cmd, filters expr.Filters) (*Client, error) {
 		},
 		Cmd:              command,
 		AllowedProtocols: []pluginlib.Protocol{pluginlib.ProtocolGRPC},
-		Logger: hclog.New(&hclog.LoggerOptions{
-			Name:   "plugin",
-			Level:  hclog.Trace,
-			Output: os.Stderr,
-		}),
+		Logger:           hclog.NewNullLogger(),
 	})
 
 	rpcClient, err := client.Client()
@@ -90,11 +85,16 @@ func launch(command *exec.Cmd, filters expr.Filters) (*Client, error) {
 			client.Kill()
 			return nil, fmt.Errorf("plugin declared an empty handler name")
 		}
-		if callbacks == nil {
-			handlers[name] = handlerAdapter{client: remote, name: name, emoji: listed.GetHandlerEmojis()[name]}
-		} else {
-			handlers[name] = handlerAdapter{client: remote, name: name, emoji: listed.GetHandlerEmojis()[name], callbacks: callbacks}
+		metadata := listed.GetHandlerMetadata()[name]
+		emoji := listed.GetHandlerEmojis()[name]
+		var requiredTools []string
+		if metadata != nil {
+			if metadata.GetEmoji() != "" {
+				emoji = metadata.GetEmoji()
+			}
+			requiredTools = metadata.GetRequiredTools()
 		}
+		handlers[name] = handlerAdapter{client: remote, name: name, emoji: emoji, requiredTools: requiredTools, callbacks: callbacks}
 	}
 	return &Client{client: client, handlers: handlers}, nil
 }

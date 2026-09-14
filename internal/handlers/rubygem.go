@@ -8,6 +8,10 @@ import "github.com/TacoContent/ironstate/internal/engine"
 // (roles/languages/ruby/main.yml), so it's implemented here regardless.
 type rubyGemHandler struct{}
 
+func (rubyGemHandler) Emoji() string { return "💎" }
+
+func (rubyGemHandler) RequiredTools() []string { return []string{"gem"} }
+
 func (rubyGemHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	pkg := getString(item, "package")
 	result, err := runner.Run("gem", []string{"list", pkg, "-i"})

@@ -15,6 +15,9 @@ import (
 // machinery.
 type sshHostBlockHandler struct{}
 
+func (sshHostBlockHandler) Emoji() string  { return "🔐" }
+func (sshHostBlockHandler) RequiredTools() []string { return []string{} }
+
 var sshHostNameKeys = map[string]bool{"host_name": true, "hostname": true}
 
 // convertSshDirectiveKeyToPascalCase ports

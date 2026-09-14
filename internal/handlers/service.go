@@ -19,6 +19,10 @@ import (
 // separate scanner.
 type serviceHandler struct{}
 
+func (serviceHandler) Emoji() string { return "💽" }
+
+func (serviceHandler) RequiredTools() []string { return []string{} }
+
 var errServiceUnsupported = errors.New("the 'service' module has no install/uninstall support yet - it is scan-only")
 
 func (serviceHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {

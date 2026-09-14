@@ -12,6 +12,10 @@ import (
 // operations, while fitting ironstate's present/absent/latest state model.
 type iptablesHandler struct{}
 
+func (iptablesHandler) Emoji() string { return "🧱" }
+
+func (iptablesHandler) RequiredTools() []string { return []string{"iptables", "ip6tables"} }
+
 func iptablesBinary(item map[string]any) string {
 	if getBool(item, "ipv6", false) {
 		return "ip6tables"

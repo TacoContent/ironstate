@@ -10,6 +10,9 @@ import (
 // GitHub release binaries via xget.
 type xgetHandler struct{}
 
+func (xgetHandler) Emoji() string          { return "📦" }
+func (xgetHandler) RequiredTools() []string { return []string{"xget"} }
+
 var xgetToArgPattern = regexp.MustCompile(`^--to=(.+)$`)
 
 func xgetExpandedArgs(item map[string]any) []string {

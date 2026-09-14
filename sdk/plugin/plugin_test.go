@@ -20,6 +20,8 @@ type fixtureHandler struct{}
 
 func (fixtureHandler) Emoji() string { return "fixture" }
 
+func (fixtureHandler) RequiredTools() []string { return []string{"fixture-tool"} }
+
 func (fixtureHandler) Test(item map[string]any, _ string, _ handler.Context) (bool, error) {
 	enabled, _ := item["enabled"].(bool)
 	return enabled, nil
@@ -72,6 +74,9 @@ func TestServeDispatchesHandlerOverGRPC(t *testing.T) {
 	}
 	if listed.GetHandlerEmojis()["fixture"] != "fixture" {
 		t.Fatalf("handler emoji = %q, want fixture", listed.GetHandlerEmojis()["fixture"])
+	}
+	if got := listed.GetHandlerMetadata()["fixture"].GetRequiredTools(); len(got) != 1 || got[0] != "fixture-tool" {
+		t.Fatalf("handler required tools = %v, want [fixture-tool]", got)
 	}
 
 	item, err := structpb.NewStruct(map[string]any{"enabled": true})

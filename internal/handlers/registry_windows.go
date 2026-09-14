@@ -19,6 +19,10 @@ import (
 // only removes the named values, never the key itself.
 type registryHandler struct{}
 
+func (registryHandler) Emoji() string { return "🗃️" }
+
+func (registryHandler) RequiredTools() []string { return []string{} }
+
 var registryHiveAliases = map[string]uint32{
 	"HKLM": hive(registry.LOCAL_MACHINE), "HKEY_LOCAL_MACHINE": hive(registry.LOCAL_MACHINE),
 	"HKCU": hive(registry.CURRENT_USER), "HKEY_CURRENT_USER": hive(registry.CURRENT_USER),

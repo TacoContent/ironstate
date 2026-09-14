@@ -23,6 +23,10 @@ import (
 // this gap is accepted rather than worked around.
 type shellHandler struct{}
 
+func (shellHandler) Emoji() string { return "💻" }
+
+func (shellHandler) RequiredTools() []string { return []string{} }
+
 var shellHostPresets = map[string][]string{
 	"powershell": {"powershell.exe"},
 	"cmd":        {"cmd.exe", "/d", "/c"},

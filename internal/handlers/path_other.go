@@ -14,6 +14,10 @@ import (
 // handlers stay Windows-only" scope decision.
 type pathHandler struct{}
 
+func (pathHandler) Emoji() string { return "📁" }
+
+func (pathHandler) RequiredTools() []string { return []string{} }
+
 var errPathUnsupportedOS = fmt.Errorf("the 'path' module is only supported on Windows")
 
 func (pathHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {

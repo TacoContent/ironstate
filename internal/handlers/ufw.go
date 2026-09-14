@@ -14,6 +14,9 @@ import (
 // - absent: always run delete (non-existent delete is normalized to RC 0)
 type ufwHandler struct{}
 
+func (ufwHandler) Emoji() string { return "🧱" }
+func (ufwHandler) RequiredTools() []string { return []string{"ufw"} }
+
 func ufwRuleAction(item map[string]any) string {
 	rule := strings.ToLower(strings.TrimSpace(getString(item, "rule")))
 	if rule != "" {

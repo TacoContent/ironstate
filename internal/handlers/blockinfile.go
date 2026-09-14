@@ -19,6 +19,9 @@ import (
 // jinja/gotemplate engines the 'template' module uses (see template.go).
 type blockInFileHandler struct{}
 
+func (blockInFileHandler) Emoji() string { return "🧩" }
+func (blockInFileHandler) RequiredTools() []string { return []string{} }
+
 const defaultBlockMarker = "# {mark} IRONSTATE MANAGED - {name}"
 
 type blockMarkers struct {

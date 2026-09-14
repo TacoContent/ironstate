@@ -10,6 +10,10 @@ import (
 // egetHandler ports Handlers/Eget.psm1 (GitHub release binaries via eget).
 type egetHandler struct{}
 
+func (egetHandler) Emoji() string { return "📦" }
+
+func (egetHandler) RequiredTools() []string { return []string{"eget"} }
+
 var egetToArgPattern = regexp.MustCompile(`^--to=(.+)$`)
 
 func egetExpandedArgs(item map[string]any) []string {

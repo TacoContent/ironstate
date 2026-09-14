@@ -12,6 +12,10 @@ import (
 // npmHandler ports Handlers/Npm.psm1 (Node global packages).
 type npmHandler struct{}
 
+func (npmHandler) Emoji() string { return "📦" }
+
+func (npmHandler) RequiredTools() []string { return []string{"npm"} }
+
 func (npmHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	pkg := getString(item, "package")
 	result, err := runner.Run("npm", []string{"list", "-g", pkg, "--depth=0"})

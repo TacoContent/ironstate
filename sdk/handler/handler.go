@@ -30,6 +30,7 @@ type Context struct {
 type HostCallbacks interface {
 	RenderTemplate(template string, variables map[string]any) (string, error)
 	EvaluateCondition(expression string, variables map[string]any) (bool, error)
+	Log(message string) error
 }
 
 // ExecResult is a handler's normalized command result.
@@ -55,6 +56,13 @@ type Handler interface {
 // default glyph.
 type EmojiProvider interface {
 	Emoji() string
+}
+
+// RequiredToolsProvider optionally declares the executables a handler needs
+// available on PATH before ironstate dispatches it. An absent or empty value
+// means the handler performs its own availability checks.
+type RequiredToolsProvider interface {
+	RequiredTools() []string
 }
 
 // FactProducer optionally exposes a named result as a later-task fact.
