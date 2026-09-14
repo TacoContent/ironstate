@@ -671,14 +671,11 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 		if secretID {
 			description = fmt.Sprintf("run %s via %q ***", module, "secure command")
 		}
-		verb := "install"
-		if action == ActionUninstall {
-			verb = "remove"
-		}
+		verb, progressing, completed := actionWords(action)
 		if !apply {
 			Info("%s %s [%s] %s", emoji, ui.BrightCyan(fmt.Sprintf("› would %s", verb)), module, description)
 		} else {
-			Info("%s %s [%s] %s", emoji, ui.Bold(fmt.Sprintf("→ %sing", verb)), module, description)
+			Info("%s %s [%s] %s", emoji, ui.Bold("→ "+progressing), module, description)
 			// Ambient, not threaded through Install/Uninstall's signature -
 			// see ironexec.SetBecome. Cleared unconditionally once this
 			// call returns, whether or not elevation was actually
@@ -710,7 +707,7 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 				Danger("[%s] %s threw: %s", module, displayLabel, msg)
 				exec = ExecResult{RC: 1, Stderr: msg, StderrLines: []string{msg}}
 			} else if exec.RC == 0 {
-				Info("%s %s [%s] %s", emoji, ui.BoldGreen(fmt.Sprintf("✔ %sed", verb)), module, displayLabel)
+				Info("%s %s [%s] %s", emoji, ui.BoldGreen("✔ "+completed), module, displayLabel)
 			}
 		}
 	}
@@ -730,6 +727,13 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 		Apply:   apply,
 		Exec:    exec,
 	}, nil
+}
+
+func actionWords(action Action) (verb, progressing, completed string) {
+	if action == ActionUninstall {
+		return "remove", "removing", "removed"
+	}
+	return "install", "installing", "installed"
 }
 
 func handlerEmoji(handler Handler) string {

@@ -18,17 +18,14 @@ import (
 // than unchanged, failed reads as danger" scheme requested for the CLI's
 // output.
 func statusCell(r Result) (string, func(string) string) {
-	verb := "install"
-	if r.Action == ActionUninstall {
-		verb = "remove"
-	}
+	verb, _, completed := actionWords(r.Action)
 	switch {
 	case r.Failed:
 		return "✖ failed", ui.BoldRed
 	case r.Action == ActionSkip:
 		return "⏭️ skip", ui.Dim
 	case r.Apply:
-		return "✔ " + verb + "ed", ui.BoldGreen
+		return "✔ " + completed, ui.BoldGreen
 	default:
 		return "› would " + verb, ui.BrightCyan
 	}

@@ -32,6 +32,13 @@ func TestComputeStats(t *testing.T) {
 	}
 }
 
+func TestStatusCellUsesCorrectUninstallCompletedWord(t *testing.T) {
+	status, _ := statusCell(Result{Action: ActionUninstall, Apply: true})
+	if status != "✔ removed" {
+		t.Fatalf("uninstall status = %q, want removed", status)
+	}
+}
+
 func TestPrintSummary(t *testing.T) {
 	withColorDisabled(t)
 	var buf bytes.Buffer

@@ -170,6 +170,30 @@ func TestRunLeavesApplyCallsInstall(t *testing.T) {
 	}
 }
 
+func TestRunLeavesApplyUsesCorrectUninstallProgressWords(t *testing.T) {
+	h := &fakeHandler{installed: true, installExec: ExecResult{RC: 0}}
+	opts := baseOpts(map[string]Handler{"widget": h})
+	opts.Apply = true
+	originalInfo := Info
+	t.Cleanup(func() { Info = originalInfo })
+	var lines []string
+	Info = func(format string, args ...any) { lines = append(lines, fmt.Sprintf(format, args...)) }
+
+	_, _, err := RunLeaves([]tasks.Leaf{
+		leaf("widget", map[string]any{"state": "absent"}, withName("w")),
+	}, opts, NewState())
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := strings.Join(lines, "\n")
+	if !strings.Contains(output, "removing") || !strings.Contains(output, "removed") {
+		t.Fatalf("uninstall progress = %q, want removing and removed", output)
+	}
+	if strings.Contains(output, "removeing") || strings.Contains(output, "removeed") {
+		t.Fatalf("uninstall progress contains malformed words: %q", output)
+	}
+}
+
 func TestRunLeavesAssertForcesExecutionUnderDryRun(t *testing.T) {
 	h := &fakeHandler{installed: false, installExec: ExecResult{RC: 0}}
 	opts := baseOpts(map[string]Handler{"assert": h})

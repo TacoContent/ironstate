@@ -6,8 +6,7 @@ plugins:
 tasks:
   - name: Example Task
     camalot.hosts.entry:
-      path: C:\Windows\System32\drivers\etc
       ip: 10.0.0.12
       hostname: build.local
-    when:
-      ansible_os_family == "windows"
+      state: absent
+    become: true
