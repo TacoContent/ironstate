@@ -1,4 +1,37 @@
 
+## [v0.4.1](https://github.com/tacocontent/ironstate/releases/tag/v0.4.1) - 2026-09-14
+
+### 🐛 BUG FIXES
+
+#### _GENERAL_
+
+- Better handling of defining plugin -[@camalot](https://github.com/camalot)
+
+
+## GitHub
+
+### 💛 Contributors
+
+
+- [@camalot](https://github.com/camalot)
+## 📈 Commit Statistics
+
+
+- `1` commit contributed to the release.
+- `0` days have passed between the first and last commit.
+- `1` commit parsed as conventional.
+- `0` linked issues detected in commits.
+
+
+![Statistics](https://quickchart.io/chart?c={type:'bar',data:{labels:['Commits','Contributors','Days%20Between%20Commits','Conventional%20Commits','Referenced%20Links','Days%20Since%20Last%20Release'],datasets:[{label:'Release',data:[1,1,0,1,0,0]}]}})
+
+
+
+---
+
+
+**Full Changelog**: https://github.com/tacocontent/ironstate/compare/v0.4.0...v0.4.1
+
 ## [v0.4.0](https://github.com/tacocontent/ironstate/releases/tag/v0.4.0) - 2026-09-14
 
 ### 🚀 FEATURES
