@@ -2,9 +2,14 @@ package handlers
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/TacoContent/ironstate/internal/engine"
 )
@@ -15,7 +20,7 @@ import (
 // machinery.
 type sshHostBlockHandler struct{}
 
-func (sshHostBlockHandler) Emoji() string  { return "🔐" }
+func (sshHostBlockHandler) Emoji() string           { return "🔐" }
 func (sshHostBlockHandler) RequiredTools() []string { return []string{} }
 
 var sshHostNameKeys = map[string]bool{"host_name": true, "hostname": true}
@@ -356,4 +361,327 @@ func (sshHostBlockHandler) Install(item map[string]any, name string, ctx engine.
 
 func (sshHostBlockHandler) Uninstall(item map[string]any, name string, ctx engine.Context) (engine.ExecResult, error) {
 	return engine.ExecResult{}, removeSshHostBlock(item, name)
+}
+
+// ScanRole implements engine.ScanCapable - discovered packages seed
+// roles/packages in a generated playbook (see internal/scan).
+func (sshHostBlockHandler) ScanRole() string { return "roles/ssh/config" }
+
+// sshDirectiveValues is the set of raw values a single directive keyword
+// took within one Host stanza, plus the case as first written (used to
+// canonicalize unrecognized/dynamic directive names back to snake_case).
+type sshDirectiveValues struct {
+	OriginalKey string
+	Values      []string
+}
+
+// sshScanEntry is one "Host ..." stanza read from an ssh_config file,
+// before it's grouped into ssh_host_block items.
+type sshScanEntry struct {
+	Dest   string
+	Host   string
+	Fields map[string]*sshDirectiveValues // keyed by lower-cased directive keyword
+}
+
+// sshKnownDirectiveSnakeCase maps common OpenSSH client directive
+// keywords (lower-cased) to the snake_case key ssh_host_block's schema
+// uses for them - the reverse of convertSshDirectiveKeyToPascalCase for
+// the directives this handler is most likely to encounter. Anything not
+// listed here falls back to sshDirectiveKeyToSnakeCase, since the
+// handler's schema is otherwise fully dynamic.
+var sshKnownDirectiveSnakeCase = map[string]string{
+	"hostname":                 "host_name",
+	"user":                     "user",
+	"port":                     "port",
+	"identityfile":             "identity_file",
+	"identitiesonly":           "identities_only",
+	"proxycommand":             "proxy_command",
+	"proxyjump":                "proxy_jump",
+	"forwardagent":             "forward_agent",
+	"forwardx11":               "forward_x11",
+	"stricthostkeychecking":    "strict_host_key_checking",
+	"userknownhostsfile":       "user_known_hosts_file",
+	"serveraliveinterval":      "server_alive_interval",
+	"serveralivecountmax":      "server_alive_count_max",
+	"compression":              "compression",
+	"controlmaster":            "control_master",
+	"controlpath":              "control_path",
+	"controlpersist":           "control_persist",
+	"addkeystoagent":           "add_keys_to_agent",
+	"pubkeyauthentication":     "pubkey_authentication",
+	"passwordauthentication":   "password_authentication",
+	"preferredauthentications": "preferred_authentications",
+	"localforward":             "local_forward",
+	"remoteforward":            "remote_forward",
+	"dynamicforward":           "dynamic_forward",
+	"sendenv":                  "send_env",
+	"setenv":                   "set_env",
+	"certificatefile":          "certificate_file",
+	"ciphers":                  "ciphers",
+	"macs":                     "macs",
+	"kexalgorithms":            "kex_algorithms",
+	"hostkeyalgorithms":        "host_key_algorithms",
+	"connecttimeout":           "connect_timeout",
+	"connectionattempts":       "connection_attempts",
+	"tcpkeepalive":             "tcp_keep_alive",
+	"batchmode":                "batch_mode",
+	"canonicalizehostname":     "canonicalize_hostname",
+	"gssapiauthentication":     "gssapi_authentication",
+	"loglevel":                 "log_level",
+}
+
+// sshDirectiveKeyToSnakeCase converts a CamelCase directive keyword (e.g.
+// "HostName", "ServerAliveInterval") to snake_case, for directives not
+// found in sshKnownDirectiveSnakeCase - the inverse of
+// convertSshDirectiveKeyToPascalCase, used so dynamic/unrecognized
+// directives still round-trip through the handler's own writer.
+func sshDirectiveKeyToSnakeCase(name string) string {
+	var sb strings.Builder
+	runes := []rune(name)
+	for i, r := range runes {
+		if i > 0 && r >= 'A' && r <= 'Z' {
+			prev := runes[i-1]
+			if (prev >= 'a' && prev <= 'z') || (prev >= '0' && prev <= '9') {
+				sb.WriteRune('_')
+			}
+		}
+		sb.WriteRune(unicode.ToLower(r))
+	}
+	return sb.String()
+}
+
+func canonicalSshDirectiveSnakeCase(lowerKey, originalKey string) string {
+	if snake, ok := sshKnownDirectiveSnakeCase[lowerKey]; ok {
+		return snake
+	}
+	return sshDirectiveKeyToSnakeCase(originalKey)
+}
+
+// convertSshScannedValue turns a raw ssh_config value string into a bool,
+// int, or string - mirroring how ssh_host_block's own writer
+// (sshDirectiveValueString) renders those same Go types back out.
+func convertSshScannedValue(raw string) any {
+	raw = strings.TrimSpace(raw)
+	if len(raw) >= 2 && raw[0] == '"' && raw[len(raw)-1] == '"' {
+		raw = raw[1 : len(raw)-1]
+	}
+	switch strings.ToLower(raw) {
+	case "yes":
+		return true
+	case "no":
+		return false
+	}
+	if n, err := strconv.Atoi(raw); err == nil {
+		return n
+	}
+	return raw
+}
+
+// splitSshDirectiveLine splits one ssh_config line into its keyword and
+// value, accepting both "Key value" and "Key=value" (with optional
+// surrounding whitespace around '=') forms; blank/comment lines return
+// ok=false.
+func splitSshDirectiveLine(line string) (key, value string, ok bool) {
+	line = strings.TrimSpace(line)
+	if line == "" || strings.HasPrefix(line, "#") {
+		return "", "", false
+	}
+	idx := strings.IndexAny(line, " \t=")
+	if idx < 0 {
+		return "", "", false
+	}
+	key = line[:idx]
+	rest := strings.TrimSpace(line[idx:])
+	rest = strings.TrimPrefix(rest, "=")
+	rest = strings.TrimSpace(rest)
+	if key == "" || rest == "" {
+		return "", "", false
+	}
+	return key, rest, true
+}
+
+// resolveSshIncludePath expands '~' and, for a relative pattern, resolves
+// it against the directory of the ssh_config file that referenced it -
+// mirroring OpenSSH's own Include semantics.
+func resolveSshIncludePath(pattern, baseDir string) string {
+	expanded := resolvePath(pattern)
+	if filepath.IsAbs(expanded) {
+		return expanded
+	}
+	return filepath.Join(baseDir, expanded)
+}
+
+// scanSshConfigFile reads one ssh_config-style file, collecting every
+// "Host" stanza's directives into out, and recursing into any "Include"
+// target (glob-expanded, relative to this file's own directory) -
+// visited guards against an Include cycle re-reading the same file.
+func scanSshConfigFile(path string, visited map[string]bool, out *[]sshScanEntry) {
+	canon, err := filepath.Abs(path)
+	if err != nil {
+		canon = path
+	}
+	if visited[canon] {
+		return
+	}
+	visited[canon] = true
+	if !fileExists(path) {
+		return
+	}
+
+	var current *sshScanEntry
+	inHostBlock := false
+	flush := func() {
+		if current != nil {
+			*out = append(*out, *current)
+			current = nil
+		}
+	}
+	for _, raw := range getFileLines(path) {
+		key, value, ok := splitSshDirectiveLine(raw)
+		if !ok {
+			continue
+		}
+		lowerKey := strings.ToLower(key)
+		switch lowerKey {
+		case "host":
+			flush()
+			current = &sshScanEntry{Dest: path, Host: value, Fields: map[string]*sshDirectiveValues{}}
+			inHostBlock = true
+			continue
+		case "match":
+			flush()
+			inHostBlock = false
+			continue
+		case "include":
+			dir := filepath.Dir(path)
+			for _, pattern := range strings.Fields(value) {
+				resolved := resolveSshIncludePath(pattern, dir)
+				matches, _ := filepath.Glob(resolved)
+				if len(matches) == 0 && !strings.ContainsAny(resolved, "*?[") {
+					matches = []string{resolved}
+				}
+				sort.Strings(matches)
+				for _, m := range matches {
+					scanSshConfigFile(m, visited, out)
+				}
+			}
+			continue
+		}
+		if !inHostBlock || current == nil {
+			continue
+		}
+		dv, exists := current.Fields[lowerKey]
+		if !exists {
+			dv = &sshDirectiveValues{OriginalKey: key}
+			current.Fields[lowerKey] = dv
+		}
+		dv.Values = append(dv.Values, value)
+	}
+	flush()
+}
+
+// sshConfigBaseFiles are the ssh_config-style files scanned by default:
+// the current user's own config, plus the system-wide config (whose
+// location differs on Windows vs. everywhere else).
+func sshConfigBaseFiles() []string {
+	files := []string{resolvePath("~/.ssh/config")}
+	if runtime.GOOS == "windows" {
+		if programData := os.Getenv("PROGRAMDATA"); programData != "" {
+			files = append(files, filepath.Join(programData, "ssh", "ssh_config"))
+		}
+	} else {
+		files = append(files, "/etc/ssh/ssh_config")
+	}
+	return files
+}
+
+// buildSshHostBlockScanItems groups scanned Host stanzas into
+// ssh_host_block items: one item per (source file, HostName) pair when a
+// stanza defines its own HostName, and one catch-all item per source
+// file for every stanza that doesn't.
+func buildSshHostBlockScanItems(entries []sshScanEntry) []engine.ScanItem {
+	type destGroups struct {
+		order  []string
+		groups map[string][]map[string]any
+	}
+	byDest := map[string]*destGroups{}
+	var destOrder []string
+
+	for _, e := range entries {
+		if strings.TrimSpace(e.Host) == "*" {
+			// A bare wildcard stanza holds catch-all defaults, not a
+			// real host worth seeding into a playbook.
+			continue
+		}
+		hostEntry := map[string]any{"host": e.Host}
+		groupKey := ""
+		keys := make([]string, 0, len(e.Fields))
+		for k := range e.Fields {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, lowerKey := range keys {
+			dv := e.Fields[lowerKey]
+			snake := canonicalSshDirectiveSnakeCase(lowerKey, dv.OriginalKey)
+			if lowerKey == "hostname" {
+				groupKey = dv.Values[0]
+			}
+			if len(dv.Values) > 1 {
+				values := make([]any, len(dv.Values))
+				for i, v := range dv.Values {
+					values[i] = convertSshScannedValue(v)
+				}
+				hostEntry[snake+"s"] = values
+			} else {
+				hostEntry[snake] = convertSshScannedValue(dv.Values[0])
+			}
+		}
+
+		dg, ok := byDest[e.Dest]
+		if !ok {
+			dg = &destGroups{groups: map[string][]map[string]any{}}
+			byDest[e.Dest] = dg
+			destOrder = append(destOrder, e.Dest)
+		}
+		if _, ok := dg.groups[groupKey]; !ok {
+			dg.order = append(dg.order, groupKey)
+		}
+		dg.groups[groupKey] = append(dg.groups[groupKey], hostEntry)
+	}
+
+	var items []engine.ScanItem
+	for _, dest := range destOrder {
+		dg := byDest[dest]
+		for _, groupKey := range dg.order {
+			hosts := dg.groups[groupKey]
+			name := groupKey
+			if name == "" {
+				name = "hosts (" + filepath.Base(dest) + ")"
+			}
+			hostsAny := make([]any, len(hosts))
+			for i, h := range hosts {
+				hostsAny[i] = h
+			}
+			items = append(items, engine.ScanItem{
+				Module: "ssh_host_block",
+				Name:   name,
+				Config: map[string]any{"dest": dest, "hosts": hostsAny},
+				Tags:   []string{"ssh", "hosts"},
+			})
+		}
+	}
+	return items
+}
+
+// Scan implements engine.ScanCapable: reads the user's and system's
+// ssh_config files (following any Include directives) and turns their
+// "Host" stanzas into ssh_host_block items, grouped by HostName - see
+// buildSshHostBlockScanItems.
+func (sshHostBlockHandler) Scan(ctx engine.Context) ([]engine.ScanItem, error) {
+	visited := map[string]bool{}
+	var entries []sshScanEntry
+	for _, base := range sshConfigBaseFiles() {
+		scanSshConfigFile(base, visited, &entries)
+	}
+	return buildSshHostBlockScanItems(entries), nil
 }

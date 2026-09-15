@@ -128,7 +128,10 @@ func (s *Store) ListInstalled() ([]Manifest, error) {
 				}
 				manifest, err := s.GetManifest(organization.Name()+"."+name.Name(), version.Name())
 				if err != nil {
-					return nil, err
+					// An orphaned version directory (e.g. left behind by a
+					// partial uninstall whose binary was locked) shouldn't take
+					// down the whole listing.
+					continue
 				}
 				manifests = append(manifests, manifest)
 			}
@@ -198,14 +201,24 @@ func (s *Store) ResolveVersion(namespace, requested string) (Manifest, error) {
 	return matches[0], nil
 }
 
-// RemoveVersion removes one installed plugin version.
+// RemoveVersion removes one installed plugin version. The binary is removed
+// before manifest.json so that if it's locked (e.g. a still-running plugin
+// process on Windows), the manifest survives - keeping 'plugin list'/'info'
+// working and letting the uninstall be retried, instead of leaving behind an
+// orphaned directory with no manifest.
 func (s *Store) RemoveVersion(namespace, version string) error {
 	if err := validateIdentity(namespace); err != nil || !validPathPart(version) {
 		return fmt.Errorf("invalid plugin reference %s@%s", namespace, version)
 	}
-	if err := os.RemoveAll(s.versionDir(namespace, version)); err != nil {
+	parts := strings.Split(namespace, ".")
+	dir := s.versionDir(namespace, version)
+	if err := os.Remove(filepath.Join(dir, binaryName(parts[1]))); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove plugin %s@%s: %w", namespace, version, err)
 	}
+	if err := os.Remove(filepath.Join(dir, "manifest.json")); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove plugin %s@%s: %w", namespace, version, err)
+	}
+	_ = os.Remove(dir) // best-effort: only succeeds once the directory is empty
 	return nil
 }
 
