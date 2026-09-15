@@ -89,7 +89,12 @@ func All() map[string]engine.Handler {
 		"async":          asyncHandler{},
 		"wait_for":       waitForHandler{},
 	}
-	for name, handler := range handlers {
+	names := make([]string, 0, len(handlers))
+	for name := range handlers {
+		names = append(names, name)
+	}
+	for _, name := range names {
+		handler := handlers[name]
 		handlers["ironstate.builtin."+name] = handler
 	}
 	return handlers

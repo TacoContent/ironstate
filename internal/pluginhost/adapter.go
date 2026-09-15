@@ -38,6 +38,41 @@ func (h handlerAdapter) Emoji() string { return h.emoji }
 
 func (h handlerAdapter) RequiredTools() []string { return append([]string(nil), h.requiredTools...) }
 
+func (h handlerAdapter) ScanRole() string {
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+	response, err := h.client.ScanRole(ctx, &pluginpb.ScanRoleRequest{HandlerName: h.name})
+	if err != nil || !response.GetSupported() {
+		return ""
+	}
+	return response.GetRole()
+}
+
+func (h handlerAdapter) Scan(ctx engine.Context) ([]engine.ScanItem, error) {
+	prepared, cleanup, err := h.prepare(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	rpcCtx, cancel := context.WithTimeout(context.Background(), operationTimeout)
+	defer cancel()
+	response, err := h.client.Scan(rpcCtx, &pluginpb.ScanRequest{
+		HandlerName: h.name,
+		Context: &pluginpb.Context{Flat: mustStruct(prepared.Flat), Apply: prepared.Apply, Become: &pluginpb.Become{
+			Enabled: prepared.Become.Enabled,
+			User:    prepared.Become.User,
+		}},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("plugin handler %q scan: %w", h.name, err)
+	}
+	items := make([]engine.ScanItem, 0, len(response.GetItems()))
+	for _, item := range response.GetItems() {
+		items = append(items, engine.ScanItem{Module: item.GetModule(), Name: item.GetName(), Config: structMap(item.GetConfig()), Tags: item.GetTags()})
+	}
+	return items, nil
+}
+
 func (h handlerAdapter) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	ctx, cleanup, err := h.prepare(ctx)
 	if err != nil {

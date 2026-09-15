@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -33,8 +34,17 @@ type Registry struct {
 }
 
 func NewRegistry() *Registry {
+	return NewRegistryWithHandlers(nil)
+}
+
+// NewRegistryWithHandlers returns a registry for built-in scanners plus any
+// externally supplied handlers that implement engine.ScanCapable.
+func NewRegistryWithHandlers(external map[string]engine.Handler) *Registry {
 	r := &Registry{}
-	for _, s := range defaultScanners() {
+	for _, s := range scannersForHandlers(handlers.All()) {
+		r.Register(s)
+	}
+	for _, s := range scannersForHandlers(external) {
 		r.Register(s)
 	}
 	return r
@@ -95,21 +105,26 @@ type handlerScanner struct {
 func (h handlerScanner) Name() string { return h.name }
 func (h handlerScanner) Role() string { return h.cap.ScanRole() }
 func (h handlerScanner) Scan() ([]Item, error) {
-	return h.cap.Scan(engine.Context{})
+	items, err := h.cap.Scan(engine.Context{})
+	if err != nil {
+		return nil, err
+	}
+	if strings.Count(h.name, ".") == 2 {
+		for index := range items {
+			if !strings.Contains(items[index].Module, ".") {
+				items[index].Module = h.name
+			}
+		}
+	}
+	return items, nil
 }
 
-// defaultScanners builds one Scanner per handlers.All() entry that
-// implements engine.ScanCapable, dynamically discovering what can be
-// scanned instead of hardcoding a scanner per module here.
-func defaultScanners() []Scanner {
-	all := handlers.All()
+func scannersForHandlers(all map[string]engine.Handler) []Scanner {
 	names := make([]string, 0, len(all))
 	for name := range all {
-		if name == "brew" {
-			// "brew" is a registered alias for "homebrew" pointing at
-			// the exact same handler instance (see handlers.All) - skip
-			// it here so its packages aren't scanned (and duplicated)
-			// twice under two different names.
+		if name == "brew" || strings.HasPrefix(name, "ironstate.builtin.") {
+			// Aliases point to the same implementation as their base handler.
+			// Scan each built-in once under its canonical module name.
 			continue
 		}
 		names = append(names, name)
@@ -119,7 +134,9 @@ func defaultScanners() []Scanner {
 	out := make([]Scanner, 0, len(names))
 	for _, name := range names {
 		if sc, ok := all[name].(engine.ScanCapable); ok {
-			out = append(out, handlerScanner{name: name, cap: sc})
+			if sc.ScanRole() != "" {
+				out = append(out, handlerScanner{name: name, cap: sc})
+			}
 		}
 	}
 	return out
@@ -130,25 +147,6 @@ func GeneratePlaybook(target string, known []Item) error {
 	if target == "" {
 		target = "."
 	}
-	paths := []string{
-		target,
-		filepath.Join(target, "roles"),
-		filepath.Join(target, "roles", "system"),
-		filepath.Join(target, "roles", "system", "users"),
-		filepath.Join(target, "roles", "system", "groups"),
-		filepath.Join(target, "roles", "system", "services"),
-		filepath.Join(target, "roles", "packages"),
-		filepath.Join(target, "tasks"),
-		filepath.Join(target, "packages"),
-		filepath.Join(target, "hosts"),
-		filepath.Join(target, "variables"),
-	}
-	for _, p := range paths {
-		if err := os.MkdirAll(p, 0o750); err != nil {
-			return err
-		}
-	}
-
 	itemsByRole := map[string][]Item{}
 	for _, item := range known {
 		role := item.Role
@@ -170,6 +168,31 @@ func GeneratePlaybook(target string, known []Item) error {
 		}
 		itemsByRole[role] = append(itemsByRole[role], item)
 	}
+	roleDirs := orderedRoleDirs(itemsByRole)
+	paths := []string{
+		target,
+		filepath.Join(target, "roles"),
+		filepath.Join(target, "tasks"),
+		filepath.Join(target, "packages"),
+		filepath.Join(target, "hosts"),
+		filepath.Join(target, "variables"),
+	}
+	for _, roleDir := range roleDirs {
+		paths = append(paths, filepath.Join(target, roleDir))
+	}
+	for _, p := range paths {
+		if err := os.MkdirAll(p, 0o750); err != nil {
+			return err
+		}
+	}
+
+	includeTasks := make([]map[string]any, 0, len(roleDirs))
+	for _, roleDir := range roleDirs {
+		includeTasks = append(includeTasks, map[string]any{
+			"name":    "Include baseline " + filepath.Base(roleDir),
+			"include": map[string]any{"name": roleDir},
+		})
+	}
 
 	if err := writeYAML(filepath.Join(target, "main.yml"), map[string]any{
 		"version": "1",
@@ -177,17 +200,12 @@ func GeneratePlaybook(target string, known []Item) error {
 			"generated_by": "ironstate scan",
 			"generated_at": time.Now().UTC().Format(time.RFC3339),
 		},
-		"tasks": []map[string]any{
-			{"name": "Include baseline users", "include": map[string]any{"name": "roles/system/users"}},
-			{"name": "Include baseline groups", "include": map[string]any{"name": "roles/system/groups"}},
-			{"name": "Include baseline services", "include": map[string]any{"name": "roles/system/services"}},
-			{"name": "Include baseline packages", "include": map[string]any{"name": "roles/packages"}},
-		},
+		"tasks": includeTasks,
 	}); err != nil {
 		return err
 	}
 
-	for _, roleDir := range []string{"roles/system/users", "roles/system/groups", "roles/system/services", "roles/packages"} {
+	for _, roleDir := range roleDirs {
 		if err := writeYAML(filepath.Join(target, roleDir, "main.yml"), map[string]any{"tasks": buildTaskList(itemsByRole[roleDir], filepath.Base(roleDir))}); err != nil {
 			return err
 		}
@@ -200,6 +218,22 @@ func GeneratePlaybook(target string, known []Item) error {
 		return err
 	}
 	return nil
+}
+
+func orderedRoleDirs(itemsByRole map[string][]Item) []string {
+	standard := []string{"roles/system/users", "roles/system/groups", "roles/system/services", "roles/packages"}
+	known := make(map[string]bool, len(standard))
+	for _, role := range standard {
+		known[role] = true
+	}
+	extra := make([]string, 0, len(itemsByRole))
+	for role := range itemsByRole {
+		if !known[role] {
+			extra = append(extra, role)
+		}
+	}
+	sort.Strings(extra)
+	return append(standard, extra...)
 }
 
 func buildTaskList(items []Item, roleName string) []map[string]any {

@@ -3,12 +3,15 @@ package cli
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/TacoContent/ironstate/internal/engine"
 	"github.com/TacoContent/ironstate/internal/facts"
+	"github.com/TacoContent/ironstate/internal/pluginhost"
 	"github.com/TacoContent/ironstate/internal/scan"
 )
 
@@ -24,7 +27,68 @@ type initScaffoldFile struct {
 }
 
 var gatherScanItems = func(progress func(name string, index, total int)) ([]scan.Item, error) {
-	return scan.NewRegistry().ScanAllWithProgress(progress)
+	handlers, clients, err := installedScanHandlers()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		for _, client := range clients {
+			_ = client.Close()
+		}
+	}()
+	return scan.NewRegistryWithHandlers(handlers).ScanAllWithProgress(progress)
+}
+
+func installedScanHandlers() (map[string]engine.Handler, []*pluginhost.Client, error) {
+	store, err := pluginhost.DefaultStore()
+	if err != nil {
+		return nil, nil, err
+	}
+	installed, err := store.ListInstalled()
+	if err != nil {
+		return nil, nil, err
+	}
+	handlers := make(map[string]engine.Handler)
+	clients := make([]*pluginhost.Client, 0, len(installed))
+	seen := make(map[string]bool)
+	closeClients := func() {
+		for _, client := range clients {
+			_ = client.Close()
+		}
+	}
+	for _, manifest := range installed {
+		namespace := manifest.Namespace()
+		if seen[namespace] {
+			continue
+		}
+		seen[namespace] = true
+		latest, err := store.ResolveVersion(namespace, "latest")
+		if err != nil {
+			closeClients()
+			return nil, nil, err
+		}
+		binary, err := store.BinaryPath(namespace, latest.Version)
+		if err != nil {
+			closeClients()
+			return nil, nil, err
+		}
+		client, err := pluginhost.LaunchWithCallbacks(exec.Command(binary), nil) //nolint:gosec // binary is read from a validated installed plugin manifest
+		if err != nil {
+			closeClients()
+			return nil, nil, fmt.Errorf("launch installed plugin %s@%s: %w", namespace, latest.Version, err)
+		}
+		qualified, err := client.QualifiedHandlers(namespace)
+		if err != nil {
+			_ = client.Close()
+			closeClients()
+			return nil, nil, err
+		}
+		for name, handler := range qualified {
+			handlers[name] = handler
+		}
+		clients = append(clients, client)
+	}
+	return handlers, clients, nil
 }
 
 func newInitCommand() *cobra.Command {
