@@ -1,4 +1,56 @@
 
+## [v0.4.3](https://github.com/tacocontent/ironstate/releases/tag/v0.4.3) - 2026-09-15
+
+### 🐛 BUG FIXES
+
+#### _GENERAL_
+
+- Typo in how the action is logged -[@camalot](https://github.com/camalot)
+
+- Qualified handler naming for internals -[@camalot](https://github.com/camalot)
+
+
+### 💼 OTHER
+
+#### _GENERAL_
+
+- Merge branch 'develop' of github.com:TacoContent/ironstate into develop -[@camalot](https://github.com/camalot)
+
+- Develop' of github.com:TacoContent/ironstate: -[@camalot](https://github.com/camalot)
+
+
+### 📚 DOCUMENTATION
+
+#### _GENERAL_
+
+- docs: update changelog for v0.4.2 -[@camalot](https://github.com/camalot)
+
+
+## GitHub
+
+### 💛 Contributors
+
+
+- [@camalot](https://github.com/camalot)
+## 📈 Commit Statistics
+
+
+- `5` commits contributed to the release.
+- `1` day has passed between the first and last commit.
+- `2` commits parsed as conventional.
+- `0` linked issues detected in commits.
+- `1` day  has passed between releases.
+
+
+![Statistics](https://quickchart.io/chart?c={type:'bar',data:{labels:['Commits','Contributors','Days%20Between%20Commits','Conventional%20Commits','Referenced%20Links','Days%20Since%20Last%20Release'],datasets:[{label:'Release',data:[5,1,1,2,0,1]}]}})
+
+
+
+---
+
+
+**Full Changelog**: https://github.com/tacocontent/ironstate/compare/v0.4.2...v0.4.3
+
 ## [v0.4.2](https://github.com/tacocontent/ironstate/releases/tag/v0.4.2) - 2026-09-14
 
 ### 🐛 BUG FIXES
