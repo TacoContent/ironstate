@@ -177,7 +177,7 @@ func (yumHandler) Uninstall(item map[string]any, name string, ctx engine.Context
 
 // ScanRole implements engine.ScanCapable - discovered packages seed
 // roles/packages in a generated playbook (see internal/scan).
-func (yumHandler) ScanRole() string { return "roles/packages" }
+func (yumHandler) ScanRole() string { return "roles/packages/yum" }
 
 // Scan implements engine.ScanCapable: discovers packages explicitly
 // requested by the user via 'yum repoquery --userinstalled' - the closest

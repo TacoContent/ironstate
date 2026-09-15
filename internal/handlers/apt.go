@@ -234,7 +234,7 @@ func (aptHandler) Uninstall(item map[string]any, name string, ctx engine.Context
 
 // ScanRole implements engine.ScanCapable - discovered packages seed
 // roles/packages in a generated playbook (see internal/scan).
-func (aptHandler) ScanRole() string { return "roles/packages" }
+func (aptHandler) ScanRole() string { return "roles/packages/apt" }
 
 // Scan implements engine.ScanCapable: discovers packages apt has
 // explicitly installed - ports the scanning logic that used to live in

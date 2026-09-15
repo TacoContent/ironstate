@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"os/exec"
-	"runtime"
 	"strings"
 
 	"github.com/TacoContent/ironstate/internal/engine"
@@ -53,15 +52,12 @@ func (npmHandler) Uninstall(item map[string]any, name string, ctx engine.Context
 
 // ScanRole implements engine.ScanCapable - discovered packages seed
 // roles/packages in a generated playbook (see internal/scan).
-func (npmHandler) ScanRole() string { return "roles/packages" }
+func (npmHandler) ScanRole() string { return "roles/packages/npm" }
 
 // Scan implements engine.ScanCapable: discovers globally-installed npm
 // packages - ports the scanning logic that used to live in
 // internal/scan's packageScanner.
 func (npmHandler) Scan(ctx engine.Context) ([]engine.ScanItem, error) {
-	if runtime.GOOS == "windows" {
-		return nil, nil
-	}
 	if _, err := exec.LookPath("npm"); err != nil {
 		return nil, nil
 	}

@@ -69,7 +69,7 @@ func (wingetHandler) Uninstall(item map[string]any, name string, ctx engine.Cont
 
 // ScanRole implements engine.ScanCapable - discovered packages seed
 // roles/packages in a generated playbook (see internal/scan).
-func (wingetHandler) ScanRole() string { return "roles/packages" }
+func (wingetHandler) ScanRole() string { return "roles/packages/winget" }
 
 // Scan implements engine.ScanCapable: discovers packages winget (or the
 // Microsoft Store source it also manages) has installed, via 'winget

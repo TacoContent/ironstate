@@ -41,6 +41,8 @@ func (apkHandler) Emoji() string { return "📦" }
 
 func (apkHandler) RequiredTools() []string { return []string{"apk"} }
 
+func (apkHandler) ScanRole() string { return "roles/packages/apk" }
+
 // apkPackageList reads 'package' (aliasing 'name') as either a single
 // string or a list of strings.
 func apkPackageList(item map[string]any) []string {
@@ -177,10 +179,6 @@ func (apkHandler) Install(item map[string]any, name string, ctx engine.Context) 
 func (apkHandler) Uninstall(item map[string]any, name string, ctx engine.Context) (engine.ExecResult, error) {
 	return runApkPlan(item, engine.ActionUninstall), nil
 }
-
-// ScanRole implements engine.ScanCapable - discovered packages seed
-// roles/packages in a generated playbook (see internal/scan).
-func (apkHandler) ScanRole() string { return "roles/packages" }
 
 // apkWorldPackageName strips a /etc/apk/world entry's version-constraint
 // operator (=, <, >, ~) and repository/provider tag (@, %) suffix, leaving

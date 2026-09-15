@@ -67,7 +67,7 @@ func (chocolateyHandler) Uninstall(item map[string]any, name string, ctx engine.
 
 // ScanRole implements engine.ScanCapable - discovered packages seed
 // roles/packages in a generated playbook (see internal/scan).
-func (chocolateyHandler) ScanRole() string { return "roles/packages" }
+func (chocolateyHandler) ScanRole() string { return "roles/packages/chocolatey" }
 
 // Scan implements engine.ScanCapable: discovers packages Chocolatey has
 // installed - ports the choco-fallback branch of the scanning logic that

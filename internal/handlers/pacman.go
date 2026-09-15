@@ -177,7 +177,7 @@ func (pacmanHandler) Uninstall(item map[string]any, name string, ctx engine.Cont
 
 // ScanRole implements engine.ScanCapable - discovered packages seed
 // roles/packages in a generated playbook (see internal/scan).
-func (pacmanHandler) ScanRole() string { return "roles/packages" }
+func (pacmanHandler) ScanRole() string { return "roles/packages/pacman" }
 
 // Scan implements engine.ScanCapable: discovers packages pacman has
 // explicitly installed via 'pacman -Qe' - not 'pacman -Q', so packages

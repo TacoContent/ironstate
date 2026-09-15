@@ -69,7 +69,7 @@ func (homebrewHandler) Uninstall(item map[string]any, name string, ctx engine.Co
 
 // ScanRole implements engine.ScanCapable - discovered packages seed
 // roles/packages in a generated playbook (see internal/scan).
-func (homebrewHandler) ScanRole() string { return "roles/packages" }
+func (homebrewHandler) ScanRole() string { return "roles/packages/homebrew" }
 
 // Scan implements engine.ScanCapable: discovers formulae/casks Homebrew
 // has installed - ports the scanning logic that used to live in

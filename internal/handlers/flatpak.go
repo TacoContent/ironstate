@@ -146,7 +146,7 @@ func (flatpakHandler) Uninstall(item map[string]any, name string, ctx engine.Con
 
 // ScanRole implements engine.ScanCapable - discovered packages seed
 // roles/packages in a generated playbook (see internal/scan).
-func (flatpakHandler) ScanRole() string { return "roles/packages" }
+func (flatpakHandler) ScanRole() string { return "roles/packages/flatpak" }
 
 // Scan implements engine.ScanCapable: discovers installed applications via
 // 'flatpak list --app' - the '--app' filter excludes runtimes pulled in

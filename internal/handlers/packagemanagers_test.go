@@ -357,8 +357,8 @@ func TestPacmanHandlerTestAbsentReturnsTrueIfAnyPackagePresent(t *testing.T) {
 }
 
 func TestPacmanHandlerScanRoleIsRolesPackages(t *testing.T) {
-	if got := (pacmanHandler{}).ScanRole(); got != "roles/packages" {
-		t.Fatalf("ScanRole() = %q, want roles/packages", got)
+	if got := (pacmanHandler{}).ScanRole(); got != "roles/packages/pacman" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/pacman", got)
 	}
 }
 
@@ -493,8 +493,8 @@ func TestYumHandlerTestAbsentReturnsTrueIfAnyPackagePresent(t *testing.T) {
 }
 
 func TestYumHandlerScanRoleIsRolesPackages(t *testing.T) {
-	if got := (yumHandler{}).ScanRole(); got != "roles/packages" {
-		t.Fatalf("ScanRole() = %q, want roles/packages", got)
+	if got := (yumHandler{}).ScanRole(); got != "roles/packages/yum" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/yum", got)
 	}
 }
 
@@ -639,8 +639,8 @@ func TestApkHandlerTestAbsentReturnsTrueIfAnyPackagePresent(t *testing.T) {
 }
 
 func TestApkHandlerScanRoleIsRolesPackages(t *testing.T) {
-	if got := (apkHandler{}).ScanRole(); got != "roles/packages" {
-		t.Fatalf("ScanRole() = %q, want roles/packages", got)
+	if got := (apkHandler{}).ScanRole(); got != "roles/packages/apk" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/apk", got)
 	}
 }
 
@@ -889,8 +889,8 @@ func TestFlatpakHandlerTestAbsentReturnsTrueIfAnyPackagePresent(t *testing.T) {
 }
 
 func TestFlatpakHandlerScanRoleIsRolesPackages(t *testing.T) {
-	if got := (flatpakHandler{}).ScanRole(); got != "roles/packages" {
-		t.Fatalf("ScanRole() = %q, want roles/packages", got)
+	if got := (flatpakHandler{}).ScanRole(); got != "roles/packages/flatpak" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/flatpak", got)
 	}
 }
 
@@ -1005,8 +1005,8 @@ func TestScoopHandlerTestAbsentReturnsTrueIfAnyPackagePresent(t *testing.T) {
 }
 
 func TestScoopHandlerScanRoleIsRolesPackages(t *testing.T) {
-	if got := (scoopHandler{}).ScanRole(); got != "roles/packages" {
-		t.Fatalf("ScanRole() = %q, want roles/packages", got)
+	if got := (scoopHandler{}).ScanRole(); got != "roles/packages/scoop" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/scoop", got)
 	}
 }
 
@@ -1131,8 +1131,8 @@ func TestMacportsHandlerTestAbsentReturnsTrueIfAnyPackagePresent(t *testing.T) {
 }
 
 func TestMacportsHandlerScanRoleIsRolesPackages(t *testing.T) {
-	if got := (macportsHandler{}).ScanRole(); got != "roles/packages" {
-		t.Fatalf("ScanRole() = %q, want roles/packages", got)
+	if got := (macportsHandler{}).ScanRole(); got != "roles/packages/macports" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/macports", got)
 	}
 }
 
@@ -1305,24 +1305,52 @@ func TestWingetPackagesToEntriesKeepsIdsAndSources(t *testing.T) {
 
 func TestWingetHandlerScanRoleAndRoleAreRolesPackages(t *testing.T) {
 	winget := wingetHandler{}
-	if got := winget.ScanRole(); got != "roles/packages" {
-		t.Fatalf("ScanRole() = %q, want roles/packages", got)
+	if got := winget.ScanRole(); got != "roles/packages/winget" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/winget", got)
 	}
 	choco := chocolateyHandler{}
-	if got := choco.ScanRole(); got != "roles/packages" {
-		t.Fatalf("ScanRole() = %q, want roles/packages", got)
+	if got := choco.ScanRole(); got != "roles/packages/chocolatey" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/chocolatey", got)
 	}
 	brew := homebrewHandler{}
-	if got := brew.ScanRole(); got != "roles/packages" {
-		t.Fatalf("ScanRole() = %q, want roles/packages", got)
+	if got := brew.ScanRole(); got != "roles/packages/homebrew" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/homebrew", got)
+	}
+	scoop := scoopHandler{}
+	if got := scoop.ScanRole(); got != "roles/packages/scoop" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/scoop", got)
 	}
 	apt := aptHandler{}
-	if got := apt.ScanRole(); got != "roles/packages" {
-		t.Fatalf("ScanRole() = %q, want roles/packages", got)
+	if got := apt.ScanRole(); got != "roles/packages/apt" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/apt", got)
 	}
 	npm := npmHandler{}
-	if got := npm.ScanRole(); got != "roles/packages" {
-		t.Fatalf("ScanRole() = %q, want roles/packages", got)
+	if got := npm.ScanRole(); got != "roles/packages/npm" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/npm", got)
+	}
+	apk := apkHandler{}
+	if got := apk.ScanRole(); got != "roles/packages/apk" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/apk", got)
+	}
+	xget := xgetHandler{}
+	if got := xget.ScanRole(); got != "roles/packages/xget" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/xget", got)
+	}
+	flatpak := flatpakHandler{}
+	if got := flatpak.ScanRole(); got != "roles/packages/flatpak" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/flatpak", got)
+	}
+	macports := macportsHandler{}
+	if got := macports.ScanRole(); got != "roles/packages/macports" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/macports", got)
+	}
+	pacman := pacmanHandler{}
+	if got := pacman.ScanRole(); got != "roles/packages/pacman" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/pacman", got)
+	}
+	pipx := pipxHandler{}
+	if got := pipx.ScanRole(); got != "roles/packages/pipx" {
+		t.Fatalf("ScanRole() = %q, want roles/packages/pipx", got)
 	}
 }
 

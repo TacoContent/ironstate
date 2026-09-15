@@ -150,7 +150,7 @@ func (scoopHandler) Uninstall(item map[string]any, name string, ctx engine.Conte
 
 // ScanRole implements engine.ScanCapable - discovered packages seed
 // roles/packages in a generated playbook (see internal/scan).
-func (scoopHandler) ScanRole() string { return "roles/packages" }
+func (scoopHandler) ScanRole() string { return "roles/packages/scoop" }
 
 // scoopExportFile mirrors the JSON 'scoop export' prints to stdout - only
 // the 'apps' array's names matter here. Go's json package matches struct

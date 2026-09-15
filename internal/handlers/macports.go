@@ -140,7 +140,7 @@ func (macportsHandler) Uninstall(item map[string]any, name string, ctx engine.Co
 
 // ScanRole implements engine.ScanCapable - discovered packages seed
 // roles/packages in a generated playbook (see internal/scan).
-func (macportsHandler) ScanRole() string { return "roles/packages" }
+func (macportsHandler) ScanRole() string { return "roles/packages/macports" }
 
 // Scan implements engine.ScanCapable: discovers ports explicitly
 // requested by the user via 'port echo requested' - MacPorts' own
