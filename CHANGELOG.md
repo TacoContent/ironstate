@@ -1,4 +1,50 @@
 
+## [v0.4.2](https://github.com/tacocontent/ironstate/releases/tag/v0.4.2) - 2026-09-14
+
+### 🐛 BUG FIXES
+
+#### _GENERAL_
+
+- Moved emoji registration to the handler -[@camalot](https://github.com/camalot)
+
+- Added required binary registration to the handler -[@camalot](https://github.com/camalot)
+
+- Moved emoji registration to the handler -[@camalot](https://github.com/camalot)
+
+- Added required binary registration to the handler -[@camalot](https://github.com/camalot)
+
+
+### 📚 DOCUMENTATION
+
+#### _GENERAL_
+
+- Update docs -[@camalot](https://github.com/camalot)
+
+
+## GitHub
+
+### 💛 Contributors
+
+
+- [@camalot](https://github.com/camalot)
+## 📈 Commit Statistics
+
+
+- `5` commits contributed to the release.
+- `0` days have passed between the first and last commit.
+- `5` commits parsed as conventional.
+- `0` linked issues detected in commits.
+
+
+![Statistics](https://quickchart.io/chart?c={type:'bar',data:{labels:['Commits','Contributors','Days%20Between%20Commits','Conventional%20Commits','Referenced%20Links','Days%20Since%20Last%20Release'],datasets:[{label:'Release',data:[5,1,0,5,0,0]}]}})
+
+
+
+---
+
+
+**Full Changelog**: https://github.com/tacocontent/ironstate/compare/v0.4.1...v0.4.2
+
 ## [v0.4.1](https://github.com/tacocontent/ironstate/releases/tag/v0.4.1) - 2026-09-14
 
 ### 🐛 BUG FIXES
