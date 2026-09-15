@@ -94,7 +94,7 @@ func TestGeneratePlaybookIncludesPluginRole(t *testing.T) {
 		Name:   "build.local",
 		Role:   "roles/system/hosts",
 		Config: map[string]any{"ip": "10.0.0.12", "hostname": "build.local"},
-	}})
+	}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,6 +112,67 @@ func TestGeneratePlaybookIncludesPluginRole(t *testing.T) {
 	}
 	if !strings.Contains(string(main), "roles/system/hosts") {
 		t.Fatalf("main playbook = %q, want plugin role include", main)
+	}
+}
+
+func TestGeneratePlaybookRegistersScannedPluginAtLatestInstalledVersion(t *testing.T) {
+	target := t.TempDir()
+	items := []Item{{Module: "camalot.hosts.entry", Name: "build.local", Role: "roles/system/hosts"}}
+	if err := GeneratePlaybook(target, items, map[string]string{"camalot.hosts": "v1.0.2"}); err != nil {
+		t.Fatal(err)
+	}
+	main, err := os.ReadFile(filepath.Join(target, "main.yml")) //nolint:gosec // t.TempDir-derived test file
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(main), "use: camalot.hosts@v1.0.2") {
+		t.Fatalf("main playbook = %q, want registered plugin at its latest installed version", main)
+	}
+}
+
+func TestGeneratePlaybookPreservesAlreadyRegisteredPlugins(t *testing.T) {
+	target := t.TempDir()
+	existing := "---\nplugins:\n  - use: acme.other@v9.9.9\ntasks: []\n"
+	if err := os.WriteFile(filepath.Join(target, "main.yml"), []byte(existing), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	items := []Item{{Module: "camalot.hosts.entry", Name: "build.local", Role: "roles/system/hosts"}}
+	if err := GeneratePlaybook(target, items, map[string]string{"camalot.hosts": "v1.0.2"}); err != nil {
+		t.Fatal(err)
+	}
+	main, err := os.ReadFile(filepath.Join(target, "main.yml")) //nolint:gosec // t.TempDir-derived test file
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(main)
+	if !strings.Contains(text, "use: acme.other@v9.9.9") {
+		t.Fatalf("main playbook = %q, want the already-registered plugin preserved", text)
+	}
+	if !strings.Contains(text, "use: camalot.hosts@v1.0.2") {
+		t.Fatalf("main playbook = %q, want the newly scanned plugin registered", text)
+	}
+}
+
+func TestGeneratePlaybookDoesNotOverrideAlreadyRegisteredPluginVersion(t *testing.T) {
+	target := t.TempDir()
+	existing := "---\nplugins:\n  - use: camalot.hosts@v1.0.0\ntasks: []\n"
+	if err := os.WriteFile(filepath.Join(target, "main.yml"), []byte(existing), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	items := []Item{{Module: "camalot.hosts.entry", Name: "build.local", Role: "roles/system/hosts"}}
+	if err := GeneratePlaybook(target, items, map[string]string{"camalot.hosts": "v1.0.2"}); err != nil {
+		t.Fatal(err)
+	}
+	main, err := os.ReadFile(filepath.Join(target, "main.yml")) //nolint:gosec // t.TempDir-derived test file
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(main)
+	if !strings.Contains(text, "use: camalot.hosts@v1.0.0") {
+		t.Fatalf("main playbook = %q, want the already-registered version left untouched", text)
+	}
+	if strings.Contains(text, "v1.0.2") {
+		t.Fatalf("main playbook = %q, should not have added a duplicate/newer entry for an already-registered namespace", text)
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/TacoContent/ironstate/internal/engine"
 	"github.com/TacoContent/ironstate/internal/handlers"
+	"github.com/TacoContent/ironstate/internal/model"
 )
 
 // Scanner is a pluggable source of baseline config for a generated playbook.
@@ -143,7 +144,10 @@ func scannersForHandlers(all map[string]engine.Handler) []Scanner {
 }
 
 // GeneratePlaybook writes a baseline playbook tree rooted at target.
-func GeneratePlaybook(target string, known []Item) error {
+// installedVersions resolves a scanned plugin namespace ("organization.
+// plugin") to its latest installed version, used to register any plugin
+// whose qualified handler contributed scanned items - see mergedPluginUses.
+func GeneratePlaybook(target string, known []Item, installedVersions map[string]string) error {
 	if target == "" {
 		target = "."
 	}
@@ -194,14 +198,18 @@ func GeneratePlaybook(target string, known []Item) error {
 		})
 	}
 
-	if err := writeYAML(filepath.Join(target, "main.yml"), map[string]any{
+	mainDoc := map[string]any{
 		"version": "1",
 		"vars": map[string]any{
 			"generated_by": "ironstate scan",
 			"generated_at": time.Now().UTC().Format(time.RFC3339),
 		},
 		"tasks": includeTasks,
-	}); err != nil {
+	}
+	if pluginUses := mergedPluginUses(target, known, installedVersions); len(pluginUses) > 0 {
+		mainDoc["plugins"] = pluginUses
+	}
+	if err := writeYAML(filepath.Join(target, "main.yml"), mainDoc); err != nil {
 		return err
 	}
 
@@ -273,4 +281,74 @@ func writeYAML(path string, value any) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0o600)
+}
+
+// mergedPluginUses builds the 'plugins:' list for target's main.yml: every
+// plugin namespace already declared in an existing main.yml (if any) is
+// preserved verbatim, in its original order, and never removed - even if
+// this scan didn't itself require it. Any additional namespace required by
+// known's own qualified ("organization.plugin.handler") items but not
+// already declared is appended, pinned to installedVersions' resolved
+// latest-installed version, in sorted order. A required namespace with no
+// entry in installedVersions is skipped rather than failing the whole
+// generation - matches ScanAllWithProgress's own best-effort error handling.
+func mergedPluginUses(target string, known []Item, installedVersions map[string]string) []map[string]any {
+	existingNamespaces := map[string]bool{}
+	var uses []map[string]any
+	if doc, err := readExistingDocument(filepath.Join(target, "main.yml")); err == nil {
+		if plugins, err := model.Plugins(doc); err == nil {
+			for _, p := range plugins {
+				existingNamespaces[p.Namespace] = true
+				uses = append(uses, map[string]any{"use": p.Namespace + "@" + p.Version})
+			}
+		}
+	}
+
+	required := map[string]bool{}
+	for _, item := range known {
+		if ns, ok := pluginNamespace(item.Module); ok {
+			required[ns] = true
+		}
+	}
+	additions := make([]string, 0, len(required))
+	for ns := range required {
+		if !existingNamespaces[ns] {
+			additions = append(additions, ns)
+		}
+	}
+	sort.Strings(additions)
+	for _, ns := range additions {
+		version, ok := installedVersions[ns]
+		if !ok {
+			continue
+		}
+		uses = append(uses, map[string]any{"use": ns + "@" + version})
+	}
+	return uses
+}
+
+// pluginNamespace extracts "organization.plugin" from a scanned item's
+// qualified module name ("organization.plugin.handler" - see
+// handlerScanner.Scan's own qualification), or reports ok=false for a
+// built-in (unqualified) module.
+func pluginNamespace(module string) (string, bool) {
+	if strings.Count(module, ".") != 2 {
+		return "", false
+	}
+	return module[:strings.LastIndex(module, ".")], true
+}
+
+func readExistingDocument(path string) (map[string]any, error) {
+	data, err := os.ReadFile(path) //nolint:gosec // path is this package's own generated playbook main.yml
+	if err != nil {
+		return nil, err
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, err
+	}
+	if doc == nil {
+		doc = map[string]any{}
+	}
+	return doc, nil
 }

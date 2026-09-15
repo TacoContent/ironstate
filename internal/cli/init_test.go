@@ -81,7 +81,7 @@ func TestRunInitWithScanPopulatesPlaybook(t *testing.T) {
 	playbook := filepath.Join(dir, "myplaybook")
 
 	originalGatherScanItems := gatherScanItems
-	gatherScanItems = func(progress func(name string, index, total int)) ([]scan.Item, error) {
+	gatherScanItems = func(progress func(name string, index, total int)) ([]scan.Item, map[string]string, error) {
 		if progress != nil {
 			progress("users", 1, 2)
 			progress("groups", 2, 2)
@@ -89,7 +89,7 @@ func TestRunInitWithScanPopulatesPlaybook(t *testing.T) {
 		return []scan.Item{
 			{Module: "user", Name: "alice", Config: map[string]any{"name": "alice", "state": "present"}},
 			{Module: "group", Name: "devs", Config: map[string]any{"name": "devs", "state": "present"}},
-		}, nil
+		}, nil, nil
 	}
 	defer func() {
 		gatherScanItems = originalGatherScanItems

@@ -26,29 +26,34 @@ type initScaffoldFile struct {
 	content string
 }
 
-var gatherScanItems = func(progress func(name string, index, total int)) ([]scan.Item, error) {
-	handlers, clients, err := installedScanHandlers()
+// gatherScanItems also returns the latest installed version of every
+// installed plugin (namespace -> version), so scan.GeneratePlaybook can
+// register any plugin whose handler actually contributed scanned items.
+var gatherScanItems = func(progress func(name string, index, total int)) ([]scan.Item, map[string]string, error) {
+	handlers, versions, clients, err := installedScanHandlers()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer func() {
 		for _, client := range clients {
 			_ = client.Close()
 		}
 	}()
-	return scan.NewRegistryWithHandlers(handlers).ScanAllWithProgress(progress)
+	items, err := scan.NewRegistryWithHandlers(handlers).ScanAllWithProgress(progress)
+	return items, versions, err
 }
 
-func installedScanHandlers() (map[string]engine.Handler, []*pluginhost.Client, error) {
+func installedScanHandlers() (map[string]engine.Handler, map[string]string, []*pluginhost.Client, error) {
 	store, err := pluginhost.DefaultStore()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	installed, err := store.ListInstalled()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	handlers := make(map[string]engine.Handler)
+	versions := make(map[string]string)
 	clients := make([]*pluginhost.Client, 0, len(installed))
 	seen := make(map[string]bool)
 	closeClients := func() {
@@ -65,30 +70,31 @@ func installedScanHandlers() (map[string]engine.Handler, []*pluginhost.Client, e
 		latest, err := store.ResolveVersion(namespace, "latest")
 		if err != nil {
 			closeClients()
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		binary, err := store.BinaryPath(namespace, latest.Version)
 		if err != nil {
 			closeClients()
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		client, err := pluginhost.LaunchWithCallbacks(exec.Command(binary), nil) //nolint:gosec // binary is read from a validated installed plugin manifest
 		if err != nil {
 			closeClients()
-			return nil, nil, fmt.Errorf("launch installed plugin %s@%s: %w", namespace, latest.Version, err)
+			return nil, nil, nil, fmt.Errorf("launch installed plugin %s@%s: %w", namespace, latest.Version, err)
 		}
 		qualified, err := client.QualifiedHandlers(namespace)
 		if err != nil {
 			_ = client.Close()
 			closeClients()
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		for name, handler := range qualified {
 			handlers[name] = handler
 		}
+		versions[namespace] = latest.Version
 		clients = append(clients, client)
 	}
-	return handlers, clients, nil
+	return handlers, versions, clients, nil
 }
 
 func newInitCommand() *cobra.Command {
@@ -137,7 +143,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		progress.Start()
 		defer progress.Stop()
 
-		items, err := gatherScanItems(func(name string, index, total int) {
+		items, pluginVersions, err := gatherScanItems(func(name string, index, total int) {
 			if total <= 0 {
 				return
 			}
@@ -146,8 +152,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return NewRunError(err)
 		}
-		progress.Message("populated playbook from current system state")
-		if err := scan.GeneratePlaybook(root, items); err != nil {
+		// Stop (erasing the spinner's line) before any plain print below -
+		// otherwise the still-active spinner line and this command's own
+		// output can land on the same terminal line (see root.go's own
+		// explicit Stop() before its final print for the same reason).
+		progress.Stop()
+		if err := scan.GeneratePlaybook(root, items, pluginVersions); err != nil {
 			return NewLoadError(fmt.Errorf("populate playbook from scan: %w", err))
 		}
 		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "populated %s from current system state\n", root); err != nil {
