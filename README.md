@@ -32,6 +32,20 @@ Both scripts accept an install directory and a specific version to pin instead o
 
 If no release exists for your OS/architecture, the script exits with an error, a link to open an issue on this repo, and a block of diagnostic text (OS, architecture, script name, the release tag/asset it tried) to paste directly into the issue - see `install/install.sh`/`install/install.ps1`.
 
+### Scoop (Windows)
+
+```powershell
+scoop bucket add camalot https://github.com/camalot/scoop
+scoop install camalot/ironstate
+```
+
+### Homebrew (Linux/macOS)
+
+```shell
+brew tap camalot/scoop https://github.com/camalot/scoop
+brew install --cask camalot/scoop/ironstate
+```
+
 ### Manual download
 
 1. Download the archive for your OS/architecture from the [latest release](https://github.com/TacoContent/ironstate/releases/latest) - `ironstate_<version>_<os>_<arch>.zip` (Windows) or `ironstate_<version>_<os>_<arch>.tar.gz` (Linux/macOS). `<arch>` is Go's naming: `amd64` (x86_64/Intel) or `arm64` (Apple Silicon/ARM64) - e.g. an Intel Mac (`uname -m` prints `x86_64`) wants `ironstate_<version>_darwin_amd64.tar.gz`.
