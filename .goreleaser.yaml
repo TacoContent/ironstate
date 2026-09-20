@@ -187,8 +187,6 @@ scoops:
       email: '{{ .Env.IRONSTATE_BOT_EMAIL }}'
 
 changelog:
-  # if release-notes are passed, then disable generation
-  disable: '{{ if ne (envOrDefault "IRONSTATE_RELEASE_NOTES" "") "" }}true{{ else }}false{{ end }}'
   sort: asc
   filters:
     exclude:
