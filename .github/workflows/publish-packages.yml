@@ -83,6 +83,8 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/publish-chocolatey.yml
+    needs:
+      - publish
     with:
       tag: ${{ inputs.tag }}
     secrets: inherit
