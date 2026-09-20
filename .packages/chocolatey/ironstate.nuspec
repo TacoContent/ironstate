@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>ironstate</id>
+    <version>$version$</version>
+    <title>ironstate</title>
+    <authors>Ryan Conrad</authors>
+    <owners>TacoContent</owners>
+    <projectUrl>https://github.com/TacoContent/ironstate</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/TacoContent/ironstate/refs/heads/develop/winres/logo-256x256.png</iconUrl>
+    <licenseUrl>https://github.com/TacoContent/ironstate/blob/develop/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/TacoContent/ironstate</projectSourceUrl>
+    <packageSourceUrl>https://github.com/TacoContent/ironstate</packageSourceUrl>
+    <docsUrl>https://github.com/TacoContent/ironstate#readme</docsUrl>
+    <bugTrackerUrl>https://github.com/TacoContent/ironstate/issues</bugTrackerUrl>
+    <tags>ansible github-release package-manager cli system-state</tags>
+    <summary>ironstate is a declarative, Ansible-style task runner driven by YAML.</summary>
+    <description>ironstate is a declarative, Ansible-style task runner driven by YAML.</description>
+    <copyright>Copyright © 2026 TacoContent</copyright>
+  </metadata>
+  <files>
+    <file src="tools/**" target="tools" />
+  </files>
+</package>

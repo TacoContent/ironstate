@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to publish package manifests for (e.g. v2.0.1)
+        description: Existing release tag to publish package manifests for (e.g. v0.4.3)
         required: true
         type: string
 
@@ -37,20 +37,20 @@ jobs:
           asset-filters: ".tar.gz"
 
       - name: Generate man page
-        run: pandoc docs/_man/xget.md -s -t man -o xget.1
+        run: pandoc docs/_man/ironstate.md -s -t man -o ironstate.1
 
       - uses: anchore/sbom-action/download-syft@v0
 
       - uses: actions/create-github-app-token@v3.2.0
-        id: xget-bot-token
+        id: ironstate-bot-token
         with:
           client-id: ${{ vars.XGET_APP_CLIENT_ID }}
           installation-id: ${{ vars.XGET_APP_INSTALL_ID }}
           private-key: ${{ secrets.XGET_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          # the app installation must also have access to camalot/scoop (winget/scoop/homebrew manifests)
+          owner: camalot
+          # only needs push access to the tap repo (winget/scoop/homebrew manifests) -
+          # ironstate's own git operations here use github.token
           repositories: |
-            xget
             scoop
           permission-contents: write
 
@@ -62,6 +62,14 @@ jobs:
           # skip=github leaves the already-published GitHub release/assets alone
           args: release --clean --skip=validate,announce,sign,sbom,github
         env:
-          GITHUB_TOKEN: ${{ steps.xget-bot-token.outputs.token }}
-          XGET_APP_TOKEN: ${{ steps.xget-bot-token.outputs.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          IRONSTATE_APP_TOKEN: ${{ steps.ironstate-bot-token.outputs.token }}
+          IRONSTATE_BOT_NAME: ${{ vars.XGET_APP_USERNAME }}
+          IRONSTATE_BOT_EMAIL: ${{ vars.XGET_APP_USEREMAIL }}
           GORELEASER_CURRENT_TAG: ${{ inputs.tag }}
+
+  chocolatey:
+    uses: ./.github/workflows/publish-chocolatey.yml
+    with:
+      tag: ${{ inputs.tag }}
+    secrets: inherit

@@ -76,12 +76,24 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - uses: actions/create-github-app-token@v3.2.0
+        id: ironstate-bot-token
+        with:
+          client-id: ${{ vars.XGET_APP_CLIENT_ID }}
+          installation-id: ${{ vars.XGET_APP_INSTALL_ID }}
+          private-key: ${{ secrets.XGET_APP_PRIVATE_KEY }}
+          owner: camalot
+          # only needs push access to the tap repo - ironstate's own git operations use github.token
+          repositories: |
+            scoop
+          permission-contents: write
+
       # setup git using gh
       - name: Setup git
         run: |
           gh auth setup-git
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "${{ vars.XGET_APP_USERNAME }}"
+          git config --global user.email "${{ vars.XGET_APP_USEREMAIL }}"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -184,6 +196,9 @@ jobs:
           # the tag isn't created/pushed in a dry run, so goreleaser can't discover it via `git describe`
           GORELEASER_CURRENT_TAG: ${{ needs.version.outputs.tag }}
           IRONSTATE_DRY_RUN: ${{ inputs.dry-run }}
+          IRONSTATE_APP_TOKEN: ${{ steps.ironstate-bot-token.outputs.token }}
+          IRONSTATE_BOT_NAME: ${{ vars.XGET_APP_USERNAME }}
+          IRONSTATE_BOT_EMAIL: ${{ vars.XGET_APP_USEREMAIL }}
 
       - name: Upload packaging manifests
         if: ${{ inputs.dry-run == true }}
@@ -194,9 +209,7 @@ jobs:
             dist/scoop/**
             dist/homebrew/**
             dist/winget/**
-            dist/*.nupkg
             dist/checksums.txt
-            scoop/chocolatey/**
           if-no-files-found: error # at a minimum, it should find the dist/checksums.txt
 
       - uses: actions/attest-build-provenance@v4
@@ -229,3 +242,46 @@ jobs:
           SDK_TAG: sdk/${{ needs.version.outputs.tag }}
           SDK_TAG_CREATED: ${{ env.SDK_TAG_CREATED }}
           CHANGELOG_COMMIT_SHA: ${{ env.CHANGELOG_COMMIT_SHA }}
+
+  chocolatey:
+    permissions:
+      contents: read
+    # choco pack requires the Chocolatey CLI, which is only preinstalled on windows runners
+    runs-on: windows-latest
+    needs:
+      - version
+      - release
+    steps:
+      - uses: actions/create-github-app-token@v3.2.0
+        id: ironstate-bot-token
+        with:
+          client-id: ${{ vars.XGET_APP_CLIENT_ID }}
+          installation-id: ${{ vars.XGET_APP_INSTALL_ID }}
+          private-key: ${{ secrets.XGET_APP_PRIVATE_KEY }}
+          owner: camalot
+          repositories: |
+            scoop
+          permission-contents: write
+
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false # avoid exposing GITHUB_TOKEN to submodules
+
+      - name: Pack and push Chocolatey package
+        uses: ./.github/actions/chocolatey
+        with:
+          token: ${{ steps.ironstate-bot-token.outputs.token }}
+          # nupkg/nuspec versions can't have a "v" prefix, unlike the git tag
+          version: ${{ needs.version.outputs.ver_major_minor_patch }}
+          dry-run: ${{ inputs.dry-run }}
+          chocolatey-api-key: ${{ secrets.CHOCOLATEY_API_KEY }}
+          bot-name: ${{ vars.XGET_APP_USERNAME }}
+          bot-email: ${{ vars.XGET_APP_USEREMAIL }}
+
+      - name: Upload Chocolatey package
+        if: ${{ inputs.dry-run == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: chocolatey-package
+          path: dist/chocolatey/**
+          if-no-files-found: error

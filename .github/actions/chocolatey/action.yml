@@ -1,0 +1,122 @@
+---
+name: 'Chocolatey Pack and Push To Scoop'
+description: 'Pack the Chocolatey nupkg (requires windows, for choco.exe) and push it to camalot/scoop as a simple-folder feed entry'
+
+inputs:
+  token:
+    description: 'The GitHub token to use for authentication'
+    required: false
+    default: '${{ github.token }}'
+  version:
+    description: 'The plain (no "v" prefix) version of the Chocolatey package to push, e.g. 0.4.3'
+    required: true
+  dry-run:
+    description: 'Whether to perform a dry run without actually committing/pushing the package'
+    required: false
+    default: 'true'
+  chocolatey-api-key:
+    description: 'API key for push.chocolatey.org. When set (and not a dry run), the nupkg is also published to Chocolatey.org'
+    required: false
+    default: ''
+  bot-name:
+    description: 'git commit author name to use when pushing to the tap repo'
+    required: false
+    default: 'github-actions[bot]'
+  bot-email:
+    description: 'git commit author email to use when pushing to the tap repo'
+    required: false
+    default: '41898282+github-actions[bot]@users.noreply.github.com'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Pack Chocolatey package
+      id: pack
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "$OUT_DIR"
+        choco pack "$NUSPEC_PATH" --version "$VERSION" --outputdirectory "$OUT_DIR"
+        nupkg_file="$OUT_DIR/ironstate.$VERSION.nupkg"
+        if [ ! -f "$nupkg_file" ]; then
+          echo "Expected nupkg not found at $nupkg_file" >&2
+          exit 1
+        fi
+        echo "nupkg_file=$(realpath "$nupkg_file")" >> "$GITHUB_OUTPUT"
+      env:
+        VERSION: ${{ inputs.version }}
+        NUSPEC_PATH: .packages/chocolatey/ironstate.nuspec
+        OUT_DIR: dist/chocolatey
+
+    - uses: actions/checkout@v7
+      with:
+        repository: 'camalot/scoop'
+        path: 'scoop/'
+        fetch-depth: 0
+        token: ${{ inputs.token }}
+
+    - name: Define target path in remote
+      id: remote_path
+      shell: bash
+      run: |
+        set -euo pipefail
+        owner="${REPOSITORY_OWNER,,}"
+        owner_first_char=$(echo "$owner" | cut -c1)
+
+        # the .nuspec is the package manifest, embedded at the root of the nupkg zip
+        nuspec_name=$(unzip -Z1 "$NUPKG_FILE" '*.nuspec')
+        package_name=$(unzip -p "$NUPKG_FILE" "$nuspec_name" | grep -oP '(?<=<id>).*?(?=</id>)')
+        if [ -z "$package_name" ]; then
+          echo "Could not determine package id from $nuspec_name" >&2
+          exit 1
+        fi
+
+        # remote path is like winget: chocolatey/<owner-first-char>/<owner>/<package-name>/<version>
+        # relative to the scoop/ checkout, so it can be reused with `working-directory: scoop`
+        base_relative_path="chocolatey/$owner_first_char/$owner/$package_name/$VERSION"
+        nupkg_relative_path="$base_relative_path/$(basename "$NUPKG_FILE")"
+        nuspec_relative_path="$base_relative_path/$nuspec_name"
+
+        mkdir -p "scoop/$base_relative_path"
+        cp "$NUPKG_FILE" "scoop/$nupkg_relative_path"
+        unzip -o -j "$NUPKG_FILE" "$nuspec_name" -d "scoop/$base_relative_path"
+
+        {
+          echo "nupkg_relative_path=$nupkg_relative_path"
+          echo "nuspec_relative_path=$nuspec_relative_path"
+        } >> "$GITHUB_OUTPUT"
+      env:
+        REPOSITORY_OWNER: ${{ github.repository_owner }}
+        REPOSITORY: ${{ github.repository }}
+        VERSION: ${{ inputs.version }}
+        NUPKG_FILE: ${{ steps.pack.outputs.nupkg_file }}
+
+    - name: Commit and Push Chocolatey Package
+      if: inputs.dry-run == 'false'
+      shell: bash
+      working-directory: scoop
+      run: |
+        set -euo pipefail
+        gh auth setup-git
+        git config user.name "$BOT_NAME"
+        git config user.email "$BOT_EMAIL"
+        git add "$NUPKG_RELATIVE_PATH" "$NUSPEC_RELATIVE_PATH"
+        git commit -m "chore(chocolatey): $OWNER/$REPOSITORY@${VERSION}"
+        git push origin HEAD
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        BOT_NAME: ${{ inputs.bot-name }}
+        BOT_EMAIL: ${{ inputs.bot-email }}
+        OWNER: ${{ github.repository_owner }}
+        REPOSITORY: ${{ github.repository }}
+        NUSPEC_RELATIVE_PATH: ${{ steps.remote_path.outputs.nuspec_relative_path }}
+        NUPKG_RELATIVE_PATH: ${{ steps.remote_path.outputs.nupkg_relative_path }}
+        VERSION: ${{ inputs.version }}
+
+    - name: Push package to Chocolatey.org
+      if: inputs.dry-run == 'false' && inputs.chocolatey-api-key != ''
+      shell: bash
+      run: choco push "$NUPKG_FILE" --source https://push.chocolatey.org/ --api-key "$API_KEY"
+      env:
+        NUPKG_FILE: ${{ steps.pack.outputs.nupkg_file }}
+        API_KEY: ${{ inputs.chocolatey-api-key }}

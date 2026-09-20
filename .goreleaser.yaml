@@ -107,84 +107,84 @@ sboms:
 snapshot:
   version_template: "{{ .Version }}-SNAPSHOT-{{.ShortCommit}}"
 
-# winget:
-#   - name: ironstate
-#     skip_upload: '{{ if eq (envOrDefault "IRONSTATE_DRY_RUN" "false") "true" }}true{{ else }}auto{{ end }}'
-#     publisher: camalot
-#     author: Ryan Conrad
-#     package_name: ironstate
-#     package_identifier: camalot.ironstate
-#     # Explicit so the manifests can also be rendered with the release pipe disabled.
-#     url_template: "https://github.com/tacocontent/ironstate/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
-#     short_description: ironstate is a tool for managing infrastructure as code.
-#     description: ironstate is a tool for managing infrastructure as code.
-#     license: MIT
-#     commit_msg_template: "chore(winget): update manifest {{ .ProjectName }}@{{ .Version }}"
-#     license_url: https://github.com/tacocontent/ironstate/blob/main/LICENSE
-#     copyright: "Copyright © 2026 Ryan Conrad"
-#     release_notes: "{{.Changelog}}"
-#     tags:
-#       - installer
-#       - github
-#       - cli
-#       - system-state
-#     repository:
-#       owner: camalot
-#       name: scoop
-#       branch: main
-#       token: '{{ .Env.XGET_APP_TOKEN }}'
-#     commit_author:
-#       name: xget-bot[bot]
-#       email: 325102936+xget-bot[bot]@users.noreply.github.com
-# # https://goreleaser.com/customization/publish/homebrew_casks/
-# homebrew_casks:
-#   - repository:
-#       owner: camalot
-#       name: scoop
-#       branch: main
-#       token: '{{ .Env.XGET_APP_TOKEN }}'
-#     skip_upload: '{{ if eq (envOrDefault "IRONSTATE_DRY_RUN" "false") "true" }}true{{ else }}auto{{ end }}'
-#     commit_msg_template: "chore(homebrew): update manifest {{ .ProjectName }}@{{ .Version }}"
-#     homepage: https://github.com/tacocontent/ironstate
-#     description: ironstate is a tool for managing infrastructure as code.
-#     url:
-#       template: "https://github.com/tacocontent/ironstate/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
-#     binaries:
-#       - ironstate
-#     manpages:
-#       - ironstate.1
-#     generate_completions_from_executable:
-#       executable: ironstate
-#       args:
-#         - "completion"
-#       base_name: ironstate
-#       shell_parameter_format: cobra
-#       shells:
-#         - bash
-#         - zsh
-#         - fish
-#         - pwsh
-#     commit_author:
-#       name: xget-bot[bot]
-#       email: 325102936+xget-bot[bot]@users.noreply.github.com
+winget:
+  - name: ironstate
+    skip_upload: '{{ if eq (envOrDefault "IRONSTATE_DRY_RUN" "false") "true" }}true{{ else }}auto{{ end }}'
+    publisher: camalot
+    author: Ryan Conrad
+    package_name: ironstate
+    package_identifier: camalot.ironstate
+    # Explicit so the manifests can also be rendered with the release pipe disabled.
+    url_template: "https://github.com/TacoContent/ironstate/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    short_description: ironstate is a declarative, Ansible-style task runner driven by YAML.
+    description: ironstate is a declarative, Ansible-style task runner driven by YAML.
+    license: MIT
+    commit_msg_template: "chore(winget): update manifest {{ .ProjectName }}@{{ .Version }}"
+    license_url: https://github.com/TacoContent/ironstate/blob/develop/LICENSE
+    copyright: "Copyright © 2026 TacoContent"
+    release_notes: "{{.Changelog}}"
+    tags:
+      - installer
+      - github
+      - cli
+      - system-state
+    repository:
+      owner: camalot
+      name: scoop
+      branch: main
+      token: '{{ .Env.IRONSTATE_APP_TOKEN }}'
+    commit_author:
+      name: '{{ .Env.IRONSTATE_BOT_NAME }}'
+      email: '{{ .Env.IRONSTATE_BOT_EMAIL }}'
+# https://goreleaser.com/customization/publish/homebrew_casks/
+homebrew_casks:
+  - repository:
+      owner: camalot
+      name: scoop
+      branch: main
+      token: '{{ .Env.IRONSTATE_APP_TOKEN }}'
+    skip_upload: '{{ if eq (envOrDefault "IRONSTATE_DRY_RUN" "false") "true" }}true{{ else }}auto{{ end }}'
+    commit_msg_template: "chore(homebrew): update manifest {{ .ProjectName }}@{{ .Version }}"
+    homepage: https://github.com/TacoContent/ironstate
+    description: ironstate is a declarative, Ansible-style task runner driven by YAML.
+    url:
+      template: "https://github.com/TacoContent/ironstate/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    binaries:
+      - ironstate
+    manpages:
+      - ironstate.1
+    generate_completions_from_executable:
+      executable: ironstate
+      args:
+        - "completion"
+      base_name: ironstate
+      shell_parameter_format: cobra
+      shells:
+        - bash
+        - zsh
+        - fish
+        - pwsh
+    commit_author:
+      name: '{{ .Env.IRONSTATE_BOT_NAME }}'
+      email: '{{ .Env.IRONSTATE_BOT_EMAIL }}'
 
-# # https://goreleaser.com/customization/publish/scoop/
-# scoops:
-#   - repository:
-#       owner: camalot
-#       name: scoop
-#       branch: main
-#       token: '{{ .Env.XGET_APP_TOKEN }}'
-#     skip_upload: '{{ if eq (envOrDefault "IRONSTATE_DRY_RUN" "false") "true" }}true{{ else }}auto{{ end }}'
-#     url_template: "https://github.com/tacocontent/ironstate/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+# https://goreleaser.com/customization/publish/scoop/
+scoops:
+  - repository:
+      owner: camalot
+      name: scoop
+      branch: main
+      token: '{{ .Env.IRONSTATE_APP_TOKEN }}'
+    skip_upload: '{{ if eq (envOrDefault "IRONSTATE_DRY_RUN" "false") "true" }}true{{ else }}auto{{ end }}'
+    url_template: "https://github.com/TacoContent/ironstate/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
 
-#     commit_msg_template: "chore(scoop): update manifest {{ .ProjectName }}@{{ .Version }}"
-#     homepage: https://github.com/tacocontent/ironstate
-#     description: ironstate is a tool for managing infrastructure as code.
-#     license: MIT
-#     commit_author:
-#       name: xget-bot[bot]
-#       email: 325102936+xget-bot[bot]@users.noreply.github.com
+    commit_msg_template: "chore(scoop): update manifest {{ .ProjectName }}@{{ .Version }}"
+    homepage: https://github.com/TacoContent/ironstate
+    description: ironstate is a declarative, Ansible-style task runner driven by YAML.
+    license: MIT
+    commit_author:
+      name: '{{ .Env.IRONSTATE_BOT_NAME }}'
+      email: '{{ .Env.IRONSTATE_BOT_EMAIL }}'
 
 changelog:
   # if release-notes are passed, then disable generation
