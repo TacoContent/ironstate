@@ -61,13 +61,15 @@ jobs:
         with:
           distribution: goreleaser
           version: latest
-          # skip=github leaves the already-published GitHub release/assets alone
-          args: release --clean --skip=validate,announce,sign,sbom,github
+          # IRONSTATE_SKIP_GITHUB_RELEASE (below) leaves the already-published GitHub
+          # release/assets alone - goreleaser has no standalone `--skip=github`
+          args: release --clean --skip=validate,announce,sign,sbom
         env:
           GITHUB_TOKEN: ${{ github.token }}
           IRONSTATE_APP_TOKEN: ${{ steps.ironstate-bot-token.outputs.token }}
           IRONSTATE_BOT_NAME: ${{ vars.XGET_APP_USERNAME }}
           IRONSTATE_BOT_EMAIL: ${{ vars.XGET_APP_USEREMAIL }}
+          IRONSTATE_SKIP_GITHUB_RELEASE: 'true'
           GORELEASER_CURRENT_TAG: ${{ inputs.tag }}
 
   chocolatey:

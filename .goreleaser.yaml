@@ -8,7 +8,10 @@ release:
   prerelease: auto
   # IRONSTATE_DRY_RUN=true builds everything and writes the package manifests to
   # dist/ without creating a GitHub release or pushing to the tap repos.
-  disable: '{{ envOrDefault "IRONSTATE_DRY_RUN" "false" }}'
+  # IRONSTATE_SKIP_GITHUB_RELEASE=true leaves an already-published GitHub release alone
+  # while still publishing the winget/scoop/homebrew manifests (goreleaser has no
+  # standalone `--skip=github`; this is the supported way to skip just that pipe).
+  disable: '{{ if or (eq (envOrDefault "IRONSTATE_DRY_RUN" "false") "true") (eq (envOrDefault "IRONSTATE_SKIP_GITHUB_RELEASE" "false") "true") }}true{{ else }}false{{ end }}'
 
 before:
   hooks:
