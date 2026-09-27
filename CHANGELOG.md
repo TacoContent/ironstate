@@ -1,4 +1,90 @@
 
+## [v0.5.0](https://github.com/tacocontent/ironstate/releases/tag/v0.5.0) - 2026-09-27
+
+### 🚀 FEATURES
+
+#### _GENERAL_
+
+- Enabled ssh host block scan for init -[@camalot](https://github.com/camalot)
+
+
+### 🐛 BUG FIXES
+
+#### _GENERAL_
+
+- Automatically register plugin that is installed, if it is used to init with --scan -[@camalot](https://github.com/camalot)
+
+- Scan improvements for existing handlers -[@camalot](https://github.com/camalot)
+
+- Give chocolatey job contents read -[@camalot](https://github.com/camalot)
+
+- Add cosign to publish workflow -[@camalot](https://github.com/camalot)
+
+- Set correct variables -[@camalot](https://github.com/camalot)
+
+- Go lint fixes -[@camalot](https://github.com/camalot)
+
+
+### 💼 OTHER
+
+#### _GENERAL_
+
+- Merge branch 'develop' of github.com:TacoContent/ironstate into develop -[@camalot](https://github.com/camalot)
+
+- Develop' of github.com:TacoContent/ironstate: -[@camalot](https://github.com/camalot)
+
+
+### 📚 DOCUMENTATION
+
+#### _GENERAL_
+
+- docs: update changelog for v0.4.3 -[@camalot](https://github.com/camalot)
+
+- Update install info for scoop and homebrew -[@camalot](https://github.com/camalot)
+
+
+### ⚙️ MISCELLANEOUS TASKS
+
+
+#### _PACKAGE_
+- Publish scoop/homebrew/chocolatey -[@camalot](https://github.com/camalot)
+
+
+#### _REPO_
+- Ensure release notes are published with the release -[@camalot](https://github.com/camalot)
+
+- Use current goreleaser -[@camalot](https://github.com/camalot)
+
+- Run chocolatey after publish -[@camalot](https://github.com/camalot)
+
+#### _GENERAL_
+
+
+## GitHub
+
+### 💛 Contributors
+
+
+- [@camalot](https://github.com/camalot)
+## 📈 Commit Statistics
+
+
+- `15` commits contributed to the release.
+- `12` days have passed between the first and last commit.
+- `12` commits parsed as conventional.
+- `0` linked issues detected in commits.
+- `12` days  have passed between releases.
+
+
+![Statistics](https://quickchart.io/chart?c={type:'bar',data:{labels:['Commits','Contributors','Days%20Between%20Commits','Conventional%20Commits','Referenced%20Links','Days%20Since%20Last%20Release'],datasets:[{label:'Release',data:[15,1,12,12,0,12]}]}})
+
+
+
+---
+
+
+**Full Changelog**: https://github.com/tacocontent/ironstate/compare/v0.4.3...v0.5.0
+
 ## [v0.4.3](https://github.com/tacocontent/ironstate/releases/tag/v0.4.3) - 2026-09-15
 
 ### 🐛 BUG FIXES
