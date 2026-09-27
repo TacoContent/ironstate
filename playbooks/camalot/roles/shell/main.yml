@@ -169,6 +169,7 @@ tasks:
       create: false
       state: ${{ shell.pwsh | enabled('omp') | ternary('present', 'absent') }}
       dest: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}"
+      insertbefore: EOF
       block: |
         if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {
           oh-my-posh init pwsh --config "${{ shell.pwsh.omp.profile | default(defaults.shell.pwsh.omp.profile) }}" | Invoke-Expression
@@ -188,7 +189,7 @@ tasks:
 
   - name: Create Zoxide (z) Symlink
     symlinks:
-      dest: "${{ facts.local_bin_path | join('z') }}"
+      dest: "${{ facts.local_bin_path | join('z') | extension('exe') }}"
       src: "${{ facts.local_bin_path | join('zoxide') | extension('exe') }}"
     tags:
       - shell

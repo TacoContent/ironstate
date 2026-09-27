@@ -4,7 +4,7 @@ tasks:
     when: true
     xget:
       package: zyedidia/eget
-      state: latest
+      state: present
       args:
         - --to=~/.local/bin/eget.exe
         - --upgrade-only

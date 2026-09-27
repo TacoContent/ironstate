@@ -6,7 +6,7 @@ vars:
     oss: d:/Development/projects/github
     work: d:/Development/work/imanage
   monitoring: false
-  cli: false
+  cli: true
   languages: 
     rust: true
     python: true

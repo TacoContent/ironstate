@@ -1,12 +1,16 @@
 # Default PowerShell aliases — sourced by ~/.config/powershell/Microsoft.PowerShell_profile.ps1.
 
 # Modern CLI replacements (gated on availability)
-if (Get-Command bat  -ErrorAction SilentlyContinue) { 
-    function Invoke-Bat {
+if (Get-Command bat -ErrorAction SilentlyContinue) { 
+    function global:Invoke-Bat {
         bat --paging=never @args
     }
-    Remove-Item Alias:cat -ErrorAction SilentlyContinue
-    Set-Alias -Name cat -Value Invoke-Bat -Scope Global
+    # -Force: without it, Remove-Item/Set-Alias silently no-op against a
+    # ReadOnly/Constant 'cat' alias (e.g. one a coreutils module/profile
+    # already registered) - leaving that one - typically native cat.exe -
+    # still winning over this override with no error shown.
+    Remove-Item Alias:cat -Force -ErrorAction SilentlyContinue
+    Set-Alias -Name cat -Value Invoke-Bat -Scope Global -Option AllScope -Force
 }
 
 

@@ -7,7 +7,7 @@ vars:
     work: d:/Development/work/imanage
   monitoring: false
   security: true
-  cli: false
+  cli: true
   languages: false
     # rust: true
     # python: true

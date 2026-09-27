@@ -18,7 +18,7 @@ function versions {
     if (Get-Command jq        -ErrorAction SilentlyContinue) { jq --version }
 }
 
-function gi {
+function Invoke-Gitignore {
     param(
         [Parameter(Mandatory=$true, Position=0)]
         [string[]]$Technologies
@@ -30,3 +30,6 @@ function gi {
     # Fetch the data and output it as clean text
     Invoke-RestMethod -Uri "https://gitignore.io/api/$argsString" -UserAgent "curl"
 }
+
+Remove-Item Alias:gi -Force -ErrorAction SilentlyContinue
+Set-Alias -Name gi -Value Invoke-Gitignore -Scope Global

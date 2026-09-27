@@ -23,6 +23,21 @@ tasks:
         - --to=${{ facts.local_bin_path | join("jq.exe") }}
         - --upgrade-only
 
+  - name: Install YQ (Windows)
+    tags: 
+      - yaml
+      - cli
+    xget:
+      package: mikefarah/yq
+      state: ${{ package.state }}
+      args:
+        - --to=${{ facts.local_bin_path | join("yq") | extension("exe") }}
+        - --upgrade-only
+        - --asset=".zip"
+        - --ignore=".sbom.json"
+      when: 
+        - facts.os_family == "windows"
+  
   - name: Install YQ
     tags: 
       - yaml
@@ -31,19 +46,44 @@ tasks:
       package: mikefarah/yq
       state: ${{ package.state }}
       args:
-        - --to=${{ facts.local_bin_path | join("yq.exe") }}
+        - --to=${{ facts.local_bin_path | join("yq") }}
         - --upgrade-only
-        - --asset=".exe"
+        - --asset=".tar.gz"
+        - --ignore=".sbom.json"
+      when:
+        - facts.os_family != "windows"
 
   - name: Install Bat
+    id: install_bat
     tags:
       - cli
+      - cli.bat
     xget:
       package: sharkdp/bat
       state: ${{ package.state }}
       args:
-        - --to=${{ facts.local_bin_path | join("bat.exe") }}
+        - --to=${{ facts.local_bin_path | join("bat") | extension("exe") }}
         - --upgrade-only
+
+  - name: Bat Exists
+    tags:
+      - cli
+      - cli.bat
+    id: bat_exists
+    shell:
+      command: Get-Command bat
+  
+  - name: Disable Cat from CoreUtils
+    tags:
+      - cli
+      - cli.bat
+    shell:
+      command: |
+        & 'C:\Program Files\coreutils\bin\coreutils-manager.exe' disable cat
+    when:
+      - facts.os_family == "windows"
+      - install_bat.rc == 0
+      - bat_exists.rc == 0
 
   - name: Install FD
     tags: 
