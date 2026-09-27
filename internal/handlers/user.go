@@ -14,8 +14,13 @@ import (
 // userHandler manages local users across Windows/Linux/macOS.
 type userHandler struct{}
 
-func (userHandler) Emoji() string { return "👤" }
-func (userHandler) RequiredTools() []string { return []string{} }
+func (userHandler) Emoji() string {
+	return "👤"
+}
+
+func (userHandler) RequiredTools() []string {
+	return []string{}
+}
 
 func userName(item map[string]any) string {
 	if name := strings.TrimSpace(getString(item, "name")); name != "" {

@@ -20,6 +20,7 @@ import (
 type blockInFileHandler struct{}
 
 func (blockInFileHandler) Emoji() string { return "🧩" }
+
 func (blockInFileHandler) RequiredTools() []string { return []string{} }
 
 const defaultBlockMarker = "# {mark} IRONSTATE MANAGED - {name}"

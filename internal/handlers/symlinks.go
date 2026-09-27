@@ -10,8 +10,13 @@ import "github.com/TacoContent/ironstate/internal/engine"
 // whatever's already at dest" behavior.
 type symlinksHandler struct{}
 
-func (symlinksHandler) Emoji() string { return "🔗" }
-func (symlinksHandler) RequiredTools() []string { return []string{} }
+func (symlinksHandler) Emoji() string {
+	return "🔗"
+}
+
+func (symlinksHandler) RequiredTools() []string {
+	return []string{}
+}
 
 func toFileLinkItem(item map[string]any) map[string]any {
 	return map[string]any{

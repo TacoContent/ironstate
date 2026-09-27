@@ -11,9 +11,13 @@ import (
 // npmHandler ports Handlers/Npm.psm1 (Node global packages).
 type npmHandler struct{}
 
-func (npmHandler) Emoji() string { return "📦" }
+func (npmHandler) Emoji() string {
+	return "📦"
+}
 
-func (npmHandler) RequiredTools() []string { return []string{"npm"} }
+func (npmHandler) RequiredTools() []string {
+	return []string{"npm"}
+}
 
 func (npmHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	pkg := getString(item, "package")
@@ -52,7 +56,9 @@ func (npmHandler) Uninstall(item map[string]any, name string, ctx engine.Context
 
 // ScanRole implements engine.ScanCapable - discovered packages seed
 // roles/packages in a generated playbook (see internal/scan).
-func (npmHandler) ScanRole() string { return "roles/packages/npm" }
+func (npmHandler) ScanRole() string {
+	return "roles/packages/npm"
+}
 
 // Scan implements engine.ScanCapable: discovers globally-installed npm
 // packages - ports the scanning logic that used to live in

@@ -11,10 +11,13 @@ import (
 
 type cronFileHandler struct{}
 
-func (cronFileHandler) Emoji() string { return "⏰" }
+func (cronFileHandler) Emoji() string {
+	return "⏰"
+}
 
-func (cronFileHandler) RequiredTools() []string { return []string{} }
-
+func (cronFileHandler) RequiredTools() []string {
+	return []string{}
+}
 
 func cronFilePath(item map[string]any) (string, error) {
 	raw := strings.TrimSpace(getString(item, "cron_file"))

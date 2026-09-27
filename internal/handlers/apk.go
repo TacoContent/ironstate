@@ -37,11 +37,17 @@ import (
 // the task.
 type apkHandler struct{}
 
-func (apkHandler) Emoji() string { return "📦" }
+func (apkHandler) Emoji() string {
+	return "📦"
+}
 
-func (apkHandler) RequiredTools() []string { return []string{"apk"} }
+func (apkHandler) RequiredTools() []string {
+	return []string{"apk"}
+}
 
-func (apkHandler) ScanRole() string { return "roles/packages/apk" }
+func (apkHandler) ScanRole() string {
+	return "roles/packages/apk"
+}
 
 // apkPackageList reads 'package' (aliasing 'name') as either a single
 // string or a list of strings.

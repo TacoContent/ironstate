@@ -9,12 +9,17 @@ import (
 // pipxHandler ports Handlers/Pipx.psm1 (Python isolated tools).
 type pipxHandler struct{}
 
-func (pipxHandler) Emoji() string { return "🐍" }
+func (pipxHandler) Emoji() string {
+	return "🐍"
+}
 
-func (pipxHandler) RequiredTools() []string { return []string{"pipx"} }
+func (pipxHandler) RequiredTools() []string {
+	return []string{"pipx"}
+}
 
-func (pipxHandler) ScanRole() string { return "roles/packages/pipx" }
-
+func (pipxHandler) ScanRole() string {
+	return "roles/packages/pipx"
+}
 
 func (pipxHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	pkg := getString(item, "package")
@@ -67,5 +72,3 @@ func (pipxHandler) Uninstall(item map[string]any, name string, ctx engine.Contex
 	}
 	return result, nil
 }
-
-

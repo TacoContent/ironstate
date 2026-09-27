@@ -26,9 +26,13 @@ import (
 // completion.
 type asyncHandler struct{}
 
-func (asyncHandler) Emoji() string { return "⚡" }
+func (asyncHandler) Emoji() string {
+	return "⚡"
+}
 
-func (asyncHandler) RequiredTools() []string { return []string{} }
+func (asyncHandler) RequiredTools() []string {
+	return []string{}
+}
 
 func (asyncHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	return false, nil // always "not installed" -> Install always dispatches

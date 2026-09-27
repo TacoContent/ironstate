@@ -38,6 +38,7 @@ tasks:
       state: ${{ languages.golang | enabled() | ternary('present', 'absent') }}
       args:
         - --to=${{ facts.local_bin_path | join(item.bin) }}
+        - --ignore=.sbom.json
     with:
       bin: "${{ (facts.os_family == 'windows') | ternary('goreleaser.exe', 'goreleaser') }}"
     when:

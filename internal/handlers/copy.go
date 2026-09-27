@@ -15,9 +15,13 @@ import (
 // resolved it at load time).
 type copyHandler struct{}
 
-func (copyHandler) Emoji() string { return "📋" }
-func (copyHandler) RequiredTools() []string { return []string{} }
+func (copyHandler) Emoji() string {
+	return "📋"
+}
 
+func (copyHandler) RequiredTools() []string {
+	return []string{}
+}
 
 func copySrcIsDirectory(src string) bool {
 	info, err := os.Stat(src)

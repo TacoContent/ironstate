@@ -21,9 +21,14 @@ import (
 // the archive/dest contents itself.
 type zipHandler struct{}
 
-func (zipHandler) Emoji() string           { return "🗜️" }
+func (zipHandler) Emoji() string {
+	return "🗜️"
+}
 
-func (zipHandler) RequiredTools() []string { return []string{} }
+func (zipHandler) RequiredTools() []string {
+	return []string{}
+}
+
 // func (zipHandler) RequiredTools() []string { return []string{"unzip"} }
 
 func zipSha256CachePath(item map[string]any) string {

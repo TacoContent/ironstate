@@ -34,8 +34,13 @@ import (
 // 'become' - a per-user Flatpak install doesn't need root.
 type flatpakHandler struct{}
 
-func (flatpakHandler) Emoji() string { return "📦" }
-func (flatpakHandler) RequiredTools() []string { return []string{"flatpak"} }
+func (flatpakHandler) Emoji() string {
+	return "📦"
+}
+
+func (flatpakHandler) RequiredTools() []string {
+	return []string{"flatpak"}
+}
 
 // flatpakPackageList reads 'package' (aliasing 'name') as either a single
 // string or a list of strings.

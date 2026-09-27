@@ -23,6 +23,7 @@ vars:
       # install:
       #   override: '/verysilent /tasks="assocfiles,modpath" /DIR="d:\ruby" /currentuser'
   shell:
+    zoxide: true
     pwsh:
       profile: '~/.config/powershell/Microsoft.PowerShell_profile.ps1'
       aliases: '~/.config/powershell/custom/aliases/dev.ps1'

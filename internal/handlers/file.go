@@ -17,9 +17,13 @@ import (
 // field (file|directory|link|hard|touch, default 'file').
 type fileHandler struct{}
 
-func (fileHandler) Emoji() string { return "📄" }
-func (fileHandler) RequiredTools() []string { return []string{} }
+func (fileHandler) Emoji() string {
+	return "📄"
+}
 
+func (fileHandler) RequiredTools() []string {
+	return []string{}
+}
 
 // filePathKind classifies what already exists at path: "missing", "link"
 // (symlink), "hard" (hard link - best-effort: Go's stdlib has no portable

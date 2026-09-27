@@ -33,8 +33,13 @@ import (
 // warning for a non-default become user on Windows).
 type scoopHandler struct{}
 
-func (scoopHandler) Emoji() string { return "📦" }
-func (scoopHandler) RequiredTools() []string { return []string{"scoop"} }
+func (scoopHandler) Emoji() string {
+	return "📦"
+}
+
+func (scoopHandler) RequiredTools() []string {
+	return []string{"scoop"}
+}
 
 // scoopPackageList reads 'package' (aliasing 'name') as either a single
 // string or a list of strings.

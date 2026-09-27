@@ -17,8 +17,8 @@ import (
 type assertHandler struct{}
 
 func (assertHandler) Emoji() string { return "✅" }
-func (assertHandler) RequiredTools() []string { return []string{} }
 
+func (assertHandler) RequiredTools() []string { return []string{} }
 
 func (assertHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	return false, nil

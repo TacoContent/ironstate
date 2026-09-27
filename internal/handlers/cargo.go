@@ -9,9 +9,13 @@ import (
 // cargoHandler ports Handlers/Cargo.psm1 (Rust crates).
 type cargoHandler struct{}
 
-func (cargoHandler) Emoji() string { return "🦀" }
+func (cargoHandler) Emoji() string {
+	return "🦀"
+}
 
-func (cargoHandler) RequiredTools() []string { return []string{"cargo"} }
+func (cargoHandler) RequiredTools() []string {
+	return []string{"cargo"}
+}
 
 func (cargoHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
 	pkg := getString(item, "package")

@@ -51,7 +51,6 @@ func (aptHandler) Emoji() string { return "📦" }
 
 func (aptHandler) RequiredTools() []string { return []string{"apt-get"} }
 
-
 // aptPackageList reads 'package' (aliasing 'name', matching ansible) as
 // either a single string or a list of strings.
 func aptPackageList(item map[string]any) []string {
