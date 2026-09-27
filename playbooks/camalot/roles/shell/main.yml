@@ -145,17 +145,11 @@ tasks:
       package: JanDeDobbeleer/oh-my-posh
       state: ${{ shell.pwsh | enabled('omp') | ternary('present', 'absent') }}
       args:
-        - --to=${{ facts.local_bin_path | join('oh-my-posh.exe') }}
+        - --to=${{ facts.local_bin_path | join('oh-my-posh') }}
         - --upgrade-only
         - --non-interactive
       when: 
         - facts.os_family != 'windows'
-
-  - name: Set up Oh-My-Posh Bin Path
-    path:
-      paths:
-        - ~\AppData\Local\Programs\oh-my-posh\bin
-      state: ${{ shell.pwsh | enabled('omp') | ternary('present', 'absent') }}
 
   - name: Copy Oh-My-Posh Configuration
     copy:
@@ -188,6 +182,14 @@ tasks:
         - --to=${{ facts.local_bin_path | join(item.bin) }}
     with:
       bin: "${{ (facts.os_family == 'windows') | ternary('zoxide.exe', 'zoxide') }}"
+    tags:
+      - shell
+      - shell.zoxide
+
+  - name: Create Zoxide (z) Symlink
+    symlinks:
+      dest: "${{ facts.local_bin_path | join('z') }}"
+      src: "${{ facts.local_bin_path | join('zoxide') | extension('exe') }}"
     tags:
       - shell
       - shell.zoxide

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -212,6 +213,34 @@ func TestSHA1Filter(t *testing.T) {
 	}
 }
 
+func TestExtensionFilter(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		if got := apply(t, "extension", `/home/user/.local/bin/zoxide`, "exe"); got != `/home/user/.local/bin/zoxide` {
+			t.Errorf("extension(non-windows) = %v, want value unchanged", got)
+		}
+		return
+	}
+
+	if got := apply(t, "extension", `C:\bin\zoxide`, "exe"); got != `C:\bin\zoxide.exe` {
+		t.Errorf("extension(no ext, default add) = %v", got)
+	}
+	if got := apply(t, "extension", `C:\bin\zoxide.exe`, "exe"); got != `C:\bin\zoxide.exe` {
+		t.Errorf("extension(already has ext) = %v, want unchanged", got)
+	}
+	if got := apply(t, "extension", `C:\bin\zoxide`, []any{"exe", "cmd"}); got != `C:\bin\zoxide.exe` {
+		t.Errorf("extension(list, no ext) = %v", got)
+	}
+	if got := apply(t, "extension", `C:\bin\zoxide.cmd`, []any{"exe", "cmd"}); got != `C:\bin\zoxide.cmd` {
+		t.Errorf("extension(list, matches 2nd) = %v, want unchanged", got)
+	}
+	if got := apply(t, "extension", `C:\bin\zoxide`, "exe", "bat"); got != `C:\bin\zoxide.bat` {
+		t.Errorf("extension(explicit add-extension) = %v", got)
+	}
+	if got := apply(t, "extension", nil, "exe"); got != nil {
+		t.Errorf("extension(nil) = %v, want nil", got)
+	}
+}
+
 func TestFromJSONAndJSONQuery(t *testing.T) {
 	parsed := apply(t, "from_json", `{"a":{"b":1},"list":[1,2]}`)
 	m, ok := parsed.(map[string]any)
@@ -375,7 +404,7 @@ func TestNamesIncludesEveryBuiltin(t *testing.T) {
 	want := []string{
 		"default", "toggle", "ternary", "enabled", "upper", "lower", "trim",
 		"quote", "length", "concat", "join", "split", "prefix", "dirname",
-		"basename", "resolve", "exists", "sha1", "from_json", "json_query", "lookup",
+		"basename", "resolve", "exists", "sha1", "extension", "from_json", "json_query", "lookup",
 	}
 	set := map[string]bool{}
 	for _, n := range names {

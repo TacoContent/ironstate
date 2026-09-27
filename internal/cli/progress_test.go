@@ -40,6 +40,25 @@ func TestProgressReporterMessageIgnoresBlank(t *testing.T) {
 	}
 }
 
+// TestProgressReporterMessagePadsShorterFollowUp guards against a
+// regression where a shorter message following a longer one left the
+// longer message's tail visible on the status line (briandowns/spinner
+// skips its own end-of-line erase under Windows Terminal, relying only on
+// a '\r' rewind before redrawing - see lastSuffixLen's doc comment).
+func TestProgressReporterMessagePadsShorterFollowUp(t *testing.T) {
+	p := newProgressReporter()
+	p.Start()
+	defer p.Stop()
+
+	p.Message("a much longer status message")
+	p.Message("short")
+
+	want := " short" + strings.Repeat(" ", len(" a much longer status message")-len(" short"))
+	if got := p.spin.Suffix; got != want {
+		t.Fatalf("Message() after longer message = %q, want %q", got, want)
+	}
+}
+
 func TestProgressReporterPauseRunsFn(t *testing.T) {
 	var buf strings.Builder
 	p := newProgressReporter()

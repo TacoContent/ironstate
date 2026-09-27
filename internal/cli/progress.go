@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/briandowns/spinner"
 
@@ -19,6 +20,14 @@ type progressReporter struct {
 	// from a background goroutine (an 'async' task) concurrently with the
 	// main goroutine's own progress.Step calls.
 	mu sync.Mutex
+	// lastSuffixLen is the rune length of the last message actually set
+	// via setSuffix (unpadded). briandowns/spinner redraws each frame with
+	// a bare '\r' rewind - no end-of-line erase - whenever it thinks it's
+	// running under Windows Terminal, so a shorter message left the tail
+	// of a longer previous one still visible on the line. Padding each new
+	// message out to the previous one's length (tracked here) papers over
+	// that instead of patching the vendored redraw logic.
+	lastSuffixLen int
 }
 
 func newProgressReporter() *progressReporter {
@@ -98,7 +107,7 @@ func (p *progressReporter) Message(message string) {
 	if trimmed == "" {
 		return
 	}
-	p.spin.Suffix = " " + trimmed
+	p.setSuffix(" " + trimmed)
 }
 
 // Step updates the spinner's suffix to reflect current progress in place -
@@ -110,7 +119,19 @@ func (p *progressReporter) Step(stage string, index, total int, detail string) {
 	if message == "" {
 		return
 	}
-	p.spin.Suffix = " " + message
+	p.setSuffix(" " + message)
+}
+
+// setSuffix sets the spinner's suffix, padding it with trailing spaces up
+// to the previous suffix's length when the new one is shorter - see
+// lastSuffixLen's doc comment for why. Caller must already hold p.mu.
+func (p *progressReporter) setSuffix(suffix string) {
+	length := utf8.RuneCountInString(suffix)
+	if pad := p.lastSuffixLen - length; pad > 0 {
+		suffix += strings.Repeat(" ", pad)
+	}
+	p.spin.Suffix = suffix
+	p.lastSuffixLen = length
 }
 
 // Pause stops the spinner (erasing its current line - see Spinner.Stop),

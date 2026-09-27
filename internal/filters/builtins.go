@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"unicode/utf8"
 
@@ -31,6 +32,7 @@ func registerBuiltins(r *Registry) {
 	r.Register("resolve", filterResolve)
 	r.Register("exists", filterExists)
 	r.Register("sha1", filterSHA1)
+	r.Register("extension", filterExtension)
 	registerJSONFilters(r)
 	registerLookupFilter(r)
 }
@@ -273,6 +275,65 @@ func filterResolve(value any, args []any) (any, error) {
 		return nil, fmt.Errorf("'resolve' filter does not accept argument values")
 	}
 	return pathutil.ResolveUserPath(toStr(value)), nil
+}
+
+// dotnetExtension mirrors [System.IO.Path]::GetExtension: the substring
+// from the last '.' in the final path segment (dot included), "" if
+// there's no dot, or "" if the last character is a trailing dot.
+func dotnetExtension(p string) string {
+	base := dotnetFileName(p)
+	idx := strings.LastIndex(base, ".")
+	if idx < 0 || idx == len(base)-1 {
+		return ""
+	}
+	return base[idx:]
+}
+
+func normalizeExtension(ext string) string {
+	if strings.HasPrefix(ext, ".") {
+		return ext
+	}
+	return "." + ext
+}
+
+// filterExtension ports the 'extension' PowerShell filter (Windows-only:
+// non-Windows platforms have no ".exe"-style suffix convention, so the
+// value passes through unchanged there). args[0] is one extension or a
+// list of acceptable extensions (with or without the leading dot); if the
+// value doesn't already end in one of them, args[1] - or, if omitted,
+// args[0]'s first entry - is appended.
+func filterExtension(value any, args []any) (any, error) {
+	if value == nil {
+		return nil, nil
+	}
+	if runtime.GOOS != "windows" {
+		return value, nil
+	}
+	if len(args) < 1 {
+		return value, nil
+	}
+
+	var rawExtensions []string
+	for _, item := range asItems(args[0]) {
+		rawExtensions = append(rawExtensions, toStr(item))
+	}
+	if len(rawExtensions) == 0 {
+		return value, nil
+	}
+
+	rawExtToAdd := rawExtensions[0]
+	if len(args) >= 2 {
+		rawExtToAdd = toStr(args[1])
+	}
+
+	s := toStr(value)
+	current := dotnetExtension(s)
+	for _, ext := range rawExtensions {
+		if strings.EqualFold(normalizeExtension(ext), current) {
+			return s, nil
+		}
+	}
+	return s + normalizeExtension(rawExtToAdd), nil
 }
 
 func filterExists(value any, args []any) (any, error) {
