@@ -55,7 +55,7 @@ func newRootCommand() (*cobra.Command, error) {
 	flags.BoolP("verbose", "v", false, "verbose output")
 	flags.Bool("no-color", false, "disable colored output")
 	flags.Bool("allow-plugin-install", false, "allow playbook-declared plugins to be installed automatically")
-	flags.Bool("allow-remote-imports", false, "pre-approve non-isolated remote 'import:' sources instead of prompting (required for non-interactive runs)")
+	flags.Bool("allow-remote-uses", false, "pre-approve non-isolated remote 'uses:' sources instead of prompting (required for non-interactive runs)")
 
 	cmd.AddCommand(newVersionCommand())
 	cmd.AddCommand(newFiltersCommand())
@@ -119,7 +119,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	engine.Danger = func(format string, args ...any) { progress.Pause(func() { origDanger(format, args...) }) }
 	packages.Warn = func(format string, args ...any) { progress.Pause(func() { origPackagesWarn(format, args...) }) }
 	tasks.Warn = func(format string, args ...any) { progress.Pause(func() { origTasksWarn(format, args...) }) }
-	// The remote-import trust prompt both prints and reads a line - the
+	// The remote-source trust prompt both prints and reads a line - the
 	// spinner must be fully paused for the whole exchange or its frames
 	// overwrite the question the operator is answering.
 	origConfirm := remote.Confirm
@@ -239,7 +239,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		Vars:         vars,
 		Filters:      fset,
 
-		AllowRemoteImports: cfg.AllowRemoteImports,
+		AllowRemoteUses: cfg.AllowRemoteUses,
 	})
 	if err != nil {
 		return NewLoadError(err)

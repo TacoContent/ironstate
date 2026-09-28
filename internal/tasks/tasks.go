@@ -5,9 +5,9 @@
 // materializes a task once per loop value *before* anything else about it
 // is evaluated; 'include' loads another document's tasks via
 // internal/packages, isolated from the parent's PackageVars/loop context;
-// 'import' does the same for a remote (git over ssh/https), local, or
+// 'uses' does the same for a remote (git over ssh/https), local, or
 // network-share source via internal/packages + internal/remote,
-// optionally sandboxing the imported tasks ('isolate: true').
+// optionally sandboxing those tasks ('isolate: true').
 package tasks
 
 import (
@@ -45,9 +45,9 @@ type Leaf struct {
 	Item            map[string]any
 	ItemCtx         map[string]any // {"item": <loop value>[, "parent": <outer loop's ItemCtx>]}; nil outside any loop
 
-	// Isolated marks a leaf that came from an 'import:' with
+	// Isolated marks a leaf that came from a 'uses:' with
 	// 'isolate: true'. Such a leaf sees ONLY IsolatedFacts/IsolatedVars
-	// (whatever the importing task passed in 'with'), never the host's
+	// (whatever the consuming task passed in 'with'), never the host's
 	// gathered facts, the site's vars, or the id registry - and may not
 	// elevate via 'become' (internal/engine enforces both).
 	Isolated      bool
@@ -73,9 +73,9 @@ type Options struct {
 	Facts        map[string]any
 	Vars         map[string]any
 	Filters      expr.Filters
-	// AllowRemoteImports pre-approves a non-isolated remote 'import:'
-	// instead of prompting the operator (--allow-remote-imports).
-	AllowRemoteImports bool
+	// AllowRemoteUses pre-approves a non-isolated remote 'uses:'
+	// instead of prompting the operator (--allow-remote-uses).
+	AllowRemoteUses bool
 }
 
 // Warn reports a non-fatal tree-shape problem (unrecognized module key,
@@ -98,10 +98,9 @@ type scope struct {
 	parentItemCtx  map[string]any // nil outside any loop
 
 	// packagesRoot/facts/vars are Options' same-named fields by default,
-	// but an 'import:' replaces them for its own subtree: a nested
-	// 'include:' inside an imported document resolves against the
-	// imported tree, and an isolated import's tasks see only the
-	// facts/vars it was handed.
+	// but a 'uses:' replaces them for its own subtree: a nested
+	// 'include:' inside a used document resolves against that tree, and
+	// an isolated 'uses' sees only the facts/vars it was handed.
 	packagesRoot string
 	facts        map[string]any
 	vars         map[string]any
@@ -216,41 +215,41 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 			continue
 		}
 
-		if importSpec, ok := item["import"]; ok {
+		if usesSpec, ok := item["uses"]; ok {
 			if _, hasID := item["id"]; hasID {
-				Warn("task '%s' has an 'id' but is an 'import'; 'id' is only supported on leaf actions - ignoring", label)
+				Warn("task '%s' has an 'id' but is a 'uses'; 'id' is only supported on leaf actions - ignoring", label)
 			}
-			imported, err := packages.LoadImportedPackage(model.AsMap(importSpec), packages.ImportOptions{
+			used, err := packages.LoadUsedPackage(model.AsMap(usesSpec), packages.UseOptions{
 				BaseDir:     sc.packagesRoot,
 				Facts:       sc.facts,
 				Vars:        sc.vars,
 				Filters:     opts.Filters,
-				AllowRemote: opts.AllowRemoteImports,
+				AllowRemote: opts.AllowRemoteUses,
 			})
 			if err != nil {
 				return nil, err
 			}
-			if imported == nil {
+			if used == nil {
 				continue
 			}
-			importedTasks, err := model.TaskList(imported.Data)
+			usedTasks, err := model.TaskList(used.Data)
 			if err != nil {
 				return nil, err
 			}
-			children, err := expand(importedTasks, opts, scope{
-				packageVars:    model.Vars(imported.Data),
-				packageInputs:  imported.Inputs,
-				packagePackage: imported.Package,
+			children, err := expand(usedTasks, opts, scope{
+				packageVars:    model.Vars(used.Data),
+				packageInputs:  used.Inputs,
+				packagePackage: used.Package,
 				parentTags:     effectiveTags,
 				parentWhen:     effectiveWhen,
 				parentLooped:   sc.parentLooped,
 				parentItemCtx:  nil,
-				packagesRoot:   imported.Root,
-				facts:          imported.Facts,
-				vars:           imported.Vars,
-				// Isolation is one-way: a non-isolated import nested
+				packagesRoot:   used.Root,
+				facts:          used.Facts,
+				vars:           used.Vars,
+				// Isolation is one-way: a non-isolated 'uses' nested
 				// inside an isolated one stays isolated.
-				isolated: sc.isolated || imported.Isolated,
+				isolated: sc.isolated || used.Isolated,
 			})
 			if err != nil {
 				return nil, err

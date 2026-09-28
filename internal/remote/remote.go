@@ -1,6 +1,6 @@
 package remote
 
-// Package remote resolves an 'import:' task's source - a git repository
+// Package remote resolves a 'uses:' task's source - a git repository
 // (ssh or https), a local directory, or a network share - to a real
 // directory on this machine. Git sources are cloned once into a
 // per-URL/ref cache directory and reused on later runs.
@@ -20,7 +20,7 @@ import (
 	"github.com/TacoContent/ironstate/internal/pathutil"
 )
 
-// Kind classifies where an import's content comes from.
+// Kind classifies where a source's content comes from.
 type Kind string
 
 const (
@@ -30,7 +30,7 @@ const (
 	KindGit Kind = "git"
 )
 
-// Spec is the source half of an 'import:' task.
+// Spec is the source half of a 'uses:' task.
 type Spec struct {
 	// Remote is the repository URL, filesystem path, or UNC share.
 	Remote string
@@ -42,7 +42,7 @@ type Spec struct {
 
 // Resolved is a Spec after the source has been made available locally.
 type Resolved struct {
-	// Dir is the directory the import's document should be loaded from.
+	// Dir is the directory the used document should be loaded from.
 	Dir string
 	// Kind is the source classification.
 	Kind Kind
@@ -60,7 +60,7 @@ var CacheRoot = func() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "ironstate", "imports"), nil
+	return filepath.Join(base, "ironstate", "remotes"), nil
 }
 
 // RunGit executes a git command in dir. Overridable for tests.
@@ -126,15 +126,15 @@ func Describe(spec Spec) (Kind, string) {
 }
 
 // Resolve makes spec's source available locally and returns the
-// directory the import should be loaded from. baseDir anchors a relative
-// local path (normally the importing playbook's own directory).
+// directory the source should be loaded from. baseDir anchors a relative
+// local path (normally the consuming playbook's own directory).
 //
 // For a remote source this performs a real network fetch - call
 // Describe/NeedsConfirmation and obtain the operator's approval first.
 func Resolve(spec Spec, baseDir string) (*Resolved, error) {
 	remote := strings.TrimSpace(spec.Remote)
 	if remote == "" {
-		return nil, fmt.Errorf("import has no 'remote'")
+		return nil, fmt.Errorf("uses has no 'remote'")
 	}
 	kind, source := Describe(spec)
 
@@ -147,10 +147,10 @@ func Resolve(spec Spec, baseDir string) (*Resolved, error) {
 		}
 		fi, err := os.Stat(root) //nolint:gosec // an operator-configured playbook location, same trust boundary as --playbook itself
 		if err != nil {
-			return nil, fmt.Errorf("import source not found: %s: %w", root, err)
+			return nil, fmt.Errorf("uses source not found: %s: %w", root, err)
 		}
 		if !fi.IsDir() {
-			return nil, fmt.Errorf("import source is not a directory: %s", root)
+			return nil, fmt.Errorf("uses source is not a directory: %s", root)
 		}
 	case KindGit:
 		dir, err := fetchGit(remote, strings.TrimSpace(spec.Ref))
@@ -177,11 +177,11 @@ func safeSubPath(root, sub string) (string, error) {
 	}
 	normalized := strings.ReplaceAll(sub, `\`, "/")
 	if strings.HasPrefix(normalized, "/") || filepath.IsAbs(sub) {
-		return "", fmt.Errorf("import 'path' must be relative to the import source: %q", sub)
+		return "", fmt.Errorf("uses 'path' must be relative to the source: %q", sub)
 	}
 	cleaned := filepath.Clean(filepath.FromSlash(normalized))
 	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("import 'path' escapes the import source: %q", sub)
+		return "", fmt.Errorf("uses 'path' escapes the source: %q", sub)
 	}
 	joined := filepath.Join(root, cleaned)
 	absRoot, err := filepath.Abs(root)
@@ -193,7 +193,7 @@ func safeSubPath(root, sub string) (string, error) {
 		return "", err
 	}
 	if absJoined != absRoot && !strings.HasPrefix(absJoined, absRoot+string(filepath.Separator)) {
-		return "", fmt.Errorf("import 'path' escapes the import source: %q", sub)
+		return "", fmt.Errorf("uses 'path' escapes the source: %q", sub)
 	}
 	return absJoined, nil
 }
@@ -202,7 +202,7 @@ func safeSubPath(root, sub string) (string, error) {
 // rather than a URL/ref.
 func validateGitArg(kind, value string) error {
 	if strings.HasPrefix(value, "-") {
-		return fmt.Errorf("import %s may not start with '-': %q", kind, value)
+		return fmt.Errorf("uses %s may not start with '-': %q", kind, value)
 	}
 	return nil
 }
@@ -219,7 +219,7 @@ func fetchGit(remote, ref string) (string, error) {
 	}
 	root, err := CacheRoot()
 	if err != nil {
-		return "", fmt.Errorf("resolving import cache directory: %w", err)
+		return "", fmt.Errorf("resolving remote cache directory: %w", err)
 	}
 	dest := filepath.Join(root, cacheKey(remote, ref))
 	if fi, err := os.Stat(dest); err == nil && fi.IsDir() { //nolint:gosec // cache path derived from a hash, not user input
@@ -272,7 +272,7 @@ func sanitizeName(remote string) string {
 	base = unsafeNameChars.ReplaceAllString(base, "-")
 	base = strings.Trim(base, "-")
 	if base == "" {
-		base = "import"
+		base = "source"
 	}
 	if len(base) > 40 {
 		base = base[:40]

@@ -118,12 +118,12 @@ func TestResolveRejectsOptionLikeRemote(t *testing.T) {
 
 func TestNeedsConfirmation(t *testing.T) {
 	if !NeedsConfirmation(KindGit, false) {
-		t.Error("a non-isolated remote import must be confirmed")
+		t.Error("a non-isolated remote source must be confirmed")
 	}
 	if NeedsConfirmation(KindGit, true) {
-		t.Error("an isolated remote import must not prompt")
+		t.Error("an isolated remote source must not prompt")
 	}
 	if NeedsConfirmation(KindLocal, false) {
-		t.Error("a local import must not prompt")
+		t.Error("a local source must not prompt")
 	}
 }

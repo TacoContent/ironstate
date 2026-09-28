@@ -9,7 +9,7 @@ import (
 	"github.com/TacoContent/ironstate/internal/remote"
 )
 
-// writeSharedPlaybook creates a minimal importable playbook fragment
+// writeSharedPlaybook creates a minimal usable playbook fragment
 // under <base>/shared/roles/greet and returns <base>.
 func writeSharedPlaybook(t *testing.T, body string) string {
 	t.Helper()
@@ -24,7 +24,7 @@ func writeSharedPlaybook(t *testing.T, body string) string {
 	return base
 }
 
-func TestImportLocalPathExpandsTasks(t *testing.T) {
+func TestUsesLocalPathExpandsTasks(t *testing.T) {
 	base := writeSharedPlaybook(t, `
 tasks:
   - name: greet
@@ -33,7 +33,7 @@ tasks:
 
 	leaves := expandOK(t, `
 - name: A Local Role
-  import:
+  uses:
     remote: shared
     path: roles/greet
 `, Options{PackagesRoot: base})
@@ -42,11 +42,11 @@ tasks:
 		t.Fatalf("leaves = %#v", leaves)
 	}
 	if leaves[0].Isolated {
-		t.Error("a local import without 'isolate' must not be isolated")
+		t.Error("a local source without 'isolate' must not be isolated")
 	}
 }
 
-func TestImportIsolateRestrictsContextToWith(t *testing.T) {
+func TestUsesIsolateRestrictsContextToWith(t *testing.T) {
 	base := writeSharedPlaybook(t, `
 tasks:
   - name: greet
@@ -55,7 +55,7 @@ tasks:
 
 	leaves := expandOK(t, `
 - name: A Sandboxed Role
-  import:
+  uses:
     remote: shared
     path: roles/greet
     isolate: true
@@ -73,23 +73,23 @@ tasks:
 	}
 	l := leaves[0]
 	if !l.Isolated {
-		t.Fatal("import with 'isolate: true' must mark its leaves isolated")
+		t.Fatal("a 'uses' with 'isolate: true' must mark its leaves isolated")
 	}
 	if l.IsolatedVars["greeting"] != "bonjour" {
 		t.Errorf("isolated vars = %#v", l.IsolatedVars)
 	}
 	if _, leaked := l.IsolatedVars["token"]; leaked {
-		t.Error("site vars leaked into an isolated import")
+		t.Error("site vars leaked into an isolated 'uses'")
 	}
 	if _, leaked := l.IsolatedFacts["secret_fact"]; leaked {
-		t.Error("host facts leaked into an isolated import")
+		t.Error("host facts leaked into an isolated 'uses'")
 	}
 	if l.IsolatedFacts["platform"] != "linux" {
 		t.Errorf("isolated facts = %#v", l.IsolatedFacts)
 	}
 }
 
-func TestImportPropagatesTagsAndWhen(t *testing.T) {
+func TestUsesPropagatesTagsAndWhen(t *testing.T) {
 	base := writeSharedPlaybook(t, `
 tasks:
   - name: greet
@@ -103,7 +103,7 @@ tasks:
   tags: [outer]
   when:
     - outer_condition
-  import:
+  uses:
     remote: shared
     path: roles/greet
 `, Options{PackagesRoot: base})
@@ -119,7 +119,7 @@ tasks:
 	}
 }
 
-func TestImportRemoteNonIsolatedPromptsAndSkipsWhenDeclined(t *testing.T) {
+func TestUsesRemoteNonIsolatedPromptsAndSkipsWhenDeclined(t *testing.T) {
 	origConfirm, origCacheRoot := remote.Confirm, remote.CacheRoot
 	t.Cleanup(func() { remote.Confirm, remote.CacheRoot = origConfirm, origCacheRoot })
 
@@ -134,42 +134,42 @@ func TestImportRemoteNonIsolatedPromptsAndSkipsWhenDeclined(t *testing.T) {
 
 	leaves := expandOK(t, `
 - name: A Remote Role
-  import:
+  uses:
     remote: git@github.com:camalot/ironstate-playbook-shared.git
     path: roles/greet
 `, Options{PackagesRoot: t.TempDir()})
 
 	if !prompted {
-		t.Fatal("a remote, non-isolated import must prompt for confirmation")
+		t.Fatal("a remote, non-isolated 'uses' must prompt for confirmation")
 	}
 	if len(leaves) != 0 {
-		t.Fatalf("a declined import must contribute no leaves: %#v", leaves)
+		t.Fatalf("a declined source must contribute no leaves: %#v", leaves)
 	}
 }
 
-func TestImportRemoteAllowRemoteSkipsPrompt(t *testing.T) {
+func TestUsesRemoteAllowRemoteSkipsPrompt(t *testing.T) {
 	stubGitClone(t)
 	remote.Confirm = func(kind remote.Kind, source string) (bool, error) {
-		t.Error("--allow-remote-imports must suppress the prompt")
+		t.Error("--allow-remote-uses must suppress the prompt")
 		return false, nil
 	}
 
 	leaves := expandOK(t, `
 - name: A Remote Role
-  import:
+  uses:
     remote: git@github.com:camalot/ironstate-playbook-shared.git
     path: roles/greet
-`, Options{PackagesRoot: t.TempDir(), AllowRemoteImports: true})
+`, Options{PackagesRoot: t.TempDir(), AllowRemoteUses: true})
 
 	if len(leaves) != 1 || leaves[0].Module != "log" {
 		t.Fatalf("leaves = %#v", leaves)
 	}
 }
 
-// TestImportTrustedSkipsPrompt covers the per-import counterpart to
-// --allow-remote-imports: a source the playbook itself marks trusted is
+// TestUsesTrustedSkipsPrompt covers the per-source counterpart to
+// --allow-remote-uses: a source the playbook itself marks trusted is
 // fetched and run without asking.
-func TestImportTrustedSkipsPrompt(t *testing.T) {
+func TestUsesTrustedSkipsPrompt(t *testing.T) {
 	stubGitClone(t)
 	remote.Confirm = func(kind remote.Kind, source string) (bool, error) {
 		t.Error("'trusted: true' must suppress the prompt")
@@ -178,7 +178,7 @@ func TestImportTrustedSkipsPrompt(t *testing.T) {
 
 	leaves := expandOK(t, `
 - name: A Trusted Remote Role
-  import:
+  uses:
     remote: git@github.com:camalot/ironstate-playbook-shared.git
     path: roles/greet
     trusted: true
@@ -192,8 +192,8 @@ func TestImportTrustedSkipsPrompt(t *testing.T) {
 	}
 }
 
-// stubGitClone redirects the import cache to a temp dir and replaces the
-// real clone with one that writes a minimal importable role.
+// stubGitClone redirects the remote cache to a temp dir and replaces the
+// real clone with one that writes a minimal usable role.
 func stubGitClone(t *testing.T) {
 	t.Helper()
 	origConfirm, origCacheRoot, origRunGit := remote.Confirm, remote.CacheRoot, remote.RunGit
@@ -213,7 +213,7 @@ func stubGitClone(t *testing.T) {
 	}
 }
 
-func TestImportMissingRemoteWarnsAndSkips(t *testing.T) {
+func TestUsesMissingRemoteWarnsAndSkips(t *testing.T) {
 	origWarn := packages.Warn
 	t.Cleanup(func() { packages.Warn = origWarn })
 
@@ -222,12 +222,12 @@ func TestImportMissingRemoteWarnsAndSkips(t *testing.T) {
 
 	leaves := expandOK(t, `
 - name: Broken
-  import:
+  uses:
     path: roles/greet
 `, Options{PackagesRoot: t.TempDir()})
 
 	if !warned {
-		t.Error("an import with no 'remote' must warn")
+		t.Error("a 'uses' with no 'remote' must warn")
 	}
 	if len(leaves) != 0 {
 		t.Fatalf("leaves = %#v", leaves)

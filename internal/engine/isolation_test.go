@@ -16,10 +16,10 @@ func withIsolated(facts, vars map[string]any) func(*tasks.Leaf) {
 	}
 }
 
-// TestRunLeavesIsolatedLeafSeesOnlyPassedContext guards the 'import:'
+// TestRunLeavesIsolatedLeafSeesOnlyPassedContext guards the 'uses:'
 // 'isolate: true' contract: an isolated leaf must never see the host's
 // gathered facts, the site's vars, or the id registry - only what its
-// importing task handed it in 'with'.
+// consuming task handed it in 'with'.
 func TestRunLeavesIsolatedLeafSeesOnlyPassedContext(t *testing.T) {
 	h := &fakeHandler{installed: false, installExec: ExecResult{RC: 0}}
 	opts := baseOpts(map[string]Handler{"widget": h})
@@ -47,7 +47,7 @@ func TestRunLeavesIsolatedLeafSeesOnlyPassedContext(t *testing.T) {
 }
 
 // TestRunLeavesIsolatedLeafCannotBecome guards the second half of the
-// isolation contract: an imported, sandboxed task may not elevate.
+// isolation contract: a sandboxed task from a 'uses:' may not elevate.
 func TestRunLeavesIsolatedLeafCannotBecome(t *testing.T) {
 	h := &fakeHandler{installed: false, installExec: ExecResult{RC: 0}}
 	opts := baseOpts(map[string]Handler{"widget": h})
@@ -68,15 +68,15 @@ func TestRunLeavesIsolatedLeafCannotBecome(t *testing.T) {
 		t.Fatal(err)
 	}
 	if h.seenBecome != (ironexec.Become{}) {
-		t.Fatalf("ctx.Become = %+v, want no elevation inside an isolated import", h.seenBecome)
+		t.Fatalf("ctx.Become = %+v, want no elevation inside an isolated 'uses'", h.seenBecome)
 	}
 	found := false
 	for _, w := range warnings {
-		if strings.Contains(w, "isolated import") {
+		if strings.Contains(w, "isolated 'uses'") {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("expected a warning about 'become' in an isolated import, got %#v", warnings)
+		t.Fatalf("expected a warning about 'become' in an isolated 'uses', got %#v", warnings)
 	}
 }

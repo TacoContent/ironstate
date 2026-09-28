@@ -348,7 +348,7 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 
 		flatContext := mergeFlatContext(opts.Facts, state.UserFacts, leaf.PackageVars, leaf.PackageInputs, leaf.PackagePackage, opts.Vars, state.Registry)
 		if leaf.Isolated {
-			// An isolated import's leaf sees ONLY what its importing task
+			// An isolated 'uses' leaf sees ONLY what its consuming task
 			// handed it in 'with' - no host facts, no site vars, and no
 			// id registry from the surrounding run.
 			flatContext = mergeFlatContext(leaf.IsolatedFacts, nil, leaf.PackageVars, leaf.PackageInputs, leaf.PackagePackage, leaf.IsolatedVars, nil)
@@ -446,7 +446,7 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 
 		become := resolveBecome(leaf.Become)
 		if leaf.Isolated && become.Enabled {
-			Warn("[%s] %s: 'become' is not permitted inside an isolated import; running unelevated.", module, label)
+			Warn("[%s] %s: 'become' is not permitted inside an isolated 'uses'; running unelevated.", module, label)
 			become = ironexec.Become{}
 		}
 
