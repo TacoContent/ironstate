@@ -2,12 +2,25 @@
 
 tasks:
 
-  - name: Set up Git
+  - name: Setup Git
     tags:
       - development
       - development.git
-    include:
-      name: roles/development/git
+    uses:
+      remote:  git@github.com:camalot/ironstate-playbooks.git
+      ref: main
+      path: playbooks/camalot/roles/development/git
+      trusted: true
+
+  - name: Setup GitHub
+    tags:
+      - development
+      - development.github
+    uses:
+      remote:  git@github.com:camalot/ironstate-playbooks.git
+      ref: main
+      path: playbooks/camalot/roles/development/github
+      trusted: true
 
   - name: Set up Docker
     tags:
@@ -15,13 +28,6 @@ tasks:
       - development.docker
     include:
       name: roles/development/docker
-
-  - name: Set up GitHub SSH hosts
-    tags:
-      - development
-      - development.github
-    include:
-      name: roles/development/github
 
   - name: Set up Development Folders
     tags:

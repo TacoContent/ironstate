@@ -74,7 +74,7 @@ tasks:
         );
         $modules | ForEach-Object {
           if ( !(Get-Module -ListAvailable -Name "$_") ) {
-            Install-Module $_ -Scope CurrentUser -Force --ErrorAction SilentlyContinue;
+            Install-Module $_ -Scope CurrentUser -Force;
           }
         };
         $modules | ForEach-Object { Import-Module -Name $_; }

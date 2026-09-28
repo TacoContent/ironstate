@@ -9,7 +9,7 @@ tasks:
       package: charmbracelet/gum
       state: ${{ package.state }}
       args:
-        - --to=${{ facts.local_bin_path | join("gum.exe") }}
+        - --to=${{ facts.local_bin_path | join("gum") | extension("exe") }}
         - --upgrade-only
 
   - name: Install JQ
@@ -20,38 +20,21 @@ tasks:
       package: jqlang/jq
       state: ${{ package.state }}
       args:
-        - --to=${{ facts.local_bin_path | join("jq.exe") }}
+        - --to=${{ facts.local_bin_path | join("jq") | extension("exe") }}
         - --upgrade-only
 
-  - name: Install YQ (Windows)
+  - name: Install YQ
     tags: 
       - yaml
       - cli
+      - cli.yq
     xget:
       package: mikefarah/yq
       state: ${{ package.state }}
       args:
         - --to=${{ facts.local_bin_path | join("yq") | extension("exe") }}
         - --upgrade-only
-        - --asset=".zip"
         - --ignore=".sbom.json"
-      when: 
-        - facts.os_family == "windows"
-  
-  - name: Install YQ
-    tags: 
-      - yaml
-      - cli
-    xget:
-      package: mikefarah/yq
-      state: ${{ package.state }}
-      args:
-        - --to=${{ facts.local_bin_path | join("yq") }}
-        - --upgrade-only
-        - --asset=".tar.gz"
-        - --ignore=".sbom.json"
-      when:
-        - facts.os_family != "windows"
 
   - name: Install Bat
     id: install_bat
@@ -79,7 +62,7 @@ tasks:
       - cli.bat
     shell:
       command: |
-        & 'C:\Program Files\coreutils\bin\coreutils-manager.exe' disable cat
+        & 'coreutils-manager.exe' disable cat
     when:
       - facts.os_family == "windows"
       - install_bat.rc == 0
@@ -92,7 +75,7 @@ tasks:
       package: sharkdp/fd
       state: ${{ package.state }}
       args:
-        - --to=${{ facts.local_bin_path | join("fd.exe") }}
+        - --to=${{ facts.local_bin_path | join("fd") | extension("exe") }}
         - --upgrade-only
         - --asset="-gnu.zip"
 
@@ -103,7 +86,7 @@ tasks:
       package: tjblackheart/andcli
       state: ${{ package.state }}
       args:
-        - --to=${{ facts.local_bin_path | join("andcli.exe") }}
+        - --to=${{ facts.local_bin_path | join("andcli") | extension("exe") }}
         - --upgrade-only
 
   - name: Install Clipboard
@@ -114,7 +97,7 @@ tasks:
       package: Slackadays/Clipboard
       state: ${{ package.state }}
       args:
-        - --to=${{ facts.local_bin_path | join("cb.exe") }}
+        - --to=${{ facts.local_bin_path | join("cb") | extension("exe") }}
         - --upgrade-only
 
   - name: Install Envdiff
@@ -125,7 +108,7 @@ tasks:
       package: GBerghoff/envdiff
       state: ${{ package.state }}
       args:
-        - --to=${{ facts.local_bin_path | join("envdiff.exe") }}
+        - --to=${{ facts.local_bin_path | join("envdiff") | extension("exe") }}
         - --upgrade-only
         - --asset=".zip"
 
@@ -137,7 +120,7 @@ tasks:
       package: ankddev/envfetch
       state: ${{ package.state }}
       args:
-        - --to=${{ facts.local_bin_path | join("envfetch.exe") }}
+        - --to=${{ facts.local_bin_path | join("envfetch") | extension("exe") }}
         - --upgrade-only
         - --asset=".exe"
 
@@ -149,7 +132,7 @@ tasks:
       package: mikeleppane/envx
       state: ${{ package.state }}
       args:
-        - --to=${{ facts.local_bin_path | join("envx.exe") }}
+        - --to=${{ facts.local_bin_path | join("envx") | extension("exe") }}
         - --upgrade-only
 
   - name: Install Fx
@@ -160,7 +143,7 @@ tasks:
       package: antonmedv/fx
       state: ${{ package.state }}
       args:
-        - --to=${{ facts.local_bin_path | join("fx.exe") }}
+        - --to=${{ facts.local_bin_path | join("fx") | extension("exe") }}
         - --upgrade-only
 
   - name: Install Chezmoi
@@ -214,7 +197,7 @@ tasks:
       package: bootandy/dust
       state: present
       args:
-        - --to=${{ facts.local_bin_path | join("dust.exe") }}
+        - --to=${{ facts.local_bin_path | join("dust") | extension("exe") }}
         - --upgrade-only
 
   - name: Install Fastfetch
@@ -225,7 +208,7 @@ tasks:
       package: fastfetch-cli/fastfetch
       state: present
       args:
-        - --to=${{ facts.local_bin_path | join("fastfetch.exe") }}
+        - --to=${{ facts.local_bin_path | join("fastfetch") | extension("exe") }}
         - --upgrade-only
         - --asset=".zip"
 
@@ -237,7 +220,7 @@ tasks:
       package: dalance/procs/
       state: present
       args:
-        - --to=${{ facts.local_bin_path | join("procs.exe") }}
+        - --to=${{ facts.local_bin_path | join("procs") | extension("exe") }}
         - --upgrade-only
 
   - name: Install Sd
@@ -248,7 +231,7 @@ tasks:
       package: chmln/sd
       state: present
       args:
-        - --to=${{ facts.local_bin_path | join("sd.exe") }}
+        - --to=${{ facts.local_bin_path | join("sd") | extension("exe") }}
         - --upgrade-only
 
   - name: Install totp-cli
@@ -260,7 +243,7 @@ tasks:
       package: yitsushi/totp-cli
       state: present
       args:
-        - --to=${{ facts.local_bin_path | join("totp.exe") }}
+        - --to=${{ facts.local_bin_path | join("totp") | extension("exe") }}
         - --upgrade-only
         - --asset=".zip"
 
@@ -272,7 +255,7 @@ tasks:
       package: guumaster/hostctl
       state: present
       args:
-        - --to=${{ facts.local_bin_path | join("hostctl.exe") }}
+        - --to=${{ facts.local_bin_path | join("hostctl") | extension("exe") }}
         - --upgrade-only
         - --asset="64-bit.zip"
 
@@ -283,7 +266,7 @@ tasks:
       package: Tairesh/rustormy
       state: present
       args:
-        - --to=${{ facts.local_bin_path | join("rustormy.exe") }}
+        - --to=${{ facts.local_bin_path | join("rustormy") | extension("exe") }}
         - --upgrade-only
         - --asset=".zip"
 
@@ -295,6 +278,6 @@ tasks:
       package: hanshuaikang/NBping
       state: present
       args:
-        - --to=${{ facts.local_bin_path | join("nbping.exe") }}
+        - --to=${{ facts.local_bin_path | join("nbping") | extension("exe") }}
         - --upgrade-only
         - --asset=".zip"

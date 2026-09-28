@@ -34,6 +34,7 @@ func newWaitForSpinner(label string) *spinner.Spinner {
 	if !ui.Enabled {
 		s.Disable()
 	}
+	ui.PadSpinnerSuffix(s)
 	return s
 }
 
