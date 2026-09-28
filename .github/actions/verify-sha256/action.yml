@@ -6,25 +6,5 @@ runs:
   steps:
     - name: Verify Checksums
       shell: bash
-      run: |
-        set -euo pipefail
-        declare -A files=(
-          ["install/install.sh"]="$(cat install/install.sh.sha256 | awk '{print $1}')"
-          ["install/install.ps1"]="$(cat install/install.ps1.sha256 | awk '{print $1}')"
-        )
-        failed=0
-        for file in "${!files[@]}"; do
-          expected="${files[$file]}"
-          actual="$(sha256sum "$file" | awk '{print $1}')"
-          if [[ "$actual" != "$expected" ]]; then
-            echo "❌ Checksum mismatch for $file"
-            echo "   expected: $expected"
-            echo "   actual  : $actual"
-            failed=1
-          else
-            echo "✅ Checksum verified for $file"
-          fi
-        done
-        if [[ $failed -eq 1 ]]; then
-          exit 1
-        fi
+      # Same script 'task verify:sha256' runs, so local and CI can't diverge.
+      run: bash ./scripts/verify-install-sha256.sh

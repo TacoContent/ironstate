@@ -16,22 +16,134 @@ tasks:
     cmds:
       - pwsh -NoProfile -Command "[Environment]::SetEnvironmentVariable('GOOS','linux','Process'); golangci-lint run ./..."
 
-  build:
-    desc: Build the project
+  # --- CI parity -----------------------------------------------------------
+  # Each task below mirrors one job/step in .github/workflows/ci.yml so a
+  # failure shows up locally instead of for the first time in Actions. Keep
+  # the two in sync when either changes.
+
+  tools:
+    desc: Install the CI-only Go tools (golangci-lint, govulncheck) into GOBIN
+    cmds:
+      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+      - go install golang.org/x/vuln/cmd/govulncheck@latest
+
+  sha256:
+    desc: Regenerate install/*.sha256 for the install scripts
     cmds:
       - chmod +x ./scripts/generate-install-sha256.sh
       - chmod +x ./install/install.sh
       - chmod +x ./install/install.ps1
       - bash ./scripts/generate-install-sha256.sh
+
+  verify:sha256:
+    desc: 'CI job "verify": check install/*.sha256 matches the scripts'
+    cmds:
+      - bash ./scripts/verify-install-sha256.sh
+
+  tidy:
+    desc: go mod tidy across every module (root, sdk, examples)
+    cmds:
+      - go mod tidy
+      - cd sdk && go mod tidy
+      - cd examples/ironstate-handler-hosts && go mod tidy
+
+  tidy:check:
+    desc: 'CI job "lint": fail if go mod tidy would change any module''s go.mod/go.sum'
+    cmds:
+      - bash ./scripts/check-tidy.sh
+
+  lint:
+    desc: 'CI job "lint": golangci-lint'
+    cmds:
+      - golangci-lint run ./...
+
+  vet:
+    desc: 'CI job "vet-and-vuln": go vet'
+    cmds:
+      - go vet ./...
+
+  vuln:
+    desc: 'CI job "vet-and-vuln": govulncheck (every module, not just the root)'
+    cmds:
+      - govulncheck ./...
+      - cd sdk && govulncheck ./...
+
+  fmt:check:
+    desc: Fail if any file is not gofmt-clean
+    cmds:
+      # gofmt -l exits 0 even when it lists files, so turn any output into a failure.
+      - |
+        unformatted="$(gofmt -l .)"
+        if [ -n "$unformatted" ]; then
+          echo "not gofmt-clean:"
+          echo "$unformatted"
+          exit 1
+        fi
+
+  test:
+    desc: 'CI job "test": build + full test suite with coverage'
+    cmds:
+      - go build ./...
+      - go test ./... -coverprofile=coverage.out
+
+  race:
+    desc: 'CI job "race": race detector over internal/filters (needs cgo + a C toolchain)'
+    env:
+      CGO_ENABLED: "1"
+    cmds:
+      # -race requires cgo. CI runs this on ubuntu-latest, which always has a C
+      # toolchain; a dev box (especially Windows) often doesn't, so skip loudly
+      # rather than fail the whole 'ci' chain on a missing compiler.
+      - |
+        cc="$(go env CC)"
+        if ! command -v "$cc" >/dev/null 2>&1; then
+          echo "⚠ skipping race detector: no C compiler ('$cc') on PATH - CI still runs this job."
+          exit 0
+        fi
+        go test ./internal/filters/... -race
+
+  fuzz-smoke:
+    desc: 'CI job "fuzz-smoke": short fuzz runs over internal/expr'
+    vars:
+      FUZZTIME: '{{.FUZZTIME | default "20s"}}'
+    cmds:
+      - go test ./internal/expr/... -run xxx -fuzz FuzzParse -fuzztime {{.FUZZTIME}}
+      - go test ./internal/expr/... -run xxx -fuzz FuzzScanSpans -fuzztime {{.FUZZTIME}}
+
+  build-snapshot:
+    desc: 'CI job "build-snapshot": goreleaser snapshot of every target'
+    env:
+      # cgo cross-compilation for android needs the NDK, which is only present in CI.
+      IRONSTATE_SKIP_ANDROID: '{{.SKIP_ANDROID | default "true"}}'
+    cmds:
+      - goreleaser build --snapshot --clean
+
+  ci:
+    desc: Run every check the ci.yml workflow runs, in the same order
+    cmds:
+      - task: verify:sha256
+      - task: tidy:check
+      - task: lint
+      - task: vet
+      - task: vuln
+      - task: fmt:check
+      - task: test
+      - task: race
+      - task: fuzz-smoke
+      - task: build-snapshot
+
+  build:
+    desc: Build the project (local dev loop - full CI parity is 'task ci')
+    cmds:
+      - task: sha256
       - echo "Building the project..."
       - mkdir -p bin
-      - go mod tidy
-      - cd sdk && go mod tidy && cd ..
-      - cd examples/ironstate-handler-hosts && go mod tidy && cd ../../
-      - golangci-lint run ./...
+      - task: tidy
+      - task: lint
       - goreleaser build --snapshot --clean --id ironstate-windows --id ironstate-unix
-      - go vet ./...
-      - gofmt -l .
+      - task: vet
+      - task: fmt:check
+      - task: vuln
       - go test ./...
 
   manpage:
