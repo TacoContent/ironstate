@@ -123,7 +123,8 @@
         "scheduled_task": { "$ref": "#/$defs/scheduledTaskItem" },
         "group": { "$ref": "#/$defs/groupItem" },
         "user": { "$ref": "#/$defs/userItem" },
-        "include": { "$ref": "#/$defs/includeItem" }
+        "include": { "$ref": "#/$defs/includeItem" },
+        "import": { "$ref": "#/$defs/importItem" }
       }
     },
     "wingetItem": {
@@ -937,6 +938,65 @@
         "with": {
           "type": "object",
           "description": "Arbitrary key/value inputs made available inside the package as '${{ inputs.<key> }}' (dotted paths, e.g. '${{ inputs.<key>.<nested> }}', work for nested values)."
+        }
+      }
+    },
+    "importItem": {
+      "type": "object",
+      "description": "Pulls in another playbook's task list from a remote or external source - a git repository (ssh or https), a local directory, or a network share - as if written inline in place of this action. The remote counterpart to 'include'. Tags/when on this taskItem's own envelope cascade down to every imported task normally. A non-isolated remote source is confirmed interactively before anything is fetched unless '--allow-remote-imports' is passed.",
+      "additionalProperties": false,
+      "required": ["remote"],
+      "properties": {
+        "remote": {
+          "type": "string",
+          "description": "Source location: a git URL ('git@host:owner/repo.git', 'ssh://...', 'https://host/owner/repo.git', 'git://...'), a local absolute/relative directory path, or a UNC network share ('\\\\server\\share\\playbooks'). A relative path is resolved against the importing playbook's directory."
+        },
+        "path": {
+          "type": "string",
+          "description": "Optional sub-directory within the source holding the role/task/package to import (for example 'roles/ssh'). Must stay inside the source - a value that escapes it is rejected."
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git branch, tag, or commit to check out. Ignored for local/network-share sources. Each remote+ref pair is cloned once into a local cache and reused on later runs."
+        },
+        "isolate": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, the imported tasks run sandboxed: they may not elevate via 'become', and they see ONLY the facts/vars passed in 'with' - never the host's gathered facts, the site's vars, or the id registry. An isolated import is never prompted for, since it cannot reach the surrounding system state."
+        },
+        "trusted": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, this specific remote source is pre-approved: the interactive trust prompt is skipped and it is fetched and run without asking. The per-import equivalent of '--allow-remote-imports', which pre-approves every import in the run. Only mark a source trusted when you control it or have pinned 'ref' to an exact commit."
+        },
+        "name": {
+          "type": "string",
+          "description": "Made available inside the imported document as '${{ package.name }}'. Defaults to a description of the source."
+        },
+        "state": {
+          "type": "string",
+          "enum": ["present", "absent", "latest"],
+          "default": "present",
+          "description": "Made available inside the imported document as '${{ package.state }}'."
+        },
+        "tags": {
+          "type": "array",
+          "description": "Made available inside the imported document as '${{ package.tags }}'.",
+          "items": { "type": "string" }
+        },
+        "with": {
+          "type": "object",
+          "description": "Context handed to the imported tasks. 'vars' and 'facts' are special; every other key is an ordinary input available as '${{ inputs.<key> }}'.",
+          "properties": {
+            "vars": {
+              "type": "object",
+              "description": "Vars for the imported tasks. When 'isolate' is true these are the ONLY vars they see; otherwise they are merged on top of the site's vars."
+            },
+            "facts": {
+              "type": "object",
+              "description": "Facts for the imported tasks. Only used when 'isolate' is true, where they replace the host's gathered facts entirely."
+            }
+          }
         }
       }
     },

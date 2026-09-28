@@ -21,6 +21,10 @@ type Config struct {
 	Output       string   // --output table|json
 	Verbose      bool     // -v/--verbose
 
+	// AllowRemoteImports pre-approves a non-isolated remote 'import:'
+	// instead of prompting for confirmation (--allow-remote-imports).
+	AllowRemoteImports bool
+
 	FiltersDir         string              // directory scanned for external script filters
 	FilterInterpreters map[string][]string // script extension -> interpreter argv prefix
 }
@@ -83,6 +87,8 @@ func Load(flags *pflag.FlagSet) (*Config, error) {
 		Tags:         v.GetStringSlice("tags"),
 		Output:       v.GetString("output"),
 		Verbose:      v.GetBool("verbose"),
+
+		AllowRemoteImports: v.GetBool("allow-remote-imports"),
 
 		FiltersDir:         v.GetString("filters.dir"),
 		FilterInterpreters: interpreters,

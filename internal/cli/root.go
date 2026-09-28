@@ -21,6 +21,7 @@ import (
 	"github.com/TacoContent/ironstate/internal/packages"
 	"github.com/TacoContent/ironstate/internal/pathutil"
 	"github.com/TacoContent/ironstate/internal/pluginhost"
+	"github.com/TacoContent/ironstate/internal/remote"
 	"github.com/TacoContent/ironstate/internal/tasks"
 	"github.com/TacoContent/ironstate/internal/template"
 	"github.com/TacoContent/ironstate/internal/ui"
@@ -54,6 +55,7 @@ func newRootCommand() (*cobra.Command, error) {
 	flags.BoolP("verbose", "v", false, "verbose output")
 	flags.Bool("no-color", false, "disable colored output")
 	flags.Bool("allow-plugin-install", false, "allow playbook-declared plugins to be installed automatically")
+	flags.Bool("allow-remote-imports", false, "pre-approve non-isolated remote 'import:' sources instead of prompting (required for non-interactive runs)")
 
 	cmd.AddCommand(newVersionCommand())
 	cmd.AddCommand(newFiltersCommand())
@@ -117,9 +119,20 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	engine.Danger = func(format string, args ...any) { progress.Pause(func() { origDanger(format, args...) }) }
 	packages.Warn = func(format string, args ...any) { progress.Pause(func() { origPackagesWarn(format, args...) }) }
 	tasks.Warn = func(format string, args ...any) { progress.Pause(func() { origTasksWarn(format, args...) }) }
+	// The remote-import trust prompt both prints and reads a line - the
+	// spinner must be fully paused for the whole exchange or its frames
+	// overwrite the question the operator is answering.
+	origConfirm := remote.Confirm
+	remote.Confirm = func(kind remote.Kind, source string) (bool, error) {
+		var ok bool
+		var err error
+		progress.Pause(func() { ok, err = origConfirm(kind, source) })
+		return ok, err
+	}
 	defer func() {
 		engine.Info, engine.Warn, engine.Danger = origInfo, origWarn, origDanger
 		packages.Warn, tasks.Warn = origPackagesWarn, origTasksWarn
+		remote.Confirm = origConfirm
 	}()
 
 	progress.Message("loading playbook inputs")
@@ -225,6 +238,8 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		Facts:        hostFacts,
 		Vars:         vars,
 		Filters:      fset,
+
+		AllowRemoteImports: cfg.AllowRemoteImports,
 	})
 	if err != nil {
 		return NewLoadError(err)

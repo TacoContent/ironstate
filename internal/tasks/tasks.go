@@ -4,7 +4,10 @@
 // algorithm description: tags/when accumulate top-down; 'with'/'items'
 // materializes a task once per loop value *before* anything else about it
 // is evaluated; 'include' loads another document's tasks via
-// internal/packages, isolated from the parent's PackageVars/loop context.
+// internal/packages, isolated from the parent's PackageVars/loop context;
+// 'import' does the same for a remote (git over ssh/https), local, or
+// network-share source via internal/packages + internal/remote,
+// optionally sandboxing the imported tasks ('isolate: true').
 package tasks
 
 import (
@@ -41,6 +44,15 @@ type Leaf struct {
 	Module          string
 	Item            map[string]any
 	ItemCtx         map[string]any // {"item": <loop value>[, "parent": <outer loop's ItemCtx>]}; nil outside any loop
+
+	// Isolated marks a leaf that came from an 'import:' with
+	// 'isolate: true'. Such a leaf sees ONLY IsolatedFacts/IsolatedVars
+	// (whatever the importing task passed in 'with'), never the host's
+	// gathered facts, the site's vars, or the id registry - and may not
+	// elevate via 'become' (internal/engine enforces both).
+	Isolated      bool
+	IsolatedFacts map[string]any
+	IsolatedVars  map[string]any
 }
 
 // Options carries the inputs Expand-TaskTree needs beyond the task list
@@ -61,6 +73,9 @@ type Options struct {
 	Facts        map[string]any
 	Vars         map[string]any
 	Filters      expr.Filters
+	// AllowRemoteImports pre-approves a non-isolated remote 'import:'
+	// instead of prompting the operator (--allow-remote-imports).
+	AllowRemoteImports bool
 }
 
 // Warn reports a non-fatal tree-shape problem (unrecognized module key,
@@ -81,6 +96,16 @@ type scope struct {
 	parentWhen     []any
 	parentLooped   bool
 	parentItemCtx  map[string]any // nil outside any loop
+
+	// packagesRoot/facts/vars are Options' same-named fields by default,
+	// but an 'import:' replaces them for its own subtree: a nested
+	// 'include:' inside an imported document resolves against the
+	// imported tree, and an isolated import's tasks see only the
+	// facts/vars it was handed.
+	packagesRoot string
+	facts        map[string]any
+	vars         map[string]any
+	isolated     bool
 }
 
 // Expand flattens tasksList into leaves, matching Expand-TaskTree's
@@ -90,6 +115,9 @@ func Expand(tasksList []any, opts Options) ([]Leaf, error) {
 		packageVars:    map[string]any{},
 		packageInputs:  map[string]any{},
 		packagePackage: map[string]any{},
+		packagesRoot:   opts.PackagesRoot,
+		facts:          opts.Facts,
+		vars:           opts.Vars,
 	})
 }
 
@@ -137,6 +165,10 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 				parentWhen:     effectiveWhen,
 				parentLooped:   sc.parentLooped,
 				parentItemCtx:  sc.parentItemCtx,
+				packagesRoot:   sc.packagesRoot,
+				facts:          sc.facts,
+				vars:           sc.vars,
+				isolated:       sc.isolated,
 			})
 			if err != nil {
 				return nil, err
@@ -149,11 +181,11 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 			if _, hasID := item["id"]; hasID {
 				Warn("task '%s' has an 'id' but is an 'include'; 'id' is only supported on leaf actions - ignoring", label)
 			}
-			if opts.PackagesRoot == "" {
+			if sc.packagesRoot == "" {
 				Warn("task '%s' has an 'include' but no PackagesRoot was configured; skipping", label)
 				continue
 			}
-			included, err := packages.LoadIncludedPackage(model.AsMap(includeSpec), opts.PackagesRoot, opts.Facts, opts.Vars, opts.Filters)
+			included, err := packages.LoadIncludedPackage(model.AsMap(includeSpec), sc.packagesRoot, sc.facts, sc.vars, opts.Filters)
 			if err != nil {
 				return nil, err
 			}
@@ -172,6 +204,53 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 				parentWhen:     effectiveWhen,
 				parentLooped:   sc.parentLooped,
 				parentItemCtx:  nil,
+				packagesRoot:   sc.packagesRoot,
+				facts:          sc.facts,
+				vars:           sc.vars,
+				isolated:       sc.isolated,
+			})
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, children...)
+			continue
+		}
+
+		if importSpec, ok := item["import"]; ok {
+			if _, hasID := item["id"]; hasID {
+				Warn("task '%s' has an 'id' but is an 'import'; 'id' is only supported on leaf actions - ignoring", label)
+			}
+			imported, err := packages.LoadImportedPackage(model.AsMap(importSpec), packages.ImportOptions{
+				BaseDir:     sc.packagesRoot,
+				Facts:       sc.facts,
+				Vars:        sc.vars,
+				Filters:     opts.Filters,
+				AllowRemote: opts.AllowRemoteImports,
+			})
+			if err != nil {
+				return nil, err
+			}
+			if imported == nil {
+				continue
+			}
+			importedTasks, err := model.TaskList(imported.Data)
+			if err != nil {
+				return nil, err
+			}
+			children, err := expand(importedTasks, opts, scope{
+				packageVars:    model.Vars(imported.Data),
+				packageInputs:  imported.Inputs,
+				packagePackage: imported.Package,
+				parentTags:     effectiveTags,
+				parentWhen:     effectiveWhen,
+				parentLooped:   sc.parentLooped,
+				parentItemCtx:  nil,
+				packagesRoot:   imported.Root,
+				facts:          imported.Facts,
+				vars:           imported.Vars,
+				// Isolation is one-way: a non-isolated import nested
+				// inside an isolated one stays isolated.
+				isolated: sc.isolated || imported.Isolated,
 			})
 			if err != nil {
 				return nil, err
@@ -210,6 +289,9 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 			Module:          moduleName,
 			Item:            model.AsMap(item[moduleName]),
 			ItemCtx:         sc.parentItemCtx,
+			Isolated:        sc.isolated,
+			IsolatedFacts:   sc.facts,
+			IsolatedVars:    sc.vars,
 		})
 	}
 
@@ -253,6 +335,10 @@ func expandLoop(item map[string]any, key string, opts Options, sc scope) ([]Leaf
 			parentWhen:     sc.parentWhen,
 			parentLooped:   true,
 			parentItemCtx:  itemCtx,
+			packagesRoot:   sc.packagesRoot,
+			facts:          sc.facts,
+			vars:           sc.vars,
+			isolated:       sc.isolated,
 		})
 		if err != nil {
 			return nil, err

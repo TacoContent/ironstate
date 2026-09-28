@@ -347,6 +347,12 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 		}
 
 		flatContext := mergeFlatContext(opts.Facts, state.UserFacts, leaf.PackageVars, leaf.PackageInputs, leaf.PackagePackage, opts.Vars, state.Registry)
+		if leaf.Isolated {
+			// An isolated import's leaf sees ONLY what its importing task
+			// handed it in 'with' - no host facts, no site vars, and no
+			// id registry from the surrounding run.
+			flatContext = mergeFlatContext(leaf.IsolatedFacts, nil, leaf.PackageVars, leaf.PackageInputs, leaf.PackagePackage, leaf.IsolatedVars, nil)
+		}
 		// A leaf materialized from 'with'/'items' only had its loop 'item'
 		// (and, nested, 'parent') in scope during tasks.expandLoop's soft
 		// pass, which defers whole expressions that also need 'facts'/
@@ -438,7 +444,13 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 		// fact undefined for every later leaf's preview.
 		effectiveApply := opts.Apply || hasEmbeddedShell || module == "assert" || isFactProducer(handler)
 
-		result, err := invokePackageItem(module, leaf.Name, leaf.Item, handler, flatContext, opts.Filters, effectiveApply, opts.Verbose, leaf.SecretID, resolveBecome(leaf.Become))
+		become := resolveBecome(leaf.Become)
+		if leaf.Isolated && become.Enabled {
+			Warn("[%s] %s: 'become' is not permitted inside an isolated import; running unelevated.", module, label)
+			become = ironexec.Become{}
+		}
+
+		result, err := invokePackageItem(module, leaf.Name, leaf.Item, handler, flatContext, opts.Filters, effectiveApply, opts.Verbose, leaf.SecretID, become)
 		if err != nil {
 			return results, false, err
 		}

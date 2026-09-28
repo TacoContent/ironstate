@@ -1612,3 +1612,88 @@ tasks:
 ```
 
 Note that `${{ package.tags }}` replaces a field wholesale rather than appending — to combine caller-supplied and package-defined tags, reference individual `with` values instead (e.g. `tags: [keyboard, ${{ inputs.extra_tag }}]`).
+
+## Imports (remote roles/packages)
+
+`import:` is the remote counterpart to `include:`. Where `include:` can only reach a directory inside the playbook itself, `import:` pulls a role/task list/package in from a **git repository** (ssh or https), a **local directory**, or a **network share**, and splices its `tasks:` list in at that position exactly like `include:` does:
+
+```yaml
+- name: A Remote Role
+  import:
+    remote: git@github.com:camalot/ironstate-playbook-shared.git
+    path: path/to/role
+    ref: main            # optional branch, tag, or commit
+    isolate: true        # optional, default false - see Isolation below
+    with:
+      vars: { editor: nvim }
+      facts: { platform: linux }
+  when:
+    - some_condition
+```
+
+| Field | Meaning |
+| --- | --- |
+| `remote` | **Required.** Source location — see [Sources](#sources) |
+| `path` | Optional sub-directory within the source (e.g. `roles/ssh`). Must stay inside the source; a value that escapes it is rejected |
+| `ref` | Git branch, tag, or commit. Ignored for local/network-share sources |
+| `isolate` | Run the imported tasks sandboxed — see [Isolation](#isolation) |
+| `trusted` | Pre-approve this source, skipping the [trust prompt](#trust-prompt) |
+| `name` / `state` / `tags` | Exposed inside the imported document as `${{ package.name }}` / `${{ package.state }}` / `${{ package.tags }}`, same as `include:` |
+| `with.vars` / `with.facts` | Vars/facts handed to the imported tasks — see [Isolation](#isolation) |
+| `with.<other>` | Any other `with` key is an ordinary input, available as `${{ inputs.<key> }}`, same as `include:` |
+
+The envelope `tags:`/`when:` next to `import:` cascade down to every imported task, exactly like `include:`. A `copy.src`/`shell.script` path inside the imported document resolves relative to the imported directory, as does a nested `include:` inside it — an imported role can rely on its own repository layout.
+
+### Sources
+
+| `remote` value | Treated as |
+| --- | --- |
+| `git@github.com:owner/repo.git` | git over ssh (scp-style syntax) |
+| `ssh://git@host/owner/repo.git` | git over ssh |
+| `https://host/owner/repo.git` | git over https (the `.git` suffix is what marks it as a repository) |
+| `git://host/owner/repo` | git |
+| `./shared`, `/srv/playbooks/shared`, `C:\playbooks\shared` | local directory (a relative path resolves against the importing playbook's directory) |
+| `\\server\share\playbooks` | network share (treated as an ordinary local path) |
+
+Git sources are cloned **once** per `remote`+`ref` pair into a cache under your user cache directory (`~/.cache/ironstate/imports` on Linux/macOS, `%LocalAppData%\ironstate\imports` on Windows) and reused on later runs. Delete a cache entry to force a fresh clone. Authentication is whatever `git` itself is configured to use (ssh agent/keys, credential helper) — ironstate never handles credentials.
+
+### Isolation
+
+`isolate: true` runs the imported tasks sandboxed:
+
+- They may **not** elevate. A `become:` on any imported task is ignored with a warning.
+- They see **only** what `with.vars`/`with.facts` hand them — never the host's gathered facts, never the site's `vars:`, and never any earlier task's `id`-registered result.
+
+Isolation is one-way: a non-isolated `import:` nested inside an isolated one stays isolated.
+
+With `isolate: false` (the default) the imported tasks are full participants in the run — same facts, same vars (with `with.vars` merged on top), and `become:` works normally.
+
+### Trust prompt
+
+Because a non-isolated import runs third-party code with full access to your system, a **remote** source that is not isolated is confirmed before anything is fetched:
+
+```
+⚠ This playbook imports a remote, non-isolated source:
+    git@github.com:camalot/ironstate-playbook-shared.git@main (path/to/role) [git]
+  It will run with full access to your facts/vars and may request elevation (become).
+  Fetch, import, and run it? [y/N]:
+```
+
+Declining skips that import (with a warning) and the rest of the run continues. There is no prompt for a local path or network share, or for any import with `isolate: true`.
+
+There are two ways to pre-approve a source instead:
+
+- `trusted: true` on the `import:` itself — pre-approves **that one source**, and travels with the playbook, so a repository you control is never re-confirmed:
+
+  ```yaml
+  - name: A Trusted Remote Role
+    import:
+      remote: git@github.com:camalot/ironstate-playbook-shared.git
+      path: path/to/role
+      ref: 9f2c1ab            # pin an exact commit when marking a source trusted
+      trusted: true
+  ```
+
+- `--allow-remote-imports` on the command line — pre-approves **every** remote import in the run.
+
+In a non-interactive run (CI, a scheduled task) there is nothing to answer the prompt, so an import that is neither `trusted` nor pre-approved on the command line is **declined by default**. Only mark a source trusted where you actually trust it, and ideally with `ref:` pinned to an exact commit.
