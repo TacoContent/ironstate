@@ -1,4 +1,53 @@
 
+## [v0.6.0](https://github.com/tacocontent/ironstate/releases/tag/v0.6.0) - 2026-09-28
+
+### 🚀 FEATURES
+
+#### _GENERAL_
+
+- Added 'extension' filter to add an extension to a filename -[@camalot](https://github.com/camalot)
+
+- Added 'import' to use remote playbook resources -[@camalot](https://github.com/camalot)
+
+
+### 🐛 BUG FIXES
+
+#### _GENERAL_
+
+- Disable coreutils->cat if bat is enabled and installed -[@camalot](https://github.com/camalot)
+
+- Rename from import to uses -[@camalot](https://github.com/camalot)
+
+- Fix the build in goreleaser to delete the syso at the correct time -[@camalot](https://github.com/camalot)
+
+- Resolve ci failure -[@camalot](https://github.com/camalot)
+
+
+## GitHub
+
+### 💛 Contributors
+
+
+- [@camalot](https://github.com/camalot)
+## 📈 Commit Statistics
+
+
+- `6` commits contributed to the release.
+- `1` day has passed between the first and last commit.
+- `6` commits parsed as conventional.
+- `0` linked issues detected in commits.
+- `1` day  has passed between releases.
+
+
+![Statistics](https://quickchart.io/chart?c={type:'bar',data:{labels:['Commits','Contributors','Days%20Between%20Commits','Conventional%20Commits','Referenced%20Links','Days%20Since%20Last%20Release'],datasets:[{label:'Release',data:[6,1,1,6,0,1]}]}})
+
+
+
+---
+
+
+**Full Changelog**: https://github.com/tacocontent/ironstate/compare/v0.5.0...v0.6.0
+
 ## [v0.5.0](https://github.com/tacocontent/ironstate/releases/tag/v0.5.0) - 2026-09-27
 
 ### 🚀 FEATURES
