@@ -33,6 +33,7 @@ func registerBuiltins(r *Registry) {
 	r.Register("exists", filterExists)
 	r.Register("sha1", filterSHA1)
 	r.Register("extension", filterExtension)
+	r.Register("env", filterEnv)
 	registerJSONFilters(r)
 	registerLookupFilter(r)
 }
@@ -65,6 +66,28 @@ func filterDefault(value any, args []any) (any, error) {
 		return args[0], nil
 	}
 	return value, nil
+}
+
+func filterEnv(value any, args []any) (any, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("'env' filter expects at least 1 argument. env(<key>, [default])")
+	}
+	if len(args) > 2 {
+		return nil, fmt.Errorf("'env' filter expects at most 2 arguments. env(<key>, [default])")
+	}
+	key := toStr(args[0])
+	if key == "" {
+		return nil, fmt.Errorf("'env' filter requires a non-empty environment variable name")
+	}
+	if len(args) == 2 {
+		def := args[1]
+		val := os.Getenv(key)
+		if val == "" {
+			return def, nil
+		}
+		return val, nil
+	}
+	return os.Getenv(key), nil
 }
 
 func filterToggle(value any, args []any) (any, error) {

@@ -28,6 +28,38 @@ func TestDefaultFilter(t *testing.T) {
 	}
 }
 
+func TestEnvFilter(t *testing.T) {
+	const key = "IRONSTATE_FILTER_ENV_TEST"
+	t.Setenv(key, "configured")
+
+	if got := apply(t, "env", nil, key); got != "configured" {
+		t.Errorf("env(%q) = %v, want configured", key, got)
+	}
+	if got := apply(t, "env", "ignored", key, "fallback"); got != "configured" {
+		t.Errorf("env(%q, fallback) = %v, want configured", key, got)
+	}
+
+	t.Run("empty value uses default", func(t *testing.T) {
+		t.Setenv(key, "")
+		if got := apply(t, "env", nil, key, "fallback"); got != "fallback" {
+			t.Errorf("env(%q, fallback) = %v, want fallback", key, got)
+		}
+	})
+
+	t.Run("empty value without default", func(t *testing.T) {
+		t.Setenv(key, "")
+		if got := apply(t, "env", nil, key); got != "" {
+			t.Errorf("env(%q) = %v, want empty string", key, got)
+		}
+	})
+
+	for _, args := range [][]any{nil, {"", "fallback"}, {key, "fallback", "extra"}} {
+		if _, err := New().Apply("env", nil, args); err == nil {
+			t.Errorf("env(%v) expected an error", args)
+		}
+	}
+}
+
 func TestToggleFilter(t *testing.T) {
 	if got := apply(t, "toggle", "Eclipse.Temurin.21", "builtin"); got != "Eclipse.Temurin.21" {
 		t.Errorf("toggle(string) = %v", got)
