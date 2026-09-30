@@ -89,7 +89,7 @@ func resolveShellStateConfig(item map[string]any, state string) shellStateConfig
 	} else if hostSpec == "" {
 		typeSpec = os.Getenv("SHELL")
 		if typeSpec == "" {
-			typeSpec = "pwsh"
+			typeSpec = defaultShellType()
 		}
 		hostSpec = typeSpec
 	}
@@ -133,6 +133,13 @@ func shellItemLabel(item map[string]any, state string) string {
 		}
 	}
 	return "<unknown>"
+}
+
+func defaultShellType() string {
+	if runtime.GOOS == "windows" {
+		return "pwsh"
+	}
+	return "bash"
 }
 
 func shellHostInvocation(hostSpec string) []string {

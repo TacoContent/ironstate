@@ -1216,8 +1216,8 @@ func TestGoHandlerBinaryPathAndUninstall(t *testing.T) {
 	}
 }
 
-func TestShellHandlerRunsCommandViaPwshByDefault(t *testing.T) {
-	t.Setenv("SHELL", "")
+func TestShellHandlerRunsCommandViaPwshFromShellEnv(t *testing.T) {
+	t.Setenv("SHELL", "pwsh")
 	rec := &recordingRunner{responses: []ironexec.Result{{RC: 0, Stdout: "hi\n", StdoutLines: []string{"hi"}}}}
 	withRunner(t, rec)
 
@@ -1246,7 +1246,7 @@ func TestShellHandlerTypeResolution(t *testing.T) {
 		{name: "type wins over host", item: map[string]any{"type": "bash", "host": "cmd"}, wantType: "bash", wantHost: "bash"},
 		{name: "legacy host", item: map[string]any{"host": "cmd"}, wantHost: "cmd"},
 		{name: "shell environment", item: map[string]any{}, shell: "/bin/zsh", wantType: "/bin/zsh", wantHost: "/bin/zsh"},
-		{name: "pwsh fallback", item: map[string]any{}, wantType: "pwsh", wantHost: "pwsh"},
+		{name: "os fallback", item: map[string]any{}, wantType: defaultShellType(), wantHost: defaultShellType()},
 	}
 
 	for _, tt := range tests {

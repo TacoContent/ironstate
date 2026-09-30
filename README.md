@@ -989,7 +989,7 @@ tasks:
 | --- | --- | --- |
 | `command` | one of `command`/`script` | Inline script content, written to a temp file and run. Use a YAML block scalar (`\|`) for multiline scripts |
 | `script` | one of `command`/`script` | Path to an existing file to run instead, resolved the same way as `copy.src` |
-| `type` | no | Interpreter type such as `bash`, `python`, or `python3.11`. If omitted, uses `$SHELL`, then `pwsh`. Inline commands receive `#! /usr/bin/env <type>`; on Unix they are executed through that shebang. |
+| `type` | no | Interpreter type such as `bash`, `python`, or `python3.11`. If omitted, uses `$SHELL`, then `pwsh` on Windows or `bash` elsewhere. Inline commands receive `#! /usr/bin/env <type>`; on Unix they are executed through that shebang. |
 | `host` | no | Legacy interpreter/command selector, retained for compatibility. `type` takes precedence when both are set. Presets `powershell`, `cmd`, `bash`, `sh`, `node`, `python` expand to their executable. Anything else is split on whitespace and used as exe + leading args - e.g. `npx tsx`. |
 | `extension` | no | Overrides the temp file's extension for inline `command` under a non-`pwsh` host (defaults to a sensible one per preset, `.txt` otherwise) - e.g. `.ts` so `npx tsx` sees real TypeScript |
 | `args` | no | List of arguments passed to the command/script |

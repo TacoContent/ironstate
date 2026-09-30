@@ -654,7 +654,7 @@
         },
         "type": {
           "type": "string",
-          "description": "Interpreter type, such as 'bash', 'python', or 'python3.11'. Takes precedence over the legacy 'host' field. If omitted, the SHELL environment variable is used, falling back to 'pwsh'. Inline commands receive a '#! /usr/bin/env <type>' shebang."
+          "description": "Interpreter type, such as 'bash', 'python', or 'python3.11'. Takes precedence over the legacy 'host' field. If omitted, the SHELL environment variable is used, falling back to 'pwsh' on Windows and 'bash' elsewhere. Inline commands receive a '#! /usr/bin/env <type>' shebang."
         },
         "host": {
           "type": "string",
