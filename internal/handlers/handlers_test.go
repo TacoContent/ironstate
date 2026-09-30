@@ -1113,6 +1113,8 @@ func TestFactHandlerPlainValue(t *testing.T) {
 }
 
 func TestFactHandlerEmbeddedShellRunsViaOverridableRunner(t *testing.T) {
+	// The default host comes from $SHELL; clear it so the pwsh fallback applies on every OS.
+	t.Setenv("SHELL", "")
 	origRunner := runner
 	defer func() { runner = origRunner }()
 	var capturedExe string
