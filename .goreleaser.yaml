@@ -91,6 +91,7 @@ archives:
       - README.md
       - LICENSE
       - ironstate.1
+      - ironstate.schema.json
 
 checksum:
   name_template: checksums.txt

@@ -1,0 +1,50 @@
+---
+name: 'Validate IronState Playbooks'
+description: 'Validates IronState playbooks'
+
+inputs:
+  path:
+    description: 'Name of the playbook to validate'
+    required: false
+    default: 'playbooks'
+
+outputs:
+  validation_result:
+    description: 'The result of the playbook validation'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install IronState
+      uses: camalot/xget-action@v1
+      with:
+        package: TacoContent/ironstate
+
+    - name: Validate IronState Playbooks
+      shell: bash
+      run: |
+        set -euo pipefail
+        # get each top level playbook under the playbooks directory
+        summary="# IronState Playbooks Validation\n"
+        echo "::group::Validating IronState Playbooks"
+        status_exit=0
+        for playbook in playbooks/*; do
+          if [ -d "$playbook" ]; then
+            echo "Validating $playbook"
+            result=$(ironstate validate "$playbook")
+            exit_code=$?
+            echo "$result"
+            ironstate validate "$playbook"
+            if [ $exit_code -ne 0 ]; then
+              echo "Validation failed for $playbook"
+              summary+="\n**Validation failed for $playbook**\n"
+              status_exit=1
+            fi
+            summary+="<details><summary>$playbook</summary>\n"
+            summary+="$result\n"
+            summary+="</details>\n"
+          fi
+        done
+        echo "::endgroup::"
+        echo -e "$summary" >> "$GITHUB_STEP_SUMMARY"
+        exit $status_exit
