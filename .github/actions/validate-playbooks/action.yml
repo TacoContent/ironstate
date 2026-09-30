@@ -3,8 +3,8 @@ name: 'Validate IronState Playbooks'
 description: 'Validates IronState playbooks'
 
 inputs:
-  path:
-    description: 'Name of the playbook to validate'
+  playbooks-path:
+    description: 'The directory containing the playbooks to validate'
     required: false
     default: 'playbooks'
 
@@ -19,32 +19,41 @@ runs:
       uses: camalot/xget-action@v1
       with:
         package: TacoContent/ironstate
+        ignore: |
+          .sbom.json
 
     - name: Validate IronState Playbooks
       shell: bash
       run: |
-        set -euo pipefail
-        # get each top level playbook under the playbooks directory
-        summary="# IronState Playbooks Validation\n"
-        echo "::group::Validating IronState Playbooks"
+        set -uo pipefail
         status_exit=0
-        for playbook in playbooks/*; do
-          if [ -d "$playbook" ]; then
-            echo "Validating $playbook"
-            result=$(ironstate validate "$playbook")
-            exit_code=$?
-            echo "$result"
-            ironstate validate "$playbook"
-            if [ $exit_code -ne 0 ]; then
-              echo "Validation failed for $playbook"
-              summary+="\n**Validation failed for $playbook**\n"
-              status_exit=1
-            fi
-            summary+="<details><summary>$playbook</summary>\n"
-            summary+="$result\n"
-            summary+="</details>\n"
+        {
+          echo "# IronState Playbooks Validation"
+          echo
+        } >> "$GITHUB_STEP_SUMMARY"
+        for playbook in ${INPUT_PLAYBOOKS_PATH}/*; do
+          [ -d "$playbook" ] || continue
+          echo "::group::Validating $playbook"
+          exit_code=0
+          result=$(ironstate validate --playbook="$playbook" 2>&1) || exit_code=$?
+          echo "$result"
+          echo "::endgroup::"
+          if [ "$exit_code" -ne 0 ]; then
+            echo "::error::Validation failed for $playbook (exit $exit_code)"
+            status_icon="❌"
+            status_exit=1
+          else
+            status_icon="✅"
           fi
+          {
+            echo "<details><summary>$status_icon $playbook</summary>"
+            echo
+            echo '```text'
+            echo "$result"
+            echo '```'
+            echo
+            echo "</details>"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
         done
-        echo "::endgroup::"
-        echo -e "$summary" >> "$GITHUB_STEP_SUMMARY"
         exit $status_exit
