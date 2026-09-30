@@ -1,4 +1,64 @@
 
+## [v0.7.0](https://github.com/tacocontent/ironstate/releases/tag/v0.7.0) - 2026-09-30
+
+### 🚀 FEATURES
+
+#### _GENERAL_
+
+- Added env filter -[@camalot](https://github.com/camalot)
+
+- Added playbook validation -[@camalot](https://github.com/camalot)
+
+- Added shell.type as it is better than shell.host -[@camalot](https://github.com/camalot)
+
+- Added schema to package -[@camalot](https://github.com/camalot)
+
+
+### 🐛 BUG FIXES
+
+#### _GENERAL_
+
+- Spinner not clearing line -[@camalot](https://github.com/camalot)
+
+- Some bug fixes -[@camalot](https://github.com/camalot)
+
+- Resolve failing tests -[@camalot](https://github.com/camalot)
+
+- Update fallback for shell when SHELL env is not set. linux / macos = bash. windows = pwsh -[@camalot](https://github.com/camalot)
+
+
+### ⚙️ MISCELLANEOUS TASKS
+
+#### _GENERAL_
+
+- Cleanup playbook -[@camalot](https://github.com/camalot)
+
+
+## GitHub
+
+### 💛 Contributors
+
+
+- [@camalot](https://github.com/camalot)
+## 📈 Commit Statistics
+
+
+- `9` commits contributed to the release.
+- `2` days have passed between the first and last commit.
+- `9` commits parsed as conventional.
+- `0` linked issues detected in commits.
+- `2` days  have passed between releases.
+
+
+![Statistics](https://quickchart.io/chart?c={type:'bar',data:{labels:['Commits','Contributors','Days%20Between%20Commits','Conventional%20Commits','Referenced%20Links','Days%20Since%20Last%20Release'],datasets:[{label:'Release',data:[9,1,2,9,0,2]}]}})
+
+
+
+---
+
+
+**Full Changelog**: https://github.com/tacocontent/ironstate/compare/v0.6.0...v0.7.0
+
 ## [v0.6.0](https://github.com/tacocontent/ironstate/releases/tag/v0.6.0) - 2026-09-28
 
 ### 🚀 FEATURES
