@@ -48,6 +48,7 @@ func LoadIncludedPackage(includeSpec map[string]any, packagesRoot string, facts,
 	}
 
 	pkgDir := filepath.Join(packagesRoot, nameStr)
+	// check if the name is a file first, then fall back to the directory containing main.yml
 	pkgFile := filepath.Join(pkgDir, "main.yml")
 	if _, err := os.Stat(pkgFile); err != nil {
 		Warn("included package '%s' not found: %s", nameStr, pkgFile)

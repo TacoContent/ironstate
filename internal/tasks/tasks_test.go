@@ -133,6 +133,30 @@ func TestItemsLoopMaterializesOneLeafPerEntry(t *testing.T) {
 	}
 }
 
+func TestItemsLoopResolvesItemsAgainstVars(t *testing.T) {
+	leaves := expandOK(t, `
+- name: install ${{ item }}
+  winget:
+    package: ${{ item }}
+    state: present
+  items:
+    - Python.Launcher
+    - '${{ "Python.Python." | concat("", languages.python | toggle(defaults.languages.python)) }}'
+`, Options{Vars: map[string]any{
+		"languages": map[string]any{"python": "3.14"},
+		"defaults":  map[string]any{"languages": map[string]any{"python": "3.13"}},
+	}})
+	if len(leaves) != 2 {
+		t.Fatalf("leaves = %#v", leaves)
+	}
+	if leaves[0].Item["package"] != "Python.Launcher" {
+		t.Fatalf("leaf 0 package = %#v", leaves[0].Item["package"])
+	}
+	if leaves[1].Name != "install Python.Python.3.14" || leaves[1].Item["package"] != "Python.Python.3.14" {
+		t.Fatalf("leaf 1 = %#v", leaves[1])
+	}
+}
+
 func TestItemsOmitsUnresolvedFieldRatherThanEmptyString(t *testing.T) {
 	leaves := expandOK(t, `
 - name: install ${{ item.package }}

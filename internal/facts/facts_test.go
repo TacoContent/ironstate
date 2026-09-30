@@ -18,7 +18,7 @@ func TestGatherShape(t *testing.T) {
 		"shell_zsh", "zsh_version",
 		"shell_fish", "fish_version",
 		"shell_nu", "nu_version",
-		"platform", "arch", "os_family",
+		"platform", "arch", "os_family", "is_debian", "debian_version",
 	} {
 		if _, ok := f[key]; !ok {
 			t.Errorf("missing fact %q", key)
@@ -54,6 +54,19 @@ func TestOSFamily(t *testing.T) {
 		if got := osFamily(goos); got != want {
 			t.Errorf("osFamily(%q) = %q, want %q", goos, got, want)
 		}
+	}
+}
+
+func TestDebianFacts(t *testing.T) {
+	readFile := func(string) ([]byte, error) { return []byte("  13.1\n"), nil }
+	isDebian, version := debianFacts("linux", readFile)
+	if !isDebian || version != "13.1" {
+		t.Fatalf("debianFacts(linux) = %t, %q; want true, 13.1", isDebian, version)
+	}
+
+	isDebian, version = debianFacts("windows", readFile)
+	if isDebian || version != nil {
+		t.Fatalf("debianFacts(windows) = %t, %v; want false, nil", isDebian, version)
 	}
 }
 

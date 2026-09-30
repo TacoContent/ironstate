@@ -322,7 +322,26 @@ func expandLoop(item map[string]any, key string, opts Options, sc scope) ([]Leaf
 		if sc.parentItemCtx != nil {
 			itemCtx["parent"] = sc.parentItemCtx
 		}
-		if err := template.ResolveInPlace(wrapper, itemCtx, opts.Filters, label, true, "items", "with"); err != nil {
+		loopContext := map[string]any{}
+		for k, v := range sc.facts {
+			loopContext[k] = v
+		}
+		for k, v := range sc.packageVars {
+			loopContext[k] = v
+		}
+		for k, v := range sc.vars {
+			loopContext[k] = v
+		}
+		for k, v := range itemCtx {
+			loopContext[k] = v
+		}
+		resolvedLoopValue, err := template.ExpandNode(model.DeepCopy(loopValue), loopContext, opts.Filters, label, true, nil)
+		if err != nil {
+			return nil, err
+		}
+		itemCtx["item"] = resolvedLoopValue
+		loopContext["item"] = resolvedLoopValue
+		if err := template.ResolveInPlace(wrapper, loopContext, opts.Filters, label, true, "items", "with"); err != nil {
 			return nil, err
 		}
 

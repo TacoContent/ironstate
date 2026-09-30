@@ -62,6 +62,7 @@ func newRootCommand() (*cobra.Command, error) {
 	cmd.AddCommand(newDoctorCommand())
 	cmd.AddCommand(newInitCommand())
 	cmd.AddCommand(newPluginCommand())
+	cmd.AddCommand(newValidateCommand())
 
 	return cmd, nil
 }

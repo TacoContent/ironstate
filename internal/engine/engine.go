@@ -341,7 +341,6 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 		if provider, ok := handler.(RequiredToolsProvider); ok {
 			missing := missingRequiredTool(provider.RequiredTools(), state.CommandAvailability)
 			if missing != "" {
-				Warn("required tool '%s' not found on PATH; skipping [%s].", missing, module)
 				continue
 			}
 		}

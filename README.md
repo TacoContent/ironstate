@@ -407,6 +407,17 @@ script filters discovered under path/to/your/playbook/filters:
 
 A `[missing]` line isn't necessarily a problem - it only matters for the specific package-manager modules (`winget`/`chocolatey`/`homebrew`/`apt`/`pacman`/`yum`/`apk`/`snap`/`flatpak`/`scoop`/`macports`/`pipx`/`npm`/`cargo`/`go`/`gem`/`eget`/`xget`) or `shell.host: pwsh` tasks your own `main.yml` actually uses; `doctor` checks a fixed list of every module this build knows about; `bin` availability is otherwise re-checked per-module at dispatch time regardless (see [Architecture](#architecture)).
 
+### `ironstate validate`
+
+Validate a playbook against `ironstate.schema.json` without running it:
+
+```shell
+$ ironstate validate --playbook path/to/playbook
+path/to/playbook/main.yml: valid
+```
+
+The command recursively validates the root playbook and every `.yml`/`.yaml` document below its directory, including included packages, roles, host overlays, and variable overlays. It looks for `ironstate.schema.json` in the current directory, next to the playbook, and next to the executable. If none is available, it fetches the schema from the `develop` branch on GitHub. Validation failures include the playbook path, YAML line and column, and the failing schema instance path. If the schema cannot be found, validation exits non-zero and reports that the playbook cannot be validated because the schema could not be found.
+
 ## Task/action model
 
 A document is either the explicit form:
@@ -619,6 +630,8 @@ Gathered fresh every run; a deliberately small, easy-to-extend starter set (see 
 | `platform` | Go's `GOOS` - `windows`, `linux`, or `darwin` |
 | `arch` | Go's `GOARCH` - `amd64`, `arm64`, ... |
 | `os_family` | `windows`/`darwin` as-is; on Linux, the distribution ID from `/etc/os-release` (e.g. `ubuntu`, `debian`, `archlinux`, `alpine`, `redhat`, `fedora`) if detectable, else `linux` |
+| `is_debian` | `true` on Linux when `/etc/debian_version` exists, otherwise `false` |
+| `debian_version` | Trimmed contents of `/etc/debian_version` when `is_debian` is `true`, otherwise `null` |
 
 ### Vars
 
@@ -976,12 +989,13 @@ tasks:
 | --- | --- | --- |
 | `command` | one of `command`/`script` | Inline script content, written to a temp file and run. Use a YAML block scalar (`\|`) for multiline scripts |
 | `script` | one of `command`/`script` | Path to an existing file to run instead, resolved the same way as `copy.src` |
-| `host` | no | What runs `command`/`script`, like a shebang line. Default `pwsh` runs it directly, in-process. Presets `powershell`, `cmd`, `bash`, `sh`, `node`, `python` expand to their executable. Anything else is split on whitespace and used as exe + leading args - e.g. `npx tsx` - so any script runner on PATH works without code changes |
+| `type` | no | Interpreter type such as `bash`, `python`, or `python3.11`. If omitted, uses `$SHELL`, then `pwsh`. Inline commands receive `#! /usr/bin/env <type>`; on Unix they are executed through that shebang. |
+| `host` | no | Legacy interpreter/command selector, retained for compatibility. `type` takes precedence when both are set. Presets `powershell`, `cmd`, `bash`, `sh`, `node`, `python` expand to their executable. Anything else is split on whitespace and used as exe + leading args - e.g. `npx tsx`. |
 | `extension` | no | Overrides the temp file's extension for inline `command` under a non-`pwsh` host (defaults to a sensible one per preset, `.txt` otherwise) - e.g. `.ts` so `npx tsx` sees real TypeScript |
 | `args` | no | List of arguments passed to the command/script |
 | `creates` | no | Glob patterns whose presence means "already run". Without it, `present`/`latest` always re-run the command. For `absent`, these paths are removed instead of the command running again |
 
-**Per-state command/script (scripted install/uninstall)**: `command`/`script`/`args`/`host`/`extension` can instead be nested one level deeper, under `present`/`absent`/`latest` keys, to run a different command per state:
+**Per-state command/script (scripted install/uninstall)**: `command`/`script`/`args`/`type`/`host`/`extension` can instead be nested one level deeper, under `present`/`absent`/`latest` keys, to run a different command per state:
 
 ```yaml
 tasks:

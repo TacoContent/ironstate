@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/user"
 	"runtime"
+	"strings"
 	"sync"
 )
 
@@ -23,27 +24,41 @@ import (
 // numeric convention.
 func Gather() map[string]any {
 	shells := gatherShellVersions()
+	isDebian, debianVersion := debianFacts(runtime.GOOS, os.ReadFile)
 	return map[string]any{
-		"computer_name": computerName(),
-		"user_name":     userName(),
-		"home":          homeDir(),
-		"os_version":    osVersion(),
-		"os_build":      float64(osBuildNumber()),
-		"is_admin":      isAdmin(),
-		"shell_pwsh":    shells.pwsh != "",
-		"pwsh_version":  stringOrNil(shells.pwsh),
-		"shell_bash":    shells.bash != "",
-		"bash_version":  stringOrNil(shells.bash),
-		"shell_zsh":     shells.zsh != "",
-		"zsh_version":   stringOrNil(shells.zsh),
-		"shell_fish":    shells.fish != "",
-		"fish_version":  stringOrNil(shells.fish),
-		"shell_nu":      shells.nu != "",
-		"nu_version":    stringOrNil(shells.nu),
-		"platform":      runtime.GOOS,
-		"arch":          runtime.GOARCH,
-		"os_family":     osFamily(runtime.GOOS),
+		"computer_name":  computerName(),
+		"user_name":      userName(),
+		"home":           homeDir(),
+		"os_version":     osVersion(),
+		"os_build":       float64(osBuildNumber()),
+		"is_admin":       isAdmin(),
+		"shell_pwsh":     shells.pwsh != "",
+		"pwsh_version":   stringOrNil(shells.pwsh),
+		"shell_bash":     shells.bash != "",
+		"bash_version":   stringOrNil(shells.bash),
+		"shell_zsh":      shells.zsh != "",
+		"zsh_version":    stringOrNil(shells.zsh),
+		"shell_fish":     shells.fish != "",
+		"fish_version":   stringOrNil(shells.fish),
+		"shell_nu":       shells.nu != "",
+		"nu_version":     stringOrNil(shells.nu),
+		"platform":       runtime.GOOS,
+		"arch":           runtime.GOARCH,
+		"os_family":      osFamily(runtime.GOOS),
+		"is_debian":      isDebian,
+		"debian_version": debianVersion,
 	}
+}
+
+func debianFacts(goos string, readFile func(string) ([]byte, error)) (bool, any) {
+	if goos != "linux" {
+		return false, nil
+	}
+	data, err := readFile("/etc/debian_version")
+	if err != nil {
+		return false, nil
+	}
+	return true, strings.TrimSpace(string(data))
 }
 
 // shellVersionFacts holds every shell version probe's result, gathered

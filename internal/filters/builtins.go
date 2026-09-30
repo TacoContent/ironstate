@@ -34,6 +34,7 @@ func registerBuiltins(r *Registry) {
 	r.Register("sha1", filterSHA1)
 	r.Register("extension", filterExtension)
 	r.Register("env", filterEnv)
+	r.Register("contains", filterContains)
 	registerJSONFilters(r)
 	registerLookupFilter(r)
 }
@@ -66,6 +67,18 @@ func filterDefault(value any, args []any) (any, error) {
 		return args[0], nil
 	}
 	return value, nil
+}
+
+func filterContains(value any, args []any) (any, error) {
+	// 'contains' filter checks if the value (string) contains the given substring argument.
+	if len(args) != 1 {
+		return nil, fmt.Errorf("'contains' filter expects exactly 1 argument")
+	}
+	substr := toStr(args[0])
+	if s, ok := value.(string); ok {
+		return strings.Contains(s, substr), nil
+	}
+	return false, nil
 }
 
 func filterEnv(value any, args []any) (any, error) {

@@ -74,6 +74,10 @@
           "default": false,
           "description": "When true, a failed leaf (see 'failed_when') is logged and the run continues to the next task instead of stopping immediately - matches Ansible's 'ignore_errors'. The leaf's registered result (if it has an 'id') still reports 'failed: true'."
         },
+        "become": {
+          "description": "Run the task with elevation. A boolean enables the default elevated identity; a string selects 'root' or a specific user where supported.",
+          "oneOf": [{ "type": "boolean" }, { "type": "string" }, { "$ref": "#/$defs/templateString" }]
+        },
         "items": {
           "description": "Materializes this task once per entry (Ansible 'loop'-style) *before* anything else about it is evaluated - name, tags, when, id, its module fields, or a nested 'actions'/'include'. Each copy gets '${{ item }}'/'${{ item.<key> }}' resolved against that one entry. Wins over 'with' if both are set. May also be a single '${{ vars.* }}'/'${{ facts.* }}' template expression that resolves to a list (e.g. '${{ vars.ssh.authorized_keys }}') - resolved before task-tree flattening, so the loop still sees a real list at run time.",
           "oneOf": [{ "type": "array" }, { "$ref": "#/$defs/templateString" }]
@@ -88,6 +92,18 @@
         },
         "winget": { "$ref": "#/$defs/wingetItem" },
         "chocolatey": { "$ref": "#/$defs/basicPackageItem" },
+        "homebrew": { "$ref": "#/$defs/packageManagerItem" },
+        "brew": { "$ref": "#/$defs/packageManagerItem" },
+        "apt": { "$ref": "#/$defs/packageManagerItem" },
+        "pacman": { "$ref": "#/$defs/packageManagerItem" },
+        "yum": { "$ref": "#/$defs/packageManagerItem" },
+        "apk": { "$ref": "#/$defs/packageManagerItem" },
+        "snap": { "$ref": "#/$defs/packageManagerItem" },
+        "flatpak": { "$ref": "#/$defs/packageManagerItem" },
+        "scoop": { "$ref": "#/$defs/packageManagerItem" },
+        "macports": { "$ref": "#/$defs/packageManagerItem" },
+        "gem": { "$ref": "#/$defs/packageManagerItem" },
+        "service": { "$ref": "#/$defs/packageManagerItem" },
         "pipx": { "$ref": "#/$defs/basicPackageItem" },
         "npm": { "$ref": "#/$defs/basicPackageItem" },
         "cargo": { "$ref": "#/$defs/basicPackageItem" },
@@ -148,11 +164,28 @@
       "type": "object",
       "description": "A package managed by chocolatey, pipx, npm, or cargo.",
       "additionalProperties": false,
-      "required": ["package"],
       "properties": {
         "package": {
-          "type": "string",
+          "oneOf": [{ "type": "string" }, { "type": "array" }],
           "description": "Package name as known to the manager's CLI."
+        },
+        "name": {
+          "oneOf": [{ "type": "string" }, { "type": "array" }],
+          "description": "Alias for package, accepted by package-manager handlers."
+        },
+        "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "packageManagerItem": {
+      "type": "object",
+      "description": "Package-manager task configuration. Individual handlers accept additional manager-specific options.",
+      "additionalProperties": true,
+      "properties": {
+        "package": {
+          "oneOf": [{ "type": "string" }, { "type": "array" }]
+        },
+        "name": {
+          "oneOf": [{ "type": "string" }, { "type": "array" }]
         },
         "state": { "$ref": "#/$defs/state" }
       }
@@ -619,10 +652,13 @@
           "type": "string",
           "description": "Path to a script to execute. Resolved relative to the install system directory (install/windows, or the owning package's own directory for packages/<name>/main.yml) unless it is absolute or '~'-prefixed. Mutually exclusive with 'command'."
         },
+        "type": {
+          "type": "string",
+          "description": "Interpreter type, such as 'bash', 'python', or 'python3.11'. Takes precedence over the legacy 'host' field. If omitted, the SHELL environment variable is used, falling back to 'pwsh'. Inline commands receive a '#! /usr/bin/env <type>' shebang."
+        },
         "host": {
           "type": "string",
-          "default": "pwsh",
-          "description": "What runs 'command'/'script', like a shebang line. Default 'pwsh' runs it directly in-process (no subprocess). Recognized presets ('powershell', 'cmd', 'bash', 'sh', 'node', 'python') expand to their executable. Any other value is split on whitespace and used as exe + leading args, e.g. 'npx tsx', so any script runner on PATH works."
+          "description": "Legacy interpreter/command selector. 'type' takes precedence when both are set. Recognized presets ('powershell', 'cmd', 'bash', 'sh', 'node', 'python') expand to their executable. Any other value is split on whitespace and used as exe + leading args, e.g. 'npx tsx'."
         },
         "extension": {
           "type": "string",
@@ -925,8 +961,7 @@
           "description": "Package directory name under install/windows/packages/."
         },
         "state": {
-          "type": "string",
-          "enum": ["present", "absent", "latest"],
+          "$ref": "#/$defs/state",
           "default": "present",
           "description": "Made available inside the package as '${{ package.state }}'."
         },
@@ -974,8 +1009,7 @@
           "description": "Made available inside the used document as '${{ package.name }}'. Defaults to a description of the source."
         },
         "state": {
-          "type": "string",
-          "enum": ["present", "absent", "latest"],
+          "$ref": "#/$defs/state",
           "default": "present",
           "description": "Made available inside the used document as '${{ package.state }}'."
         },

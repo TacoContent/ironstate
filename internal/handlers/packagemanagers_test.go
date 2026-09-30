@@ -1217,6 +1217,7 @@ func TestGoHandlerBinaryPathAndUninstall(t *testing.T) {
 }
 
 func TestShellHandlerRunsCommandViaPwshByDefault(t *testing.T) {
+	t.Setenv("SHELL", "")
 	rec := &recordingRunner{responses: []ironexec.Result{{RC: 0, Stdout: "hi\n", StdoutLines: []string{"hi"}}}}
 	withRunner(t, rec)
 
@@ -1231,6 +1232,31 @@ func TestShellHandlerRunsCommandViaPwshByDefault(t *testing.T) {
 	}
 	if result.Stdout != "hi\n" {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestShellHandlerTypeResolution(t *testing.T) {
+	tests := []struct {
+		name     string
+		item     map[string]any
+		shell    string
+		wantType string
+		wantHost string
+	}{
+		{name: "type wins over host", item: map[string]any{"type": "bash", "host": "cmd"}, wantType: "bash", wantHost: "bash"},
+		{name: "legacy host", item: map[string]any{"host": "cmd"}, wantHost: "cmd"},
+		{name: "shell environment", item: map[string]any{}, shell: "/bin/zsh", wantType: "/bin/zsh", wantHost: "/bin/zsh"},
+		{name: "pwsh fallback", item: map[string]any{}, wantType: "pwsh", wantHost: "pwsh"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("SHELL", tt.shell)
+			cfg := resolveShellStateConfig(tt.item, "present")
+			if cfg.Type != tt.wantType || cfg.HostSpec != tt.wantHost {
+				t.Fatalf("resolved type=%q host=%q, want type=%q host=%q", cfg.Type, cfg.HostSpec, tt.wantType, tt.wantHost)
+			}
+		})
 	}
 }
 

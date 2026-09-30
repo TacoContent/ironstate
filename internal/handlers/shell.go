@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/TacoContent/ironstate/internal/engine"
@@ -28,12 +29,13 @@ func (shellHandler) Emoji() string { return "💻" }
 func (shellHandler) RequiredTools() []string { return []string{} }
 
 var shellHostPresets = map[string][]string{
-	"powershell": {"powershell.exe"},
+	"powershell": {"pwsh"},
+	"pwsh":       {"pwsh"},
 	"cmd":        {"cmd.exe", "/d", "/c"},
-	"bash":       {"bash.exe"},
-	"sh":         {"sh.exe"},
-	"node":       {"node.exe"},
-	"python":     {"python.exe"},
+	"bash":       {"bash"},
+	"sh":         {"sh"},
+	"node":       {"node"},
+	"python":     {"python"},
 }
 
 var shellHostExtensions = map[string]string{
@@ -54,6 +56,7 @@ type shellStateConfig struct {
 	Command   string
 	Script    string
 	ItemArgs  []string
+	Type      string
 	HostSpec  string
 	Extension string
 }
@@ -79,9 +82,16 @@ func resolveShellStateConfig(item map[string]any, state string) shellStateConfig
 
 	command, _ := pick("command").(string)
 	script, _ := pick("script").(string)
+	typeSpec, _ := pick("type").(string)
 	hostSpec, _ := pick("host").(string)
-	if hostSpec == "" {
-		hostSpec = "pwsh"
+	if typeSpec != "" {
+		hostSpec = typeSpec
+	} else if hostSpec == "" {
+		typeSpec = os.Getenv("SHELL")
+		if typeSpec == "" {
+			typeSpec = "pwsh"
+		}
+		hostSpec = typeSpec
 	}
 	extension, _ := pick("extension").(string)
 
@@ -96,6 +106,7 @@ func resolveShellStateConfig(item map[string]any, state string) shellStateConfig
 		Command:   command,
 		Script:    script,
 		ItemArgs:  itemArgs,
+		Type:      typeSpec,
 		HostSpec:  hostSpec,
 		Extension: extension,
 	}
@@ -161,6 +172,13 @@ func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
 			engine.Warn("Shell item '%s': %v", label, err)
 			return engine.ExecResult{}
 		}
+		if cfg.Type != "" {
+			if _, err := f.WriteString("#! /usr/bin/env " + cfg.Type + "\n"); err != nil {
+				_ = f.Close()
+				engine.Warn("Shell item '%s': %v", label, err)
+				return engine.ExecResult{}
+			}
+		}
 		if _, err := f.WriteString(cfg.Command); err != nil {
 			_ = f.Close()
 			engine.Warn("Shell item '%s': %v", label, err)
@@ -184,6 +202,12 @@ func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
 		// on shellHandler), unlike the original's in-process execution.
 		args := append([]string{"-NoLogo", "-NoProfile", "-File", runPath}, cfg.ItemArgs...)
 		result = runExternalCommand("pwsh", args)
+	} else if cfg.Script == "" && runtime.GOOS != "windows" && cfg.Type != "" {
+		if err := os.Chmod(runPath, 0o700); err != nil { //nolint:gosec // the private temp script must be executable by its owner
+			engine.Warn("Shell item '%s': %v", label, err)
+			return engine.ExecResult{}
+		}
+		result = runExternalCommand(runPath, cfg.ItemArgs)
 	} else {
 		exe := invocation[0]
 		args := append(append([]string{}, invocation[1:]...), append([]string{runPath}, cfg.ItemArgs...)...)

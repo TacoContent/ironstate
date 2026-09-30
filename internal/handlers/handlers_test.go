@@ -1138,8 +1138,8 @@ func TestFactHandlerEmbeddedShellRunsViaOverridableRunner(t *testing.T) {
 	if capturedExe != "pwsh" {
 		t.Fatalf("expected the default host to shell out to pwsh, got %q (args=%v)", capturedExe, capturedArgs)
 	}
-	if capturedScriptContent != "Write-Output computed-value" {
-		t.Fatalf("expected the embedded command written to the temp script, got %q", capturedScriptContent)
+	if capturedScriptContent != "#! /usr/bin/env pwsh\nWrite-Output computed-value" {
+		t.Fatalf("expected the embedded command and shebang written to the temp script, got %q", capturedScriptContent)
 	}
 	if exec.Stdout != "computed-value\n" {
 		t.Fatalf("exec.Stdout = %q", exec.Stdout)
