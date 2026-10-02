@@ -53,6 +53,53 @@ func TestRunApplyLoadsDotEnvAndDotSecretsFromCWD(t *testing.T) {
 	}
 }
 
+func TestRunApplyPlaybookAndTaskEnvsRestoreOriginalValues(t *testing.T) {
+	const key = "IRONSTATE_PLAYBOOK_ENV_TEST"
+	const scoped = "IRONSTATE_TASK_ENV_TEST"
+	t.Setenv(key, "original")
+	_ = os.Unsetenv(scoped)
+	sitePath := filepath.Join(t.TempDir(), "main.yml")
+	content := `
+vars:
+  desired: from-var
+envs:
+  IRONSTATE_PLAYBOOK_ENV_TEST: ${{ vars.desired }}
+tasks:
+  - name: scoped
+    when: envs.IRONSTATE_PLAYBOOK_ENV_TEST == 'from-var'
+    envs:
+      IRONSTATE_PLAYBOOK_ENV_TEST: local
+      IRONSTATE_TASK_ENV_TEST: 1
+    assert:
+      that:
+        - "envs.IRONSTATE_PLAYBOOK_ENV_TEST == 'local'"
+        - "envs.IRONSTATE_TASK_ENV_TEST == '1'"
+  - name: restored for next task
+    assert:
+      that:
+        - "envs.IRONSTATE_PLAYBOOK_ENV_TEST == 'from-var'"
+        - "envs.IRONSTATE_TASK_ENV_TEST is not defined"
+`
+	if err := os.WriteFile(sitePath, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd, err := newRootCommand()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd.SetArgs([]string{"--playbook", sitePath, "--output", "json"})
+	cmd.SetOut(new(bytes.Buffer))
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if got := os.Getenv(key); got != "original" {
+		t.Errorf("playbook env leaked: %q", got)
+	}
+	if _, exists := os.LookupEnv(scoped); exists {
+		t.Error("task-only environment variable leaked")
+	}
+}
+
 func TestRunApplyMergesVarsFileAndVarOverrides(t *testing.T) {
 	dir := t.TempDir()
 

@@ -80,10 +80,12 @@ func TestMergeVarsDeepMerge(t *testing.T) {
 func TestMergeDocumentsAppendsTasksAndDeepMergesVars(t *testing.T) {
 	base := map[string]any{
 		"vars":  map[string]any{"a": 1.0},
+		"envs":  map[string]any{"A": "before", "B": "base"},
 		"tasks": []any{"base-task"},
 	}
 	overlay := map[string]any{
 		"vars":  map[string]any{"b": 2.0},
+		"envs":  map[string]any{"A": "after"},
 		"tasks": []any{"overlay-task"},
 	}
 	merged := MergeDocuments(base, overlay)
@@ -94,6 +96,10 @@ func TestMergeDocumentsAppendsTasksAndDeepMergesVars(t *testing.T) {
 	vars := merged["vars"].(map[string]any)
 	if vars["a"] != 1.0 || vars["b"] != 2.0 {
 		t.Fatalf("vars = %#v, want both keys deep-merged", vars)
+	}
+	envs := merged["envs"].(map[string]any)
+	if envs["A"] != "after" || envs["B"] != "base" {
+		t.Fatalf("envs = %#v, want overlay to win without dropping other keys", envs)
 	}
 }
 
@@ -196,6 +202,26 @@ tasks:
 	}
 	if included.Package["name"] != "cli" {
 		t.Errorf("Package.name = %v", included.Package["name"])
+	}
+}
+
+func TestLoadIncludedPackageDefersScopedEnvironmentTemplates(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "scoped", "main.yml"), `
+tasks:
+  - name: scoped
+    envs: { IRONSTATE_INCLUDED_ENV_TEST: local }
+    log:
+      message: "${{ 'IRONSTATE_INCLUDED_ENV_TEST' | env }}"
+`)
+	included, err := LoadIncludedPackage(map[string]any{"name": "scoped"}, root, nil, nil, filters.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tasks := included.Data.(map[string]any)["tasks"].([]any)
+	message := tasks[0].(map[string]any)["log"].(map[string]any)["message"]
+	if message != "${{ 'IRONSTATE_INCLUDED_ENV_TEST' | env }}" {
+		t.Errorf("included task evaluated before its env was active: %v", message)
 	}
 }
 

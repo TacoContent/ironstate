@@ -21,6 +21,10 @@
         "vars": {
           "type": "object",
           "description": "User-defined variables. Merged with gathered host facts into a single flat context that 'when' conditions and '${{ vars.* }}'/'${{ facts.* }}' templating resolve against (vars win over facts on name collision). Host/user overlay files deep-merge into this key-by-key rather than replacing it wholesale. The same 'vars:' key may also appear in a package's own main.yml (see the 'include' module) to declare package-local defaults - bare top-level names available inside that package's own expressions only, with this (site-level) 'vars' winning on a same-name collision."
+        },
+        "envs": {
+          "$ref": "#/$defs/envs",
+          "description": "Environment overrides for the entire playbook execution. Overlays merge by key; original process values are restored when the run ends."
         }
       }
     },
@@ -31,6 +35,12 @@
     }
   ],
   "$defs": {
+    "envs": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [{ "type": "string" }, { "type": "number" }, { "type": "boolean" }, { "$ref": "#/$defs/templateString" }]
+      }
+    },
     "templateString": {
       "type": "string",
       "pattern": "^\\$\\{\\{[\\s\\S]*\\}\\}$",
@@ -61,6 +71,7 @@
         },
         "tags": { "$ref": "#/$defs/tags" },
         "when": { "$ref": "#/$defs/when" },
+        "envs": { "$ref": "#/$defs/envs", "description": "Overrides environment variables only while this leaf runs. Values may use '${{ }}' expressions and are exposed as envs.NAME and to the env filter." },
         "id": {
           "type": "string",
           "description": "Registers this leaf's result under this name once it runs: '{ changed, failed, rc, stdout, stdout_lines, stderr, stderr_lines }' (Ansible 'register'-shaped; every CLI-backed module and 'shell' populate a real rc/stdout/stderr, others default to 0/''/'' unless they throw). Later tasks reference it with bare dotted/indexed paths in 'when' (e.g. 'foo.rc != 0', 'foo.results[0].rc') and '${{ foo }}' in templates. If this task also has 'items' (a loop), every iteration shares the same 'id': the flat fields reflect the last iteration, and every iteration's result is additionally available as 'foo.results[N]'. Leaf actions only - not valid on a grouping task ('actions'/'include')."

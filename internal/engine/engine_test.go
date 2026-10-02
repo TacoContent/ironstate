@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -167,6 +168,42 @@ func TestRunLeavesApplyCallsInstall(t *testing.T) {
 	}
 	if results[0].Exec.Stdout != "ok" {
 		t.Fatalf("exec = %#v", results[0].Exec)
+	}
+}
+
+func TestRunLeavesTaskEnvsAreScoped(t *testing.T) {
+	const key = "IRONSTATE_SCOPED_ENV_TEST"
+	t.Setenv(key, "original")
+	h := &fakeHandler{}
+	opts := baseOpts(map[string]Handler{"widget": h})
+	opts.Apply = true
+	leaves := []tasks.Leaf{
+		{Module: "widget", Envs: map[string]any{key: 42}, Item: map[string]any{"state": "present", "value": "${{ envs.IRONSTATE_SCOPED_ENV_TEST }}", "filtered": "${{ '' | env('IRONSTATE_SCOPED_ENV_TEST') }}"}},
+	}
+	results, stopped, err := RunLeaves(leaves, opts, NewState())
+	if err != nil || stopped || len(results) != 1 {
+		t.Fatalf("results=%#v stopped=%v err=%v", results, stopped, err)
+	}
+	if h.seenItem["value"] != "42" || h.seenItem["filtered"] != "42" {
+		t.Errorf("resolved item = %#v", h.seenItem)
+	}
+	if got := os.Getenv(key); got != "original" {
+		t.Errorf("environment leaked after task: %q", got)
+	}
+}
+
+func TestRunLeavesTaskEnvsRestoreOnFailure(t *testing.T) {
+	const key = "IRONSTATE_FAILED_ENV_TEST"
+	t.Setenv(key, "before")
+	h := &fakeHandler{installExec: ExecResult{RC: 1}}
+	opts := baseOpts(map[string]Handler{"widget": h})
+	opts.Apply = true
+	_, stopped, err := RunLeaves([]tasks.Leaf{{Module: "widget", Envs: map[string]any{key: "during"}, Item: map[string]any{"state": "present"}}}, opts, NewState())
+	if err != nil || !stopped {
+		t.Fatalf("stopped=%v err=%v", stopped, err)
+	}
+	if got := os.Getenv(key); got != "before" {
+		t.Errorf("environment leaked after failed task: %q", got)
 	}
 }
 
@@ -742,6 +779,28 @@ func TestRunLeavesMissingCommandOnPathProducesNoResultRow(t *testing.T) {
 	}
 	if len(results) != 0 {
 		t.Fatalf("expected no result row when the backing command isn't on PATH, got %#v", results)
+	}
+}
+
+func TestRunLeavesTaskPATHRechecksRequiredTools(t *testing.T) {
+	t.Setenv("PATH", "original")
+	h := &fakeHandler{requiredTools: []string{"widget"}}
+	opts := baseOpts(map[string]Handler{"widget": h})
+	originalLookPath := LookPath
+	LookPath = func(name string) (string, error) {
+		if os.Getenv("PATH") == "task-path" {
+			return name, nil
+		}
+		return "", errNotFound
+	}
+	defer func() { LookPath = originalLookPath }()
+	results, stopped, err := RunLeaves([]tasks.Leaf{
+		leaf("widget", map[string]any{"state": "present"}),
+		{Module: "widget", Envs: map[string]any{"PATH": "task-path"}, Item: map[string]any{"state": "present"}},
+		leaf("widget", map[string]any{"state": "present"}),
+	}, opts, NewState())
+	if err != nil || stopped || len(results) != 1 || os.Getenv("PATH") != "original" {
+		t.Fatalf("results=%#v stopped=%v err=%v PATH=%q", results, stopped, err, os.Getenv("PATH"))
 	}
 }
 

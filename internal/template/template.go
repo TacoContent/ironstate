@@ -223,3 +223,31 @@ func ResolveInPlace(data map[string]any, ctx map[string]any, filters expr.Filter
 	}
 	return nil
 }
+
+// DeferTaskEnvs keeps task bodies with scoped envs out of speculative soft
+// passes; the engine resolves them once their environment is active.
+func DeferTaskEnvs(tasks []any) func() {
+	var restore []func()
+	var walk func([]any)
+	walk = func(list []any) {
+		for index, raw := range list {
+			item, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			if _, scoped := item["envs"]; scoped {
+				position, original, target := index, raw, list
+				target[position] = nil
+				restore = append(restore, func() { target[position] = original })
+			} else if children, ok := item["actions"].([]any); ok {
+				walk(children)
+			}
+		}
+	}
+	walk(tasks)
+	return func() {
+		for _, undo := range restore {
+			undo()
+		}
+	}
+}

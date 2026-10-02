@@ -201,13 +201,31 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	}
 	defer func() { _ = scriptPool.Close() }()
 
+	// Resolve run-wide environment values before the soft pass so filters
+	// and subprocesses see them throughout this invocation.
+	declaredEnvs := model.DeepCopy(model.AsMap(docMap["envs"])).(map[string]any)
+	envContext := map[string]any{"facts": hostFacts, "vars": vars, "envs": engine.Environment()}
+	if err := template.ResolveInPlace(declaredEnvs, envContext, fset, "site envs", false); err != nil {
+		return NewLoadError(err)
+	}
+	restoreEnvs, err := engine.SetEnvironment(declaredEnvs)
+	if err != nil {
+		return NewLoadError(err)
+	}
+	defer restoreEnvs()
+	docMap["envs"] = declaredEnvs
+
 	// Whole-document '-Soft' pass: resolves facts/vars now, leaves any
 	// bare id/fact reference untouched for the per-leaf strict pass in
 	// internal/engine, once that registry actually exists.
-	softCtx := map[string]any{"facts": hostFacts, "vars": vars}
+	softCtx := map[string]any{"facts": hostFacts, "vars": vars, "envs": engine.Environment()}
+	// Task fields with scoped envs must wait for their own execution.
+	restoreTasks := template.DeferTaskEnvs(model.AsList(docMap["tasks"]))
 	if err := template.ResolveInPlace(docMap, softCtx, fset, "site", true); err != nil {
+		restoreTasks()
 		return NewLoadError(err)
 	}
+	restoreTasks()
 	declaredPlugins, err := model.Plugins(docMap)
 	if err != nil {
 		return NewLoadError(err)

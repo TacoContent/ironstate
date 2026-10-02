@@ -120,6 +120,12 @@ func LoadIncludedPackage(includeSpec map[string]any, packagesRoot string, facts,
 // bare list has no '.Keys' to iterate); this is a strictly more permissive
 // superset, not a behavior change for any mapping-form package.
 func resolveTemplatesInPlace(doc any, ctx map[string]any, filters expr.Filters, label string) (any, error) {
+	taskList, err := model.TaskList(doc)
+	if err != nil {
+		return nil, err
+	}
+	restoreTasks := template.DeferTaskEnvs(taskList)
+	defer restoreTasks()
 	switch v := doc.(type) {
 	case map[string]any:
 		if err := template.ResolveInPlace(v, ctx, filters, label, true); err != nil {

@@ -62,6 +62,24 @@ func TestBasicLeafFlattening(t *testing.T) {
 	}
 }
 
+func TestLeafEnvsSurviveLoopMaterialization(t *testing.T) {
+	leaves := expandOK(t, `
+- name: scoped
+  items: [one, two]
+  envs:
+    TASK_VALUE: ${{ item }}
+  log: { message: "${{ 'TASK_VALUE' | env }}" }
+`, Options{})
+	if len(leaves) != 2 || leaves[0].Envs["TASK_VALUE"] != "one" || leaves[1].Envs["TASK_VALUE"] != "two" {
+		t.Fatalf("loop envs = %#v", leaves)
+	}
+	for _, leaf := range leaves {
+		if leaf.Item["message"] != "${{ 'TASK_VALUE' | env }}" {
+			t.Fatalf("module template resolved before task environment: %#v", leaf.Item)
+		}
+	}
+}
+
 func TestTagsCascadeAndDedupe(t *testing.T) {
 	leaves := expandOK(t, `
 - name: group

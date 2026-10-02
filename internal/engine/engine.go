@@ -308,6 +308,49 @@ func mergeFacts(host, user map[string]any) map[string]any {
 	return merged
 }
 
+// Environment returns the process environment as an expression namespace.
+func Environment() map[string]any {
+	values := map[string]any{}
+	for _, entry := range os.Environ() {
+		key, value, ok := strings.Cut(entry, "=")
+		if ok && key != "" {
+			values[key] = value
+		}
+	}
+	return values
+}
+
+// SetEnvironment applies overrides until the returned restore function runs.
+func SetEnvironment(values map[string]any) (func(), error) {
+	type previous struct {
+		value string
+		set   bool
+	}
+	before := make(map[string]previous, len(values))
+	restore := func() {
+		for key, old := range before {
+			if old.set {
+				_ = os.Setenv(key, old.value)
+			} else {
+				_ = os.Unsetenv(key)
+			}
+		}
+	}
+	for key, value := range values {
+		old, set := os.LookupEnv(key)
+		before[key] = previous{old, set}
+		text := ""
+		if value != nil {
+			text = expr.DisplayString(value)
+		}
+		if err := os.Setenv(key, text); err != nil {
+			restore()
+			return nil, fmt.Errorf("envs.%s: %w", key, err)
+		}
+	}
+	return restore, nil
+}
+
 // RunLeaves dispatches leaves sequentially, in document order, mutating
 // state in place — ports Invoke-Tasks. Each leaf's 'when' and remaining
 // '${{ }}' references resolve against facts+vars+registry-so-far
@@ -338,13 +381,6 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 			continue
 		}
 
-		if provider, ok := handler.(RequiredToolsProvider); ok {
-			missing := missingRequiredTool(provider.RequiredTools(), state.CommandAvailability)
-			if missing != "" {
-				continue
-			}
-		}
-
 		flatContext := mergeFlatContext(opts.Facts, state.UserFacts, leaf.PackageVars, leaf.PackageInputs, leaf.PackagePackage, opts.Vars, state.Registry)
 		if leaf.Isolated {
 			// An isolated 'uses' leaf sees ONLY what its consuming task
@@ -361,6 +397,7 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 		for k, v := range leaf.ItemCtx {
 			flatContext[k] = v
 		}
+		flatContext["envs"] = Environment()
 
 		// 'when' is a bare-expression condition (deliberately not
 		// '${{ }}'-wrapped - see internal/conditions) evaluated directly
@@ -375,117 +412,147 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 		if !whenOK {
 			continue
 		}
-		started := time.Now()
-
-		// A 'fact' with an embedded 'shell' computes its value from that
-		// command's own not-yet-run result - defer 'value's template
-		// resolution until after the command runs (see runFactLeaf).
-		hasEmbeddedShell := module == "fact" && hasKey(leaf.Item, "shell")
-		var deferredFactValue any
-		hasDeferredFactValue := false
-		if hasEmbeddedShell {
-			if v, present := leaf.Item["value"]; present {
-				deferredFactValue = v
-				hasDeferredFactValue = true
-				delete(leaf.Item, "value")
-			}
-		}
-
-		wrapper := map[string]any{"item": leaf.Item}
-		if module == "lineinfile" {
-			if withMap, ok := leaf.Item["with"].(map[string]any); ok {
-				if _, present := flatContext["inputs"]; !present {
-					flatContext["inputs"] = withMap
+		stopped, err := func() (bool, error) {
+			if len(leaf.Envs) > 0 {
+				resolved := model.DeepCopy(leaf.Envs).(map[string]any)
+				if err := template.ResolveInPlace(resolved, flatContext, opts.Filters, label, false); err != nil {
+					return false, err
 				}
-				flatContext["input"] = withMap
-				flatContext["with"] = withMap
-				for k, v := range withMap {
-					if _, present := flatContext[k]; !present {
-						flatContext[k] = v
+				restore, err := SetEnvironment(resolved)
+				if err != nil {
+					return false, err
+				}
+				defer restore()
+				flatContext["envs"] = Environment()
+			}
+			if provider, ok := handler.(RequiredToolsProvider); ok {
+				availability := state.CommandAvailability
+				for key := range leaf.Envs {
+					if strings.EqualFold(key, "PATH") {
+						availability = map[string]bool{}
+						break
+					}
+				}
+				if missingRequiredTool(provider.RequiredTools(), availability) != "" {
+					return false, nil
+				}
+			}
+			started := time.Now()
+
+			// A 'fact' with an embedded 'shell' computes its value from that
+			// command's own not-yet-run result - defer 'value's template
+			// resolution until after the command runs (see runFactLeaf).
+			hasEmbeddedShell := module == "fact" && hasKey(leaf.Item, "shell")
+			var deferredFactValue any
+			hasDeferredFactValue := false
+			if hasEmbeddedShell {
+				if v, present := leaf.Item["value"]; present {
+					deferredFactValue = v
+					hasDeferredFactValue = true
+					delete(leaf.Item, "value")
+				}
+			}
+
+			wrapper := map[string]any{"item": leaf.Item}
+			if module == "lineinfile" {
+				if withMap, ok := leaf.Item["with"].(map[string]any); ok {
+					if _, present := flatContext["inputs"]; !present {
+						flatContext["inputs"] = withMap
+					}
+					flatContext["input"] = withMap
+					flatContext["with"] = withMap
+					for k, v := range withMap {
+						if _, present := flatContext[k]; !present {
+							flatContext[k] = v
+						}
 					}
 				}
 			}
-		}
-		if err := template.ResolveInPlace(wrapper, flatContext, opts.Filters, label, false); err != nil {
-			// A field's own '${{ }}' expression can throw for reasons
-			// that only show up at run time (e.g. a script filter whose
-			// interpreter isn't installed on this machine) - treat this
-			// exactly like a handler's Install/Uninstall throwing (see
-			// invokePackageItem): a failed leaf (rc=1) that
-			// 'continue_on_error' can still recover from, not a fatal
-			// abort of the whole run.
-			msg := err.Error()
-			Danger("[%s] %s: resolving template fields threw: %s", module, label, msg)
-			result := Result{
-				Module:   module,
-				Package:  label,
-				Action:   ActionInstall,
-				Apply:    opts.Apply,
-				Exec:     ExecResult{RC: 1, Stderr: msg, StderrLines: []string{msg}, StdoutLines: []string{}},
-				Failed:   true,
-				Duration: time.Since(started),
-			}
-			results = append(results, result)
-			if leaf.ContinueOnError {
-				Danger("[%s] %s failed (rc=%d); continuing (continue_on_error).", module, label, result.Exec.RC)
-				continue
-			}
-			Danger("[%s] %s failed (rc=%d); stopping. Set continue_on_error: true to continue past this failure.", module, label, result.Exec.RC)
-			return results, true, nil
-		}
-		leaf.Item = model.AsMap(wrapper["item"])
-
-		// A fact's embedded shell, every 'assert', and every FactProducer
-		// (e.g. 'mount_facts') have no real system side effect - each only
-		// reads/computes a value - so previews stay accurate even without
-		// '-Apply' - see docs/plans/go-rewrite.md §2/§4.10. Without this, a
-		// FactProducer's Install would never run in a dry run, leaving its
-		// fact undefined for every later leaf's preview.
-		effectiveApply := opts.Apply || hasEmbeddedShell || module == "assert" || isFactProducer(handler)
-
-		become := resolveBecome(leaf.Become)
-		if leaf.Isolated && become.Enabled {
-			Warn("[%s] %s: 'become' is not permitted inside an isolated 'uses'; running unelevated.", module, label)
-			become = ironexec.Become{}
-		}
-
-		result, err := invokePackageItem(module, leaf.Name, leaf.Item, handler, flatContext, opts.Filters, effectiveApply, opts.Verbose, leaf.SecretID, become)
-		if err != nil {
-			return results, false, err
-		}
-
-		changed := result.Action != ActionSkip
-		failed := result.Exec.RC != 0
-		if len(leaf.FailedWhen) > 0 {
-			failedWhenContext := cloneFlat(flatContext)
-			mergeExecInto(failedWhenContext, result.Exec)
-			failedWhenContext["changed"] = changed
-			failed, err = conditions.TestWhen(leaf.FailedWhen, failedWhenContext, opts.Filters)
-			if err != nil {
-				return results, false, err
-			}
-		}
-		result.Failed = failed
-		result.Duration = time.Since(started)
-		results = append(results, result)
-
-		if failed {
-			if leaf.ContinueOnError {
-				Danger("[%s] %s failed (rc=%d); continuing (continue_on_error).", module, label, result.Exec.RC)
-			} else {
+			if err := template.ResolveInPlace(wrapper, flatContext, opts.Filters, label, false); err != nil {
+				// A field's own '${{ }}' expression can throw for reasons
+				// that only show up at run time (e.g. a script filter whose
+				// interpreter isn't installed on this machine) - treat this
+				// exactly like a handler's Install/Uninstall throwing (see
+				// invokePackageItem): a failed leaf (rc=1) that
+				// 'continue_on_error' can still recover from, not a fatal
+				// abort of the whole run.
+				msg := err.Error()
+				Danger("[%s] %s: resolving template fields threw: %s", module, label, msg)
+				result := Result{
+					Module:   module,
+					Package:  label,
+					Action:   ActionInstall,
+					Apply:    opts.Apply,
+					Exec:     ExecResult{RC: 1, Stderr: msg, StderrLines: []string{msg}, StdoutLines: []string{}},
+					Failed:   true,
+					Duration: time.Since(started),
+				}
+				results = append(results, result)
+				if leaf.ContinueOnError {
+					Danger("[%s] %s failed (rc=%d); continuing (continue_on_error).", module, label, result.Exec.RC)
+					return false, nil
+				}
 				Danger("[%s] %s failed (rc=%d); stopping. Set continue_on_error: true to continue past this failure.", module, label, result.Exec.RC)
-				return results, true, nil
+				return true, nil
 			}
-		}
+			leaf.Item = model.AsMap(wrapper["item"])
 
-		if module == "fact" {
-			applyFactResult(leaf.Item, result, state, flatContext, opts.Filters, label, hasEmbeddedShell, hasDeferredFactValue, deferredFactValue)
-		} else if fp, ok := handler.(FactProducer); ok {
-			applyFactProducerResult(fp, leaf.Item, result, state)
-		}
+			// A fact's embedded shell, every 'assert', and every FactProducer
+			// (e.g. 'mount_facts') have no real system side effect - each only
+			// reads/computes a value - so previews stay accurate even without
+			// '-Apply' - see docs/plans/go-rewrite.md §2/§4.10. Without this, a
+			// FactProducer's Install would never run in a dry run, leaving its
+			// fact undefined for every later leaf's preview.
+			effectiveApply := opts.Apply || hasEmbeddedShell || module == "assert" || isFactProducer(handler)
 
-		if leaf.ID != "" {
-			registerLeafResult(state, leaf, changed, failed, result.Exec)
+			become := resolveBecome(leaf.Become)
+			if leaf.Isolated && become.Enabled {
+				Warn("[%s] %s: 'become' is not permitted inside an isolated 'uses'; running unelevated.", module, label)
+				become = ironexec.Become{}
+			}
+
+			result, err := invokePackageItem(module, leaf.Name, leaf.Item, handler, flatContext, opts.Filters, effectiveApply, opts.Verbose, leaf.SecretID, become)
+			if err != nil {
+				return false, err
+			}
+
+			changed := result.Action != ActionSkip
+			failed := result.Exec.RC != 0
+			if len(leaf.FailedWhen) > 0 {
+				failedWhenContext := cloneFlat(flatContext)
+				mergeExecInto(failedWhenContext, result.Exec)
+				failedWhenContext["changed"] = changed
+				failed, err = conditions.TestWhen(leaf.FailedWhen, failedWhenContext, opts.Filters)
+				if err != nil {
+					return false, err
+				}
+			}
+			result.Failed = failed
+			result.Duration = time.Since(started)
+			results = append(results, result)
+
+			if failed {
+				if leaf.ContinueOnError {
+					Danger("[%s] %s failed (rc=%d); continuing (continue_on_error).", module, label, result.Exec.RC)
+				} else {
+					Danger("[%s] %s failed (rc=%d); stopping. Set continue_on_error: true to continue past this failure.", module, label, result.Exec.RC)
+					return true, nil
+				}
+			}
+
+			if module == "fact" {
+				applyFactResult(leaf.Item, result, state, flatContext, opts.Filters, label, hasEmbeddedShell, hasDeferredFactValue, deferredFactValue)
+			} else if fp, ok := handler.(FactProducer); ok {
+				applyFactProducerResult(fp, leaf.Item, result, state)
+			}
+
+			if leaf.ID != "" {
+				registerLeafResult(state, leaf, changed, failed, result.Exec)
+			}
+			return false, nil
+		}()
+		if err != nil || stopped {
+			return results, stopped, err
 		}
 	}
 

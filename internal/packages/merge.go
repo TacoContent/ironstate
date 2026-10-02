@@ -31,10 +31,10 @@ func MergeDocuments(base, overlay map[string]any) map[string]any {
 		result[k] = v
 	}
 	for k, v := range overlay {
-		if k == "vars" {
-			if baseVars, ok := result["vars"].(map[string]any); ok {
+		if k == "vars" || k == "envs" {
+			if baseVars, ok := result[k].(map[string]any); ok {
 				if overlayVars, ok := v.(map[string]any); ok {
-					result["vars"] = MergeVars(baseVars, overlayVars)
+					result[k] = MergeVars(baseVars, overlayVars)
 					continue
 				}
 			}

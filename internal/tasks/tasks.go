@@ -37,6 +37,7 @@ type Leaf struct {
 	FailedWhen      []any
 	ContinueOnError bool
 	Become          any // bool or string ('root'/a username) - see engine's resolveBecome; unset/false means no elevation
+	Envs            map[string]any
 	Looped          bool
 	PackageVars     map[string]any
 	PackageInputs   map[string]any
@@ -281,6 +282,7 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 			FailedWhen:      model.AsList(item["failed_when"]),
 			ContinueOnError: continueOnError,
 			Become:          item["become"],
+			Envs:            model.AsMap(item["envs"]),
 			Looped:          sc.parentLooped,
 			PackageVars:     sc.packageVars,
 			PackageInputs:   sc.packageInputs,
@@ -341,8 +343,24 @@ func expandLoop(item map[string]any, key string, opts Options, sc scope) ([]Leaf
 		}
 		itemCtx["item"] = resolvedLoopValue
 		loopContext["item"] = resolvedLoopValue
+		// A scoped leaf's module fields need the task's environment, which
+		// is not active during loop materialization.
+		var deferredModule any
+		moduleName := ""
+		if task, ok := materialized.(map[string]any); ok {
+			if _, scoped := task["envs"]; scoped {
+				moduleName = firstModuleKey(task, opts.ModuleNames)
+				if moduleName != "" {
+					deferredModule = task[moduleName]
+					delete(task, moduleName)
+				}
+			}
+		}
 		if err := template.ResolveInPlace(wrapper, loopContext, opts.Filters, label, true, "items", "with"); err != nil {
 			return nil, err
+		}
+		if moduleName != "" {
+			model.AsMap(wrapper["task"])[moduleName] = deferredModule
 		}
 
 		children, err := expand([]any{wrapper["task"]}, opts, scope{

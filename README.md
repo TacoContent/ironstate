@@ -473,6 +473,25 @@ Every item in a task list is classified independently:
 
 **`when` cascades via AND**: a leaf only runs if every ancestor task's `when` *and* its own `when` all evaluate true.
 
+### Environment variables (`envs`)
+
+Declare `envs` at the playbook root to set environment variables for this invocation, or on a leaf task to override them only while that task resolves and executes. Values can be strings, numbers, booleans, or `${{ }}` expressions; they are converted to strings in the process environment. Task values are resolved after `when` passes, and the previous environment (including whether a variable was unset) is restored afterward. The root mapping merges by key across playbook overlays, like `vars`.
+
+```yaml
+vars:
+  greeting: hello
+envs:
+  MY_ENV_VAR: ${{ vars.greeting }}
+tasks:
+  - name: log task environment
+    envs:
+      MY_ENV_VAR: temporary
+    log:
+      message: ${{ concat(envs.MY_ENV_VAR, " / ", "" | env("MY_ENV_VAR")) }}
+```
+
+Use `envs.NAME` in expressions and conditions to read the current environment, including inherited OS variables; the existing `env` filter reads the same values. A task's `when` sees the playbook environment before that task's own overrides are applied. `envs` on grouping tasks is not inherited by children; put it on each leaf that needs it.
+
 ## Looping (`with`/`items`)
 
 A task carrying `with` or `items` is materialized multiple times *before* anything else about it is looked at - name, tags, when, id, its module fields, or a nested `actions`/`include` (looping a whole block, like Ansible). Each copy gets `${{ item }}`/`${{ item.<key> }}` resolved against one value:
