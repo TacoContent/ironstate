@@ -3,7 +3,8 @@ package remote
 // Package remote resolves a 'uses:' task's source - a git repository
 // (ssh or https), a local directory, or a network share - to a real
 // directory on this machine. Git sources are cloned once into a
-// per-URL/ref cache directory and reused on later runs.
+// per-URL/ref cache directory and refreshed on later runs (unless the
+// ref is a pinned commit SHA).
 
 import (
 	"context"
@@ -76,6 +77,14 @@ var RunGit = func(dir string, args ...string) error {
 	}
 	return nil
 }
+
+// Warn reports a non-fatal problem. Overridable for tests.
+var Warn = func(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "warning: "+format+"\n", args...)
+}
+
+// commitSHA matches an abbreviated or full git commit hash.
+var commitSHA = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)
 
 var gitURLPrefixes = []string{"ssh://", "git://", "git+ssh://", "git+https://"}
 
@@ -207,9 +216,10 @@ func validateGitArg(kind, value string) error {
 	return nil
 }
 
-// fetchGit clones remote@ref into the cache (once) and returns the
-// checkout directory. An existing checkout is reused as-is - delete the
-// cache directory to force a re-clone.
+// fetchGit clones remote@ref into the cache and returns the checkout
+// directory. An existing checkout is refreshed to the latest ref (a
+// pinned commit SHA is reused as-is); if the refresh fails, the cached
+// copy is used and a warning is emitted.
 func fetchGit(remote, ref string) (string, error) {
 	if err := validateGitArg("'remote'", remote); err != nil {
 		return "", err
@@ -223,6 +233,7 @@ func fetchGit(remote, ref string) (string, error) {
 	}
 	dest := filepath.Join(root, cacheKey(remote, ref))
 	if fi, err := os.Stat(dest); err == nil && fi.IsDir() { //nolint:gosec // cache path derived from a hash, not user input
+		refreshGit(dest, remote, ref)
 		return dest, nil
 	}
 	if err := os.MkdirAll(root, 0o750); err != nil {
@@ -250,6 +261,24 @@ func fetchGit(remote, ref string) (string, error) {
 		}
 	}
 	return dest, nil
+}
+
+// refreshGit updates an existing cached checkout to the tip of ref.
+func refreshGit(dest, remote, ref string) {
+	if commitSHA.MatchString(ref) {
+		return
+	}
+	target := ref
+	if target == "" {
+		target = "HEAD"
+	}
+	if err := RunGit(dest, "fetch", "--depth", "1", "origin", "--", target); err != nil {
+		Warn("could not refresh %s@%s, using cached copy: %v", remote, target, err)
+		return
+	}
+	if err := RunGit(dest, "reset", "--hard", "FETCH_HEAD"); err != nil {
+		Warn("could not update cached %s@%s, using cached copy: %v", remote, target, err)
+	}
 }
 
 // cacheKey derives a stable, filesystem-safe directory name for a

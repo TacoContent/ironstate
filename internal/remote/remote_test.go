@@ -67,7 +67,7 @@ func TestResolveLocalDirectory(t *testing.T) {
 	}
 }
 
-func TestResolveGitClonesIntoCacheOnce(t *testing.T) {
+func TestResolveGitClonesOnceThenRefreshes(t *testing.T) {
 	cache := t.TempDir()
 	origRoot, origRun := CacheRoot, RunGit
 	t.Cleanup(func() { CacheRoot, RunGit = origRoot, origRun })
@@ -76,6 +76,9 @@ func TestResolveGitClonesIntoCacheOnce(t *testing.T) {
 	var calls [][]string
 	RunGit = func(dir string, args ...string) error {
 		calls = append(calls, args)
+		if args[0] != "clone" {
+			return nil
+		}
 		// Simulate a real clone creating the destination directory.
 		return os.MkdirAll(args[len(args)-1], 0o750)
 	}
@@ -102,8 +105,60 @@ func TestResolveGitClonesIntoCacheOnce(t *testing.T) {
 	if second.Dir != first.Dir {
 		t.Errorf("cache key not stable: %q vs %q", second.Dir, first.Dir)
 	}
-	if len(calls) != 1 {
-		t.Errorf("an existing checkout was re-cloned: %d calls", len(calls))
+	if len(calls) != 3 {
+		t.Fatalf("expected clone + fetch + reset, got %d calls: %v", len(calls), calls)
+	}
+	if calls[1][0] != "fetch" || calls[1][len(calls[1])-1] != "main" {
+		t.Errorf("existing checkout not fetched: %v", calls[1])
+	}
+	if strings.Join(calls[2], " ") != "reset --hard FETCH_HEAD" {
+		t.Errorf("existing checkout not reset: %v", calls[2])
+	}
+}
+
+func TestResolveGitSkipsRefreshForCommitSHA(t *testing.T) {
+	cache := t.TempDir()
+	origRoot, origRun := CacheRoot, RunGit
+	t.Cleanup(func() { CacheRoot, RunGit = origRoot, origRun })
+	CacheRoot = func() (string, error) { return cache, nil }
+
+	spec := Spec{Remote: "git@github.com:camalot/shared.git", Ref: "0123abcd"}
+	if err := os.MkdirAll(filepath.Join(cache, cacheKey(spec.Remote, spec.Ref)), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	RunGit = func(dir string, args ...string) error {
+		t.Errorf("unexpected git call for pinned SHA: %v", args)
+		return nil
+	}
+	if _, err := Resolve(spec, ""); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestResolveGitFallsBackToCacheWhenRefreshFails(t *testing.T) {
+	cache := t.TempDir()
+	origRoot, origRun, origWarn := CacheRoot, RunGit, Warn
+	t.Cleanup(func() { CacheRoot, RunGit, Warn = origRoot, origRun, origWarn })
+	CacheRoot = func() (string, error) { return cache, nil }
+
+	spec := Spec{Remote: "git@github.com:camalot/shared.git", Ref: "main"}
+	dest := filepath.Join(cache, cacheKey(spec.Remote, spec.Ref))
+	if err := os.MkdirAll(dest, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	RunGit = func(dir string, args ...string) error { return os.ErrDeadlineExceeded }
+	warned := false
+	Warn = func(string, ...any) { warned = true }
+
+	res, err := Resolve(spec, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want, _ := filepath.Abs(dest); res.Dir != want {
+		t.Errorf("Dir = %q, want cached %q", res.Dir, want)
+	}
+	if !warned {
+		t.Error("expected a warning when refresh fails")
 	}
 }
 

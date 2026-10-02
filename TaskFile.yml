@@ -185,8 +185,8 @@ tasks:
       - wsl -d Ubuntu cp /home/{{.WSL_USER}}/Development/oss/ironstate/dist/ironstate-unix_linux_amd64_v1/ironstate /home/{{.WSL_USER}}/.local/bin/
       - echo "... Debian ..."
       - wsl -d Debian cp /home/{{.WSL_USER}}/Development/oss/ironstate/dist/ironstate-unix_linux_amd64_v1/ironstate /home/{{.WSL_USER}}/.local/bin/
-      - echo "... KaliLinux ..."
-      - wsl -d KaliLinux cp /home/{{.WSL_USER}}/Development/oss/ironstate/dist/ironstate-unix_linux_amd64_v1/ironstate /home/{{.WSL_USER}}/.local/bin/
+      # - echo "... KaliLinux ..."
+      # - wsl -d KaliLinux cp /home/{{.WSL_USER}}/Development/oss/ironstate/dist/ironstate-unix_linux_amd64_v1/ironstate /home/{{.WSL_USER}}/.local/bin/
       - echo "... ArchLinux ..."
       - wsl -d ArchLinux cp /home/{{.WSL_USER}}/Development/oss/ironstate/dist/ironstate-unix_linux_amd64_v1/ironstate /home/{{.WSL_USER}}/.local/bin/
       - echo "... Alpine ..."
