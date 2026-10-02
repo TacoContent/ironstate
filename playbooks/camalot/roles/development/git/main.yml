@@ -27,6 +27,7 @@ tasks:
       - development
     blockinfile:
       create: true
+      force: true
       template:
         src: templates/gitconfig.j2
         engine: jinja

@@ -6,4 +6,10 @@
         email = {{ profile.user.email }}
 {% if profile.user.signingkey is defined and profile.user.signingkey | length > 0 %}
         signingkey = {{ profile.user.signingkey }}
+
+[gpg]
+        format = ssh
+
+[commit]
+        gpgsign = true
 {% endif %}
