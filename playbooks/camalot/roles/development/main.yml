@@ -6,6 +6,8 @@ tasks:
     tags:
       - development
       - development.git
+    when:
+      - git | enabled()
     uses:
       remote:  git@github.com:camalot/ironstate-playbooks.git
       ref: main
