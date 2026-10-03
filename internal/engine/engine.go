@@ -268,6 +268,12 @@ type Options struct {
 	// RunLeaves alone (called directly, bypassing Run's phase split)
 	// never invokes this.
 	OnFactsGathered func(facts map[string]any)
+	// OnResult, if set, is called with each leaf's Result as soon as it is
+	// recorded, so callers can stream results instead of waiting for Run.
+	OnResult func(Result)
+	// Cancelled, if set, is checked before each leaf; a non-nil error stops
+	// the run there (the in-flight leaf always finishes) and is returned.
+	Cancelled func() error
 }
 
 // Run dispatches leaves in two phases — every 'fact' leaf first, in
@@ -376,6 +382,11 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 	var results []Result
 	total := len(leaves)
 	for i, leaf := range leaves {
+		if opts.Cancelled != nil {
+			if err := opts.Cancelled(); err != nil {
+				return results, true, err
+			}
+		}
 		if leaf.ID != "" && strings.HasPrefix(leaf.ID, "$") {
 			leaf.SecretID = true
 			leaf.ID = strings.TrimPrefix(leaf.ID, "$")
@@ -499,6 +510,9 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 					Duration: time.Since(started),
 				}
 				results = append(results, result)
+				if opts.OnResult != nil {
+					opts.OnResult(result)
+				}
 				if leaf.ContinueOnError {
 					Danger("[%s] %s failed (rc=%d); continuing (continue_on_error).", module, label, result.Exec.RC)
 					return false, nil
@@ -541,6 +555,9 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 			result.Failed = failed
 			result.Duration = time.Since(started)
 			results = append(results, result)
+			if opts.OnResult != nil {
+				opts.OnResult(result)
+			}
 
 			if failed {
 				if leaf.ContinueOnError {

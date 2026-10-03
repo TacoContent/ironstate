@@ -5,6 +5,9 @@ vars:
   MACOS_USER: ryan
   MACOS_IP: '192.168.2.25'
   WSL_USER: ryan
+  SNOKE_USER: ryan
+  SNOKE_IP: '192.168.2.103'
+  SNOKE_ARCH: amd64
 # includes:
 #   local: .local.taskfile.yml
     # taskfile: .local.taskfile.yml
@@ -102,6 +105,11 @@ tasks:
         fi
         go test ./internal/filters/... -race
 
+  test:ssh:
+    desc: 'CI job "ssh-integration": remote apply against a throwaway sshd container (needs docker)'
+    cmds:
+      - bash ./scripts/ssh-integration.sh
+
   fuzz-smoke:
     desc: 'CI job "fuzz-smoke": short fuzz runs over internal/expr'
     vars:
@@ -109,6 +117,39 @@ tasks:
     cmds:
       - go test ./internal/expr/... -run xxx -fuzz FuzzParse -fuzztime {{.FUZZTIME}}
       - go test ./internal/expr/... -run xxx -fuzz FuzzScanSpans -fuzztime {{.FUZZTIME}}
+      - go test ./internal/remoteexec/bundle -run xxx -fuzz FuzzExtract -fuzztime {{.FUZZTIME}}
+      - go test ./internal/remoteexec/protocol -run xxx -fuzz FuzzReadJob -fuzztime {{.FUZZTIME}}
+      - go test ./internal/remoteexec/protocol -run xxx -fuzz FuzzParseEvent -fuzztime {{.FUZZTIME}}
+
+  # --- Remote apply against snoke -------------------------------------------
+
+  remote:agent:
+    desc: Build the linux agent binary shipped to snoke
+    internal: true
+    env:
+      CGO_ENABLED: "0"
+      GOOS: linux
+      GOARCH: '{{.SNOKE_ARCH}}'
+    cmds:
+      - go build -o bin/ironstate-linux-{{.SNOKE_ARCH}} ./cmd/ironstate
+
+  remote:snoke:ping:
+    desc: Connect to snoke, probe it, and make sure the agent runs (applies nothing)
+    deps: [remote:agent]
+    cmds:
+      - go run ./cmd/ironstate remote ping --target {{.SNOKE_USER}}@{{.SNOKE_IP}} --agent-binary linux/{{.SNOKE_ARCH}}=bin/ironstate-linux-{{.SNOKE_ARCH}}
+
+  remote:snoke:dry-run:
+    desc: Dry-run playbooks/sample on snoke over SSH
+    deps: [remote:agent]
+    cmds:
+      - go run ./cmd/ironstate --playbook playbooks/sample --target {{.SNOKE_USER}}@{{.SNOKE_IP}} --agent-binary linux/{{.SNOKE_ARCH}}=bin/ironstate-linux-{{.SNOKE_ARCH}} {{.CLI_ARGS}}
+
+  remote:snoke:apply:
+    desc: Apply playbooks/sample on snoke over SSH
+    deps: [remote:agent]
+    cmds:
+      - go run ./cmd/ironstate --playbook playbooks/sample --target {{.SNOKE_USER}}@{{.SNOKE_IP}} --agent-binary linux/{{.SNOKE_ARCH}}=bin/ironstate-linux-{{.SNOKE_ARCH}} --apply {{.CLI_ARGS}}
 
   build-snapshot:
     desc: 'CI job "build-snapshot": goreleaser snapshot of every target'
@@ -129,6 +170,7 @@ tasks:
       - task: fmt:check
       - task: test
       - task: race
+      - task: test:ssh
       - task: fuzz-smoke
       - task: build-snapshot
 

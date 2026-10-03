@@ -113,6 +113,8 @@ ironstate version
 
 **Output**: on a real terminal, results print as a colored table with a per-module emoji, a host-facts panel up front, and a final summary block with elapsed time - a "changed" leaf (installed/removed) reads brighter than an already-satisfied skip, and a failure reads in a danger red. `--output json` switches to a plain JSON array on stdout instead (informational/progress lines go to stderr, so this stream stays clean and pipeable, e.g. `... --output json | jq`); colors auto-disable when not attached to a terminal, honor `NO_COLOR`/`IRONSTATE_NO_COLOR`, or can be forced off with `--no-color`.
 
+`--output ndjson` streams one JSON event per line on stdout as the run progresses (`leaf_start`, `log`, `leaf_result`, `facts`, `summary`, then a final `done` carrying the exit code; failures add an `error` event). Every line starts with `{"v":1,`, messages are secret-redacted and never colored. This is the same stream the remote-apply agent speaks (see [docs/plans/remote-apply.md](docs/plans/remote-apply.md)).
+
 Each dispatched result in `--output json` also includes `duration_ms`, measuring the leaf's template resolution and handler dispatch time. Installed plugin handlers can be measured independently with:
 
 ```text
@@ -120,6 +122,27 @@ ironstate plugin bench acme.hosts --handler entry --item '{"hostname":"build.loc
 ```
 
 The benchmark emits JSON with total, average, minimum, and maximum nanosecond/millisecond timings. Supported operations are `test`, `describe`, `install`, and `uninstall`; use `--apply` only when intentionally benchmarking a mutating operation.
+
+## Remote apply over SSH
+
+Add `--target` to run the same playbook on other machines. ironstate copies itself to the target, runs there as an agent, and streams results back, so facts, `hosts/`/`variables/` overlays, `when`, and `become` all behave as if `ironstate` had been run locally on that host.
+
+```text
+ironstate --playbook playbooks/camalot --apply --target rconr@snoke --target kresh.lan
+ironstate remote ping --target rconr@snoke        # connect, probe, check the agent runs; applies nothing
+```
+
+- **Requirements**: an `ssh` client on the controller (`ironstate doctor` checks) and key-based access to a Linux or macOS target (amd64/arm64) with `sh` and `sha256sum` or `shasum`. Windows targets aren't supported yet. Auth is entirely your OpenSSH setup (`~/.ssh/config` aliases, ssh-agent, `ProxyJump`, `known_hosts`); ironstate always runs `ssh` with `BatchMode=yes` and never disables host-key checking. `--ssh-accept-new-host-keys` opts in to `StrictHostKeyChecking=accept-new`; `--ssh-config` passes a config file via `ssh -F`.
+- **Targets**: `[user@]host[:port]` or an ssh config alias; repeat `--target` for several hosts (run one after another). `--target local` runs the agent on this machine without SSH.
+- **Agent binary**: the controller ships its own binary when the target has the same OS/arch. For other platforms pass `--agent-binary linux/arm64=./ironstate-linux-arm64` (e.g. from the release archives or `GOOS=linux GOARCH=arm64 go build ./cmd/ironstate`). Targets cache it under `~/.cache/ironstate/agent/<version>-<sha>/`, verified by SHA-256 before every run; it's only re-uploaded when it changes. `--remote-agent-dir` picks another directory (e.g. when home is mounted `noexec`).
+- **What's sent**: the playbook directory (minus `.git`, `.env`, `.secrets`, and anything matched by an `.ironstateignore` file of glob patterns), any `--vars-file`, an outside `filters.dir`, and the controller's `filters.*` config. `.env`/`.secrets` values and `--forward-env NAME` variables travel in memory, never written to the target's disk; `.secrets` values stay redacted in all output. Template expressions (`facts.*`, `lookup('env', ...)`, `lookup('url', ...)`) evaluate **on the target**.
+- **`become`**: requires passwordless sudo (or connecting as root) on the target; this is checked before anything runs.
+- **Not yet supported remotely**: playbooks declaring `plugins:` and git `uses:` sources are rejected up front.
+- **Reliability**: one apply at a time per target (a second concurrent run fails immediately). Every run's events are also written to `~/.cache/ironstate/runs/<run_id>/events.ndjson` on the target (last 20 kept). Ctrl-C asks every agent to stop after its current task; a second Ctrl-C aborts. If the connection drops, the agent finishes the current task and stops.
+- **Output**: `table` shows each host's log lines live (prefixed `[host]`), a result table per host, then a per-host summary; `json` prints one document with a `hosts` array (status, facts, results, stats per host); `ndjson` streams every agent event tagged with `"host"`, then a final run-level `done`.
+- **Exit codes**: `0` all hosts ok; `1` any host failed; `2` controller-side load/config error; `3` a host was unreachable or couldn't be bootstrapped (nothing applied there - safe to retry).
+
+The design and remaining phases (inventory files, parallel hosts, Windows targets, sudo passwords) are in [docs/plans/remote-apply.md](docs/plans/remote-apply.md).
 
 ## External handler plugins
 

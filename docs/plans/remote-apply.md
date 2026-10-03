@@ -116,7 +116,7 @@ flowchart TB
         inv["inventory: parse, groups, --limit"]
         transport["transport: Transport interface<br/>OpenSSH impl (phase 1), native impl (later)"]
         boot["bootstrap: probe, agent resolve, upload, verify"]
-        bundle["bundle: build/extract tar.gz + manifest"]
+        bundle["bundle: build/extract tar.gz"]
         proto["protocol: job header, event types, version"]
         runner["hostrun: per-host state machine"]
         agg["aggregate: multi-host results, exit code"]
@@ -294,12 +294,14 @@ the agent's stdin after the job header. Unpacked by the agent (in Go, so no remo
 
 | Bundle path | Source on controller | Notes |
 | --- | --- | --- |
-| `playbook/` | bundle root: playbook dir by default, `remote.bundle_root` to widen (e.g. repo root when a playbook uses `../shared/...`) | honors `.ironstateignore` (gitignore syntax); `.git/` always excluded; symlinks stored as links and rejected on extract if they escape the work dir |
-| `filters/` | the controller's resolved `filters.dir` (relative or absolute) | only if it exists; agent's `filters.dir` points here |
-| `config.yaml` | controller's effective config (minus remote-only keys) | agent loads this instead of a cwd `ironstate.yaml` |
+| `playbook/` | bundle root: playbook dir by default, `remote.bundle_root` to widen (e.g. repo root when a playbook uses `../shared/...`) | honors `.ironstateignore` (glob per line: base-name match, or path match if the pattern has a `/`; trailing `/` = dirs only); `.git/`, `.env`, `.secrets` always excluded at any depth; symlinks stored as links and rejected on extract if they escape the work dir |
+| `filters/` | the controller's resolved `filters.dir`, only when it lies **outside** the playbook dir (a relative `filters.dir` resolves against the playbook dir, so it's usually already inside `playbook/`) | agent's `filters.dir` is set to `../filters` |
+| `ironstate.yaml` | controller's effective `filters.*` config | agent runs with cwd = bundle root, so this is picked up like a local `ironstate.yaml` |
 | `vars-files/NN-<name>` | each `--vars-file`, in order | order preserved via `NN` prefix |
 | `uses/<hash>/` | pre-fetched `uses:` sources (phase 5) | see §8.2 |
-| `manifest.json` | generated | file list + sha256 per file, effective config, playbook entry path |
+
+No per-file manifest: the job header's whole-bundle sha256 already covers integrity, and
+the entry playbook path travels in the header's options.
 
 Not in the bundle (sent in the in-memory job header instead, never written to target disk):
 `.env`/`.secrets` key/values, `--var` overrides, become password, forwarded env vars.
@@ -582,7 +584,7 @@ groups:
 
 Each phase is independently shippable and testable.
 
-### Phase 0: Local refactors (no SSH)
+### Phase 0: Local refactors (no SSH) - DONE
 
 - `engine.EventSink` interface; `Info/Warn/Danger`, progress, facts panel, results and
   summary all flow through it. Existing table/json output become sinks (output identical,
@@ -595,7 +597,34 @@ Each phase is independently shippable and testable.
 - A `localTransport` (spawns `ironstate agent` as a child process) to test the whole
   controller↔agent path end-to-end in `go test` without SSH.
 
-### Phase 1: Single POSIX target over OpenSSH
+As built (differences from the bullets above, and why):
+
+- **Sink lives in `internal/cli`, not `internal/engine`.** `cli.runOutput` has two
+  implementations: `consoleOutput` (table/json + spinner, byte-identical to before) and
+  `ndjsonOutput`. The engine only gained `Options.OnResult`; its existing `Progress` and
+  `OnFactsGathered` callbacks were already the right hooks, and the log hooks were
+  already swappable package vars. A new engine interface would have duplicated them.
+- `engine.JSONResult`/`ToJSONResult` exported (was `jsonResult`) so `--output json` and
+  `leaf_result` events share one redacted shape; `engine.Stats` gained JSON tags.
+- Packages: `internal/remoteexec` (`Prepare` builds job + bundle, `RunHost` drives one
+  agent and collects a `HostResult`, `Transport` + `LocalTransport`),
+  `internal/remoteexec/bundle`, `internal/remoteexec/protocol`.
+- `packages.ParseEnvFile` added (read `.env`/`.secrets` without `os.Setenv`) for the
+  controller side.
+- Agent stdout protection is the `os.Stdout = os.Stderr` swap only; the fd-level redirect
+  and SIGPIPE/SIGHUP handling stay in phase 1 as planned (they only matter once a real
+  SSH channel can drop). The agent declines every `uses:` trust prompt (no TTY).
+- The agent verifies the bundle sha256 against a temp copy *before* extracting, and
+  extraction runs in a fresh `MkdirTemp` dir removed afterwards (`--keep-work-dir` for
+  debugging).
+- End-to-end tests re-exec the test binary as the agent (`TestMain` +
+  `IRONSTATE_TEST_RUN_AGENT=1`), so no prebuilt binary is needed. Covered: vars-file +
+  `--var` + `.env` + `.secrets` forwarding with redaction, `include:` from the bundle,
+  stopped run (exit 1), load error (exit 2), tampered bundle, event ordering.
+- New fuzz targets (`FuzzExtract`, `FuzzReadJob`, `FuzzParseEvent`) added to `ci.yml`
+  and the Taskfile `fuzz-smoke` task.
+
+### Phase 1: Single POSIX target over OpenSSH - DONE
 
 - OpenSSH transport, `--target` (repeatable but sequential), `--target local`,
   Linux/macOS targets only.
@@ -610,6 +639,49 @@ Each phase is independently shippable and testable.
   `become` needing a password.
 - Integration test: containerized `sshd` (Linux) in CI.
 - README section + `doctor` check for `ssh` on PATH.
+
+As built (differences from the plan, and why):
+
+- **Execs per host: probe, check, [upload], run.** The probe can't know the agent's
+  path before the controller picks a binary for the reported OS/arch, so the "is the
+  cached agent byte-identical?" check is its own tiny exec. With multiplexing (POSIX
+  controllers) the extra exec is ~free; on Windows controllers it's one more handshake.
+- **Remote scripts** (`internal/remoteexec/bootstrap.go`) are single-line, `!`-free
+  `sh -c` bodies with positional args, each word single-quoted by `PosixCommandLine`,
+  so bash/zsh/fish/tcsh login shells all pass them through unchanged. A test enforces
+  the single-line rule.
+- **Control channel stays open.** After the bundle the controller keeps the agent's
+  stdin open; `{"type":"cancel"}` or EOF (controller/SSH gone) both make the agent stop
+  before its next leaf (`engine.Options.Cancelled`). The controller closes the channel
+  when `done` arrives, because `exec.Cmd` waits for stdin copying to finish;
+  `WaitDelay` (5s) covers an agent that dies without `done`.
+- **Ctrl-C:** `ssh`/the local agent run in their own process group
+  (`Setpgid`/`CREATE_NEW_PROCESS_GROUP`), otherwise the terminal's SIGINT would kill
+  `ssh` before the graceful cancel could be sent.
+- **Agent failure phases.** `error` events carry `phase` (`job`, `lock`, `bundle`,
+  `apply`). The controller maps `job`/`lock`/`bundle` failures to host status `error`
+  (exit 3, nothing applied, retryable) and `apply` failures to `failed` (exit 1). So
+  "another run in progress" is a retryable 3.
+- **Run log** is opened append-only (not exclusive): one run can target the same machine
+  twice through two aliases; the lock keeps those passes sequential.
+- **`become` preflight** is a static scan of every YAML file in the playbook dir:
+  any truthy or templated `become` counts. Conservative on purpose; a false positive
+  just asks for passwordless sudo.
+- **Flags added beyond the plan:** `--ssh-config` (`ssh -F`, used by the integration
+  test and handy for per-project configs), `--remote-agent-dir` (the planned noexec
+  escape hatch), and `--forward-env` (pulled forward from §8.3; ~10 lines). The
+  `ironstate.yaml` `remote:` section is not wired yet; flags only.
+- **Integration test** (`scripts/ssh-integration.sh`, used by both `task test:ssh` and
+  the `ssh-integration` CI job) runs `lscr.io/linuxserver/openssh-server` with a fresh
+  key. It uses `StrictHostKeyChecking accept-new` in its throwaway ssh config instead of
+  `ssh-keyscan`: Windows' bundled `ssh-keyscan` couldn't negotiate a key exchange with
+  OpenSSH 10. Skips loudly when docker is missing, like `task race` does without cgo.
+- **Verified live from a Windows controller** (Windows OpenSSH client, no multiplexing)
+  against that container: ping, apply with table/json output, cached-agent reuse,
+  `become` with NOPASSWD sudo (uid 0), the `become` preflight without it, and an
+  unreachable host (exit 3). A real mid-leaf SSH disconnect was not exercised live; that
+  path (control-channel EOF / stream EPIPE → stop after current leaf → `done` in the
+  run log) is covered by the protocol unit tests and the local-transport cancel test.
 
 ### Phase 2: Inventory, parallelism, agent download
 

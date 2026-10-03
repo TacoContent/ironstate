@@ -1025,4 +1025,29 @@ type stubErr string
 
 func (e stubErr) Error() string { return string(e) }
 
+func TestRunStopsBeforeNextLeafWhenCancelled(t *testing.T) {
+	widget := &fakeHandler{}
+	opts := baseOpts(map[string]Handler{"widget": widget})
+	opts.Apply = true
+	cancelled := stubErr("controller gone")
+	var streamed int
+	opts.OnResult = func(Result) { streamed++ }
+	opts.Cancelled = func() error {
+		if widget.installCall >= 1 {
+			return cancelled
+		}
+		return nil
+	}
+	results, stopped, err := Run([]tasks.Leaf{
+		leaf("widget", map[string]any{"state": "present"}),
+		leaf("widget", map[string]any{"state": "present"}),
+	}, opts)
+	if err != cancelled || !stopped {
+		t.Fatalf("err=%v stopped=%v, want cancellation", err, stopped)
+	}
+	if len(results) != 1 || widget.installCall != 1 || streamed != 1 {
+		t.Fatalf("results=%d installs=%d streamed=%d, want exactly the first leaf", len(results), widget.installCall, streamed)
+	}
+}
+
 var errNotFound = stubErr("not found")

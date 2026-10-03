@@ -1,0 +1,504 @@
+package cli
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"os/signal"
+	"strings"
+	"time"
+	"unicode"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+
+	"github.com/TacoContent/ironstate/internal/config"
+	"github.com/TacoContent/ironstate/internal/engine"
+	"github.com/TacoContent/ironstate/internal/remoteexec"
+	"github.com/TacoContent/ironstate/internal/remoteexec/protocol"
+	"github.com/TacoContent/ironstate/internal/ui"
+)
+
+// addRemoteFlags registers the flags shared by remote apply and 'remote ping'.
+func addRemoteFlags(flags *pflag.FlagSet) {
+	flags.StringArray("target", nil, "apply to a remote host over SSH ([user@]host[:port] or an ssh config alias; 'local' runs the agent locally); repeatable, hosts run one after another")
+	flags.StringArray("agent-binary", nil, "ironstate binary to ship for a target platform: os/arch=path (e.g. linux/arm64=./dist/ironstate); repeatable")
+	flags.String("remote-agent-dir", "", "directory on targets for the cached agent binary (default: $XDG_CACHE_HOME or ~/.cache /ironstate/agent)")
+	flags.String("ssh-config", "", "ssh config file passed to ssh -F")
+	flags.Bool("ssh-accept-new-host-keys", false, "accept and remember host keys of never-seen targets (StrictHostKeyChecking=accept-new)")
+}
+
+func remoteHostOptions(flags *pflag.FlagSet) (remoteexec.HostOptions, error) {
+	var opts remoteexec.HostOptions
+	binaries := map[string]string{}
+	specs, _ := flags.GetStringArray("agent-binary")
+	for _, spec := range specs {
+		platform, file, ok := strings.Cut(spec, "=")
+		if !ok || !strings.Contains(platform, "/") || file == "" {
+			return opts, fmt.Errorf("--agent-binary %q: want os/arch=path", spec)
+		}
+		binaries[platform] = file
+	}
+	opts.Agents = &remoteexec.AgentSource{Binaries: binaries, Version: version}
+	opts.AgentDir, _ = flags.GetString("remote-agent-dir")
+	opts.SSH.ConfigFile, _ = flags.GetString("ssh-config")
+	opts.SSH.AcceptNewHostKeys, _ = flags.GetBool("ssh-accept-new-host-keys")
+	return opts, nil
+}
+
+func validateTargets(targets []string) error {
+	for _, target := range targets {
+		if target == remoteexec.LocalTarget {
+			continue
+		}
+		if _, err := remoteexec.ParseSSHTarget(target); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// remoteSignals turns the first Ctrl-C into a graceful cancel (agents stop
+// after their current task) and the second into an abort.
+func remoteSignals(parent context.Context, stderr io.Writer) (context.Context, <-chan struct{}, func()) {
+	ctx, abort := context.WithCancel(parent)
+	cancelCh := make(chan struct{})
+	sigCh := make(chan os.Signal, 2)
+	signal.Notify(sigCh, os.Interrupt)
+	go func() {
+		count := 0
+		for range sigCh {
+			count++
+			if count == 1 {
+				_, _ = fmt.Fprintln(stderr, ui.Yellow("⚠ stopping after the current task on each host; press Ctrl-C again to abort"))
+				close(cancelCh)
+				continue
+			}
+			abort()
+			return
+		}
+	}()
+	return ctx, cancelCh, func() {
+		signal.Stop(sigCh)
+		abort()
+	}
+}
+
+func runRemoteApply(cmd *cobra.Command, cfg *config.Config, targets []string) error {
+	if err := validateTargets(targets); err != nil {
+		return NewLoadError(err)
+	}
+	opts, err := remoteHostOptions(cmd.Flags())
+	if err != nil {
+		return NewLoadError(err)
+	}
+	view, err := newRemoteView(cmd, cfg.Output)
+	if err != nil {
+		return NewLoadError(err)
+	}
+	forward, err := forwardedEnv(cmd.Flags())
+	if err != nil {
+		return NewLoadError(err)
+	}
+	job, err := remoteexec.Prepare(remoteexec.JobSpec{
+		Playbook:           cfg.Playbook,
+		VarsFiles:          cfg.VarsFiles,
+		VarOverrides:       cfg.VarOverrides,
+		Tags:               cfg.Tags,
+		Apply:              cfg.Apply,
+		Verbose:            cfg.Verbose,
+		FiltersDir:         cfg.FiltersDir,
+		FilterInterpreters: cfg.FilterInterpreters,
+		ControllerVersion:  version,
+		ForwardEnv:         forward,
+	})
+	if err != nil {
+		return NewLoadError(err)
+	}
+	defer func() { _ = job.Close() }()
+
+	ctx, cancelCh, stopSignals := remoteSignals(cmd.Context(), cmd.ErrOrStderr())
+	defer stopSignals()
+	opts.Cancel = cancelCh
+
+	reports := make([]remoteexec.HostReport, 0, len(targets))
+	for _, target := range targets {
+		select {
+		case <-cancelCh:
+			reports = append(reports, remoteexec.HostReport{Name: target, Status: remoteexec.StatusError, Err: fmt.Errorf("not started: run cancelled")})
+			continue
+		default:
+		}
+		view.hostStart(target)
+		opts.OnEvent = func(ev protocol.Event) { view.event(target, ev) }
+		report := remoteexec.ApplyHost(ctx, target, job, opts)
+		view.hostDone(report)
+		reports = append(reports, report)
+	}
+
+	code := remoteexec.ExitCode(reports)
+	if err := view.finish(job.Job.RunID, reports, code); err != nil {
+		return NewRunError(err)
+	}
+	if code != 0 {
+		return &ExitCodeError{Code: code, Err: fmt.Errorf("remote apply: %s", summarizeStatuses(reports))}
+	}
+	return nil
+}
+
+func forwardedEnv(flags *pflag.FlagSet) (map[string]string, error) {
+	names, _ := flags.GetStringArray("forward-env")
+	env := map[string]string{}
+	for _, name := range names {
+		value, ok := os.LookupEnv(name)
+		if !ok {
+			return nil, fmt.Errorf("--forward-env %s: not set in the controller environment", name)
+		}
+		env[name] = value
+	}
+	return env, nil
+}
+
+func summarizeStatuses(reports []remoteexec.HostReport) string {
+	counts := map[string]int{}
+	for _, r := range reports {
+		counts[r.Status]++
+	}
+	var parts []string
+	for _, status := range []string{remoteexec.StatusFailed, remoteexec.StatusUnreachable, remoteexec.StatusError, remoteexec.StatusOK} {
+		if counts[status] > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", counts[status], status))
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// sanitizeRemote strips terminal control sequences from remote-origin text.
+func sanitizeRemote(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\t' || !unicode.IsControl(r) {
+			return r
+		}
+		return -1
+	}, s)
+}
+
+type remoteView struct {
+	format string
+	out    io.Writer
+	errOut io.Writer
+	events *protocol.Writer
+}
+
+func newRemoteView(cmd *cobra.Command, format string) (*remoteView, error) {
+	switch format {
+	case "", "table", "json", "ndjson":
+	default:
+		return nil, fmt.Errorf("unknown --output %q (want table, json or ndjson)", format)
+	}
+	v := &remoteView{format: format, out: cmd.OutOrStdout(), errOut: cmd.ErrOrStderr()}
+	if format == "ndjson" {
+		v.events = protocol.NewWriter(v.out)
+	}
+	return v, nil
+}
+
+func (v *remoteView) hostStart(target string) {
+	if v.events == nil {
+		_, _ = fmt.Fprintln(v.errOut, ui.Bold("▶ "+target))
+	}
+}
+
+func (v *remoteView) event(target string, ev protocol.Event) {
+	if v.events != nil {
+		ev.Host = target
+		_ = v.events.Emit(ev)
+		return
+	}
+	if ev.Type != protocol.TypeLog {
+		return
+	}
+	msg := fmt.Sprintf("[%s] %s", target, sanitizeRemote(ev.Message))
+	switch ev.Level {
+	case protocol.LevelWarn:
+		msg = ui.Yellow("⚠ " + msg)
+	case protocol.LevelDanger:
+		msg = ui.BoldRed("✖ " + msg)
+	}
+	_, _ = fmt.Fprintln(v.errOut, msg)
+}
+
+func (v *remoteView) hostDone(r remoteexec.HostReport) {
+	if v.events != nil {
+		if r.Result == nil || !r.Result.Completed {
+			code := 3
+			_ = v.events.Emit(protocol.Event{Type: protocol.TypeError, Host: r.Name, Phase: "connect", Error: errString(r.Err)})
+			_ = v.events.Emit(protocol.Event{Type: protocol.TypeDone, Host: r.Name, ExitCode: &code})
+		}
+		return
+	}
+	line := fmt.Sprintf("%s %s (%s)", statusLabel(r.Status), r.Name, r.Duration.Round(time.Millisecond))
+	if r.Err != nil {
+		line += ": " + sanitizeRemote(r.Err.Error())
+	}
+	_, _ = fmt.Fprintln(v.errOut, line)
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+func statusLabel(status string) string {
+	switch status {
+	case remoteexec.StatusOK:
+		return ui.BoldGreen("✔ ok")
+	case remoteexec.StatusFailed:
+		return ui.BoldRed("✖ failed")
+	case remoteexec.StatusUnreachable:
+		return ui.BoldYellow("⚠ unreachable")
+	default:
+		return ui.BoldRed("✖ error")
+	}
+}
+
+func (v *remoteView) finish(runID string, reports []remoteexec.HostReport, code int) error {
+	switch v.format {
+	case "ndjson":
+		return v.events.Done(code)
+	case "json":
+		return writeRemoteJSON(v.out, runID, reports)
+	default:
+		return v.writeTable(reports)
+	}
+}
+
+func hostComputerName(r remoteexec.HostReport) string {
+	if r.Result == nil {
+		return ""
+	}
+	name, _ := r.Result.Facts["computer_name"].(string)
+	return sanitizeRemote(name)
+}
+
+func hostStats(r remoteexec.HostReport) engine.Stats {
+	if r.Result == nil {
+		return engine.Stats{}
+	}
+	if r.Result.Summary != nil && r.Result.Summary.Stats != nil {
+		return *r.Result.Summary.Stats
+	}
+	// A run aborted by an error has no summary; count what streamed in.
+	return engine.ComputeStats(resultsFromJSON(r.Result.Results))
+}
+
+func (v *remoteView) writeTable(reports []remoteexec.HostReport) error {
+	for _, r := range reports {
+		if r.Result == nil || len(r.Result.Results) == 0 {
+			continue
+		}
+		title := r.Name
+		if cn := hostComputerName(r); cn != "" && !strings.EqualFold(cn, r.Name) {
+			title += " (" + cn + ")"
+		}
+		if err := ui.WriteLine(v.out, ui.Bold("── "+title+" ──")); err != nil {
+			return err
+		}
+		if err := engine.PrintTable(v.out, resultsFromJSON(r.Result.Results)); err != nil {
+			return err
+		}
+		if err := ui.WriteLine(v.out, ""); err != nil {
+			return err
+		}
+	}
+
+	header := []string{"HOST", "STATUS", "TOTAL", "INSTALLED", "UNINSTALLED", "SKIPPED", "FAILED", "TIME"}
+	rows := make([][]string, 0, len(reports))
+	for _, r := range reports {
+		s := hostStats(r)
+		rows = append(rows, []string{r.Name, r.Status, fmt.Sprint(s.Total), fmt.Sprint(s.Installed), fmt.Sprint(s.Uninstalled), fmt.Sprint(s.Skipped), fmt.Sprint(s.Failed), r.Duration.Round(time.Millisecond).String()})
+	}
+	widths := make([]int, len(header))
+	for i, h := range header {
+		widths[i] = len(h)
+	}
+	for _, row := range rows {
+		for i, cell := range row {
+			widths[i] = max(widths[i], len(cell))
+		}
+	}
+	render := func(cells []string, statusColor func(string) string) string {
+		parts := make([]string, len(cells))
+		for i, cell := range cells {
+			padded := fmt.Sprintf("%-*s", widths[i], cell)
+			if i == 1 && statusColor != nil {
+				padded = statusColor(padded)
+			}
+			parts[i] = padded
+		}
+		return strings.Join(parts, "  ")
+	}
+	if err := ui.WriteLine(v.out, ui.Bold(render(header, nil))); err != nil {
+		return err
+	}
+	for i, row := range rows {
+		if err := ui.WriteLine(v.out, render(row, statusColor(reports[i].Status))); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func statusColor(status string) func(string) string {
+	switch status {
+	case remoteexec.StatusOK:
+		return ui.BoldGreen
+	case remoteexec.StatusUnreachable:
+		return ui.BoldYellow
+	default:
+		return ui.BoldRed
+	}
+}
+
+func resultsFromJSON(in []engine.JSONResult) []engine.Result {
+	out := make([]engine.Result, len(in))
+	for i, r := range in {
+		out[i] = engine.Result{
+			Module:   sanitizeRemote(r.Module),
+			Package:  sanitizeRemote(r.Package),
+			State:    sanitizeRemote(r.State),
+			Action:   r.Action,
+			Apply:    r.Apply,
+			Failed:   r.Failed,
+			Duration: time.Duration(r.DurationMS * float64(time.Millisecond)),
+		}
+	}
+	return out
+}
+
+type remoteJSONHost struct {
+	Name         string              `json:"name"`
+	ComputerName string              `json:"computer_name,omitempty"`
+	Platform     string              `json:"platform,omitempty"`
+	Status       string              `json:"status"`
+	ExitCode     int                 `json:"exit_code"`
+	Facts        map[string]any      `json:"facts,omitempty"`
+	Results      []engine.JSONResult `json:"results"`
+	Stats        engine.Stats        `json:"stats"`
+	DurationMS   float64             `json:"duration_ms"`
+	Uploaded     bool                `json:"agent_uploaded"`
+	Error        *string             `json:"error"`
+}
+
+type remoteJSONStats struct {
+	Hosts       int `json:"hosts"`
+	OK          int `json:"ok"`
+	Failed      int `json:"failed"`
+	Unreachable int `json:"unreachable"`
+	Error       int `json:"error"`
+}
+
+func writeRemoteJSON(w io.Writer, runID string, reports []remoteexec.HostReport) error {
+	doc := struct {
+		RunID string           `json:"run_id"`
+		Hosts []remoteJSONHost `json:"hosts"`
+		Stats remoteJSONStats  `json:"stats"`
+	}{RunID: runID, Hosts: []remoteJSONHost{}}
+	for _, r := range reports {
+		h := remoteJSONHost{
+			Name:         r.Name,
+			ComputerName: hostComputerName(r),
+			Platform:     r.Platform,
+			Status:       r.Status,
+			Stats:        hostStats(r),
+			DurationMS:   float64(r.Duration) / float64(time.Millisecond),
+			Uploaded:     r.Uploaded,
+			Results:      []engine.JSONResult{},
+		}
+		if r.Result != nil {
+			h.ExitCode = r.Result.ExitCode
+			h.Facts = r.Result.Facts
+			if r.Result.Results != nil {
+				h.Results = r.Result.Results
+			}
+		}
+		if r.Err != nil {
+			msg := r.Err.Error()
+			h.Error = &msg
+		}
+		doc.Hosts = append(doc.Hosts, h)
+		doc.Stats.Hosts++
+		switch r.Status {
+		case remoteexec.StatusOK:
+			doc.Stats.OK++
+		case remoteexec.StatusFailed:
+			doc.Stats.Failed++
+		case remoteexec.StatusUnreachable:
+			doc.Stats.Unreachable++
+		default:
+			doc.Stats.Error++
+		}
+	}
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(doc)
+}
+
+func newRemoteCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "remote",
+		Short: "Remote apply helpers",
+	}
+	ping := &cobra.Command{
+		Use:   "ping",
+		Short: "Connect to targets, probe them, and make sure the agent runs (applies nothing)",
+		Args:  cobra.NoArgs,
+		RunE:  runRemotePing,
+	}
+	addRemoteFlags(ping.Flags())
+	cmd.AddCommand(ping)
+	return cmd
+}
+
+func runRemotePing(cmd *cobra.Command, _ []string) error {
+	targets, _ := cmd.Flags().GetStringArray("target")
+	if len(targets) == 0 {
+		return NewLoadError(fmt.Errorf("at least one --target is required"))
+	}
+	if err := validateTargets(targets); err != nil {
+		return NewLoadError(err)
+	}
+	opts, err := remoteHostOptions(cmd.Flags())
+	if err != nil {
+		return NewLoadError(err)
+	}
+	reports := make([]remoteexec.HostReport, 0, len(targets))
+	for _, target := range targets {
+		r := remoteexec.PingHost(cmd.Context(), target, opts)
+		reports = append(reports, r.HostReport)
+		line := fmt.Sprintf("%s %s", statusLabel(r.Status), target)
+		if r.Platform != "" {
+			line += "  " + r.Platform
+		}
+		if r.Probe.Sudo != "" {
+			line += "  sudo=" + r.Probe.Sudo
+		}
+		if r.Status == remoteexec.StatusOK {
+			line += "  agent: " + sanitizeRemote(r.AgentVersion)
+			if r.Uploaded {
+				line += " (uploaded)"
+			}
+		} else if r.Err != nil {
+			line += ": " + sanitizeRemote(r.Err.Error())
+		}
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), line)
+	}
+	if code := remoteexec.ExitCode(reports); code != 0 {
+		return &ExitCodeError{Code: code, Err: fmt.Errorf("remote ping: %s", summarizeStatuses(reports))}
+	}
+	return nil
+}

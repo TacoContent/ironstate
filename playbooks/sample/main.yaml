@@ -25,14 +25,6 @@ tasks:
     with:
       Version: "1.2.5"
 
-  - name: Test
-    user:
-      name: rconr
-
-  - name: Kanata KB Mapper
-    cron:
-      name: Kanata KB Mapper
-
   - name: Include Mount Fact Role
     include:
       name: roles/mount-fact
