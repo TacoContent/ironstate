@@ -336,7 +336,7 @@ internal/
 │                            snap, flatpak, scoop, macports, pipx, npm, cargo, go,
 │                            gem, eget, xget, git, iptables, ufw, advfirewall, firewall, zip, symlinks, file,
 │                            copy, shell, blockinfile, lineinfile,
-│                            ssh_host_block, log, fail, path, fact, mount_facts, assert, async, wait_for,
+│                            ssh_host_block, log, fail, path, fact, mount_facts, stat, assert, async, wait_for,
 │                            registry, scheduled_task, template
 ├── ui/                     ← terminal color/emoji output styling
 └── exec/                   ← external-process Runner abstraction handlers shell out through
@@ -1369,6 +1369,30 @@ tasks:
         - device not in ["none", "drivers"]
         - fstype == "NTFS"
         - source not in ["WNetGetConnection"]
+```
+
+### `stat`
+
+Reports a path's metadata and exposes it to an [`id`](#registering-results-id)-registered result as `<id>.stat` (mirrors Ansible's `stat`). Uses a coreutils `stat` (GNU or uutils; `gstat` on macOS) when one is on `PATH`, BSD `stat -f` on other Unix hosts, and `pwsh` otherwise (e.g. Windows without coreutils). A missing path is not an error - it reports `exists: false`. Always actually runs, even without `--apply`, since it has no system side effect.
+
+| Field | Required | Default | Description |
+| --- | --- | --- | --- |
+| `path` | yes | | Path to inspect (`~` is expanded) |
+| `follow` | no | `false` | Follow a symlink and report its target instead of the link itself |
+
+Registered `stat` keys: `exists`, `path`, `backend` (`coreutils`/`bsd`/`pwsh`), `isdir`, `isreg`, `islnk`, `lnk_target`, `size`, `mode` (octal string, e.g. `0644`), `pw_name`, `gr_name`, `atime`, `mtime`, `ctime` (epoch seconds). The `stat` CLI backends also report `permissions` (e.g. `-rw-r--r--`), `uid`, `gid`, `nlink`, `inode`/`dev` (strings), and `isblk`/`ischr`/`isfifo`/`issock`; the `pwsh` backend adds `attributes` and reports `ctime` as creation time. Keys a backend can't provide are omitted.
+
+```yaml
+tasks:
+  - name: check for ssh key
+    id: ssh_key
+    stat:
+      path: ~/.ssh/id_ed25519
+
+  - name: generate ssh key
+    when: not ssh_key.stat.exists
+    shell:
+      command: ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519
 ```
 
 ### `assert`

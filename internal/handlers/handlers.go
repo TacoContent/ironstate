@@ -28,7 +28,7 @@ var AllModuleNames = withBuiltinAliases([]string{
 	"npm", "cargo", "go", "eget", "xget",
 	"git", "cron", "cron_unix", "cron_file", "iptables", "ufw", "advfirewall", "firewall", "zip", "symlinks", "file", "copy", "template", "shell", "blockinfile", "lineinfile",
 	"ssh_host_block", "log", "fail", "path", "fact", "mount_facts", "registry", "scheduled_task", "group", "user",
-	"assert", "async", "wait_for", "service",
+	"assert", "async", "wait_for", "service", "stat",
 })
 
 // All returns every implemented module, ready to hand to
@@ -88,6 +88,7 @@ func All() map[string]engine.Handler {
 		"lineinfile":     lineInFileHandler{},
 		"async":          asyncHandler{},
 		"wait_for":       waitForHandler{},
+		"stat":           statHandler{},
 	}
 	names := make([]string, 0, len(handlers))
 	for name := range handlers {

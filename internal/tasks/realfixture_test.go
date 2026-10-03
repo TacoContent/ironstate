@@ -20,7 +20,7 @@ var realModuleNames = []string{
 	"winget", "chocolatey", "homebrew", "brew", "apt", "gem", "pipx", "npm", "cargo", "go", "eget", "xget",
 	"git", "cron", "cron_unix", "cron_file", "iptables", "ufw", "advfirewall", "firewall", "zip", "symlinks", "file", "copy", "template", "shell", "blockinfile", "lineinfile",
 	"ssh_host_block", "log", "fail", "path", "fact", "mount_facts", "registry", "scheduled_task",
-	"assert",
+	"assert", "stat",
 }
 
 func repoRoot(t *testing.T) string {

@@ -127,6 +127,17 @@ type FactProducer interface {
 	FactName(item map[string]any) (name string, ok bool)
 }
 
+// ReadOnlyHandler is an optional extra for a handler whose Install has no
+// system side effect (e.g. 'stat'), so it runs even without '--apply'.
+type ReadOnlyHandler interface {
+	ReadOnly() bool
+}
+
+func isReadOnly(handler Handler) bool {
+	ro, ok := handler.(ReadOnlyHandler)
+	return ok && ro.ReadOnly()
+}
+
 // ScanItem is a single configuration object a ScanCapable handler
 // discovers on the current system, ready to seed a generated playbook.
 // internal/scan.Item is a type alias for this (rather than its own
@@ -503,7 +514,7 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 			// '-Apply' - see docs/plans/go-rewrite.md §2/§4.10. Without this, a
 			// FactProducer's Install would never run in a dry run, leaving its
 			// fact undefined for every later leaf's preview.
-			effectiveApply := opts.Apply || hasEmbeddedShell || module == "assert" || isFactProducer(handler)
+			effectiveApply := opts.Apply || hasEmbeddedShell || module == "assert" || isFactProducer(handler) || isReadOnly(handler)
 
 			become := resolveBecome(leaf.Become)
 			if leaf.Isolated && become.Enabled {

@@ -143,6 +143,7 @@
         "path": { "$ref": "#/$defs/pathItem" },
         "fact": { "$ref": "#/$defs/factItem" },
         "mount_facts": { "$ref": "#/$defs/mountFactsItem" },
+        "stat": { "$ref": "#/$defs/statItem" },
         "assert": { "$ref": "#/$defs/assertItem" },
         "async": { "$ref": "#/$defs/asyncItem" },
         "wait_for": { "$ref": "#/$defs/waitForItem" },
@@ -1063,6 +1064,16 @@
           "description": "Any YAML value - scalar, list, or nested mapping. May reference '${{ <id> }}' / '${{ facts.* }}' / '${{ vars.* }}', resolved before being stored. Required unless 'state' is 'absent' or 'shell' is given (see 'shell')."
         },
         "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "statItem": {
+      "type": "object",
+      "description": "Reports a path's metadata, exposed to an 'id'-registered result as '<id>.stat' (exists, isdir, isreg, islnk, size, mode, uid/gid, pw_name/gr_name, atime/mtime/ctime, ...). Uses a coreutils 'stat' if on PATH (also 'gstat' on macOS), BSD 'stat' on other Unix hosts, else pwsh. A missing path reports 'exists: false' rather than failing. Always actually runs, even without '-Apply' - it has no system side effect.",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string", "description": "Path to inspect. '~' is expanded." },
+        "follow": { "type": "boolean", "default": false, "description": "Follow a symlink and report its target instead of the link itself." }
       }
     },
     "mountFactsItem": {
