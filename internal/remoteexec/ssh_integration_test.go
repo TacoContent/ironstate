@@ -54,7 +54,7 @@ tasks:
   - name: check
     assert:
       that:
-				- "facts.platform == '%s'"
+        - "facts.platform == '%s'"
 `, platformOS))
 	writeFile(t, dir+"/.secrets", "SSH_IT_SECRET=very-secret-value\n")
 	job, err := remoteexec.Prepare(remoteexec.JobSpec{Playbook: dir, Apply: true, EnvFile: dir + "/.env", SecretsFile: dir + "/.secrets"})
