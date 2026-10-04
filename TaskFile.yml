@@ -137,19 +137,19 @@ tasks:
     desc: Connect to snoke, probe it, and make sure the agent runs (applies nothing)
     deps: [remote:agent]
     cmds:
-      - go run ./cmd/ironstate remote ping --target {{.SNOKE_USER}}@{{.SNOKE_IP}} --agent-binary linux/{{.SNOKE_ARCH}}=bin/ironstate-linux-{{.SNOKE_ARCH}}
+      - go run ./cmd/ironstate remote ping --inventory playbooks/sample/inventory/main.yml --limit snoke --agent-binary linux/{{.SNOKE_ARCH}}=bin/ironstate-linux-{{.SNOKE_ARCH}}
 
   remote:snoke:dry-run:
     desc: Dry-run playbooks/sample on snoke over SSH
     deps: [remote:agent]
     cmds:
-      - go run ./cmd/ironstate --playbook playbooks/sample --target {{.SNOKE_USER}}@{{.SNOKE_IP}} --agent-binary linux/{{.SNOKE_ARCH}}=bin/ironstate-linux-{{.SNOKE_ARCH}} {{.CLI_ARGS}}
+      - go run ./cmd/ironstate --playbook playbooks/sample --inventory playbooks/sample/inventory/main.yml --limit snoke --agent-binary linux/{{.SNOKE_ARCH}}=bin/ironstate-linux-{{.SNOKE_ARCH}} {{.CLI_ARGS}}
 
   remote:snoke:apply:
     desc: Apply playbooks/sample on snoke over SSH
     deps: [remote:agent]
     cmds:
-      - go run ./cmd/ironstate --playbook playbooks/sample --target {{.SNOKE_USER}}@{{.SNOKE_IP}} --agent-binary linux/{{.SNOKE_ARCH}}=bin/ironstate-linux-{{.SNOKE_ARCH}} --apply {{.CLI_ARGS}}
+      - go run ./cmd/ironstate --playbook playbooks/sample --inventory playbooks/sample/inventory/main.yml --limit snoke --agent-binary linux/{{.SNOKE_ARCH}}=bin/ironstate-linux-{{.SNOKE_ARCH}} --apply {{.CLI_ARGS}}
 
   build-snapshot:
     desc: 'CI job "build-snapshot": goreleaser snapshot of every target'
