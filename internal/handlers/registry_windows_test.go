@@ -8,6 +8,27 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
+func TestSetRegistryValueDWordRange(t *testing.T) {
+	key, _, err := registry.CreateKey(registry.CURRENT_USER, `Software\IronstateDWordRangeTest`, registry.ALL_ACCESS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = key.Close()
+		_ = registry.DeleteKey(registry.CURRENT_USER, `Software\IronstateDWordRangeTest`)
+	})
+	for _, v := range []float64{0, -1, 4294967295} {
+		if err := setRegistryValue(key, "ok", "DWord", v); err != nil {
+			t.Errorf("DWord %v rejected: %v", v, err)
+		}
+	}
+	for _, v := range []float64{4294967296, -2147483649} {
+		if err := setRegistryValue(key, "bad", "DWord", v); err == nil {
+			t.Errorf("DWord %v accepted; want a range error", v)
+		}
+	}
+}
+
 func TestRegistryHandlerSetTestRemove(t *testing.T) {
 	testPath := `HKCU\Software\IronstateGoRewriteTest`
 	t.Cleanup(func() {

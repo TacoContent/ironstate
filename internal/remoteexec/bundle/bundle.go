@@ -267,9 +267,19 @@ func IsSafeEntryName(name string) bool {
 }
 
 // Extract unpacks a tar.gz stream from r into dest, which must already
-// exist. Every entry is validated before anything is written for it;
-// symlinks must resolve inside dest.
+// exist. Every entry is validated before anything is written for it, both
+// lexically and against the real (symlink-resolved) filesystem, so a
+// symlink created by an earlier entry can't redirect a later one outside
+// dest; symlinks must also resolve inside dest.
 func Extract(r io.Reader, dest string) error {
+	destAbs, err := filepath.Abs(dest)
+	if err != nil {
+		return err
+	}
+	root, err := filepath.EvalSymlinks(destAbs)
+	if err != nil {
+		return err
+	}
 	gz, err := gzip.NewReader(r)
 	if err != nil {
 		return err
@@ -289,18 +299,24 @@ func Extract(r io.Reader, dest string) error {
 			return fmt.Errorf("unsafe bundle entry %q", hdr.Name)
 		}
 		clean := path.Clean(strings.TrimSuffix(hdr.Name, "/"))
-		target := filepath.Join(dest, filepath.FromSlash(clean))
+		target := filepath.Clean(filepath.Join(root, filepath.FromSlash(clean)))
+		if !strings.HasPrefix(target, root+string(filepath.Separator)) {
+			return fmt.Errorf("bundle entry %q escapes the destination", hdr.Name)
+		}
 		switch hdr.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0o700); err != nil {
-				return err
+			if err := mkdirWithin(root, target); err != nil {
+				return fmt.Errorf("bundle dir %q: %w", hdr.Name, err)
 			}
 		case tar.TypeReg:
 			if hdr.Size < 0 || written+hdr.Size > MaxExtractBytes {
 				return fmt.Errorf("bundle exceeds %d bytes uncompressed", MaxExtractBytes)
 			}
-			if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
-				return err
+			if err := mkdirWithin(root, filepath.Dir(target)); err != nil {
+				return fmt.Errorf("bundle file %q: %w", hdr.Name, err)
+			}
+			if err := checkResolvedWithin(root, target); err != nil {
+				return fmt.Errorf("bundle file %q: %w", hdr.Name, err)
 			}
 			mode := os.FileMode(0o600)
 			if hdr.Mode&0o111 != 0 {
@@ -315,8 +331,15 @@ func Extract(r io.Reader, dest string) error {
 			if !safeLink(clean, hdr.Linkname) {
 				return fmt.Errorf("bundle symlink %q -> %q escapes the bundle", hdr.Name, hdr.Linkname)
 			}
-			if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+			if err := mkdirWithin(root, filepath.Dir(target)); err != nil {
+				return fmt.Errorf("bundle symlink %q: %w", hdr.Name, err)
+			}
+			linkDir, err := filepath.EvalSymlinks(filepath.Dir(target))
+			if err != nil {
 				return err
+			}
+			if !isRel(hdr.Name, root, root) || !isRel(hdr.Linkname, linkDir, root) {
+				return fmt.Errorf("bundle symlink %q -> %q escapes the destination", hdr.Name, hdr.Linkname)
 			}
 			if err := os.Symlink(filepath.FromSlash(hdr.Linkname), target); err != nil {
 				return err
@@ -325,6 +348,92 @@ func Extract(r io.Reader, dest string) error {
 			return fmt.Errorf("unsupported bundle entry type %q for %q", hdr.Typeflag, hdr.Name)
 		}
 	}
+}
+
+// mkdirWithin creates dir one level at a time, checking after each step
+// that the real (symlink-resolved) path is still inside root.
+func mkdirWithin(root, dir string) error {
+	rel, err := filepath.Rel(root, dir)
+	if err != nil {
+		return err
+	}
+	if rel == "." {
+		return nil
+	}
+	current := root
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		current = filepath.Join(current, part)
+		if err := os.Mkdir(current, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+			return err
+		}
+		resolved, err := filepath.EvalSymlinks(current)
+		if err != nil {
+			return err
+		}
+		if !withinRoot(root, resolved) {
+			return errors.New("path escapes the destination through a symlink")
+		}
+	}
+	return nil
+}
+
+// checkResolvedWithin verifies target's real parent dir is inside root.
+func checkResolvedWithin(root, target string) error {
+	parent, err := filepath.EvalSymlinks(filepath.Dir(target))
+	if err != nil {
+		return err
+	}
+	if !withinRoot(root, filepath.Join(parent, filepath.Base(target))) {
+		return errors.New("path escapes the destination through a symlink")
+	}
+	return nil
+}
+
+// isRel resolves candidate from base (a real directory) one segment at a
+// time, following existing symlinks, and reports whether every step stays
+// inside root. '..' is only allowed before the first name: a name that
+// doesn't exist yet could become a symlink later in the archive, and '..'
+// after it would then climb from wherever that link points.
+func isRel(candidate, base, root string) bool {
+	if candidate == "" || filepath.IsAbs(candidate) || strings.HasPrefix(candidate, "/") {
+		return false
+	}
+	current := base
+	leading := true
+	for _, segment := range strings.Split(filepath.ToSlash(candidate), "/") {
+		switch segment {
+		case "", ".":
+			continue
+		case "..":
+			if !leading {
+				return false
+			}
+			current = filepath.Dir(current)
+		default:
+			leading = false
+			current = filepath.Join(current, segment)
+			resolved, err := filepath.EvalSymlinks(current)
+			switch {
+			case err == nil:
+				current = resolved
+			case !errors.Is(err, fs.ErrNotExist):
+				return false
+			}
+		}
+		rel, err := filepath.Rel(root, current)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+			return false
+		}
+	}
+	return true
+}
+
+func withinRoot(root, p string) bool {
+	rel, err := filepath.Rel(root, filepath.Clean(p))
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel))
 }
 
 func writeFile(target string, r io.Reader, size int64, mode os.FileMode) (int64, error) {

@@ -71,6 +71,38 @@ tasks:
       - govulncheck ./...
       - cd sdk && govulncheck ./...
 
+  codeql:
+    desc: 'codeql.yml workflow: CodeQL Go analysis with the same code-scanning suite; fails on any alert'
+    cmds:
+      # Uses a codeql CLI on PATH, else the official gh extension; skips loudly
+      # like 'race' does without a C compiler.
+      - |
+        if command -v codeql >/dev/null 2>&1; then
+          cq="codeql"
+        elif gh codeql version >/dev/null 2>&1; then
+          cq="gh codeql"
+        else
+          echo "⚠ skipping CodeQL: no CLI found (install with: gh extension install github/gh-codeql) - CI still runs codeql.yml."
+          exit 0
+        fi
+        mkdir -p .codeql
+        if ! $cq database create .codeql/db --language=go --source-root=. --overwrite >.codeql/create.log 2>&1; then
+          cat .codeql/create.log
+          exit 1
+        fi
+        if ! $cq database analyze .codeql/db codeql/go-queries:codeql-suites/go-code-scanning.qls --download --format=sarif-latest --output=.codeql/results.sarif >.codeql/analyze.log 2>&1; then
+          cat .codeql/analyze.log
+          exit 1
+        fi
+        # -j: no trailing newline (Windows jq writes CRLF).
+        count="$(jq -j '[.runs[].results[]] | length' .codeql/results.sarif)"
+        if [ "$count" != "0" ]; then
+          jq -r '.runs[].results[] | "\(.ruleId) \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine): \(.message.text)"' .codeql/results.sarif
+          echo "CodeQL found $count alert(s); full report: .codeql/results.sarif"
+          exit 1
+        fi
+        echo "CodeQL: no alerts"
+
   fmt:check:
     desc: Fail if any file is not gofmt-clean
     cmds:
@@ -255,6 +287,7 @@ tasks:
       - task: lint
       - task: vet
       - task: vuln
+      - task: codeql
       - task: fmt:check
       - task: test
       - task: race
@@ -274,6 +307,7 @@ tasks:
       - task: vet
       - task: fmt:check
       - task: vuln
+      - task: codeql
       - go test ./...
 
   manpage:

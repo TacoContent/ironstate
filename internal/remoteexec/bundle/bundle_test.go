@@ -114,6 +114,42 @@ func TestExtractRejectsUnsafeEntries(t *testing.T) {
 	}
 }
 
+func TestExtractRejectsSymlinkChainEscape(t *testing.T) {
+	if err := os.Symlink(".", filepath.Join(t.TempDir(), "probe")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	cases := map[string][]*tar.Header{
+		// 'l' looks like it stays inside lexically, but 's' already points at the root.
+		"link through link": {
+			{Name: "s", Typeflag: tar.TypeSymlink, Linkname: "."},
+			{Name: "s/l", Typeflag: tar.TypeSymlink, Linkname: ".."},
+		},
+		"file through link to sibling": {
+			{Name: "a/up", Typeflag: tar.TypeSymlink, Linkname: ".."},
+			{Name: "a/up/b", Typeflag: tar.TypeSymlink, Linkname: ".."},
+		},
+		// 'x' doesn't exist when 'l' is checked, then becomes a link to the root.
+		"dotdot after a future link": {
+			{Name: "l", Typeflag: tar.TypeSymlink, Linkname: "x/../out"},
+			{Name: "x", Typeflag: tar.TypeSymlink, Linkname: "."},
+		},
+	}
+	for name, entries := range cases {
+		t.Run(name, func(t *testing.T) {
+			parent := t.TempDir()
+			dest := filepath.Join(parent, "out")
+			if err := os.Mkdir(dest, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			err := Extract(bytes.NewReader(tarGz(t, entries...)), dest)
+			if err == nil || !strings.Contains(err.Error(), "escapes") {
+				t.Fatalf("err = %v, want an escape rejection", err)
+			}
+			assertNothingOutside(t, parent)
+		})
+	}
+}
+
 func TestBuildRejectsEscapingSymlink(t *testing.T) {
 	src := t.TempDir()
 	if err := os.Symlink(filepath.Join(t.TempDir(), "elsewhere"), filepath.Join(src, "link")); err != nil {
