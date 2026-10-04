@@ -683,7 +683,45 @@ As built (differences from the plan, and why):
   path (control-channel EOF / stream EPIPE → stop after current leaf → `done` in the
   run log) is covered by the protocol unit tests and the local-transport cancel test.
 
-### Phase 2: Inventory, parallelism, agent download
+### Phase 2: Inventory, parallelism, agent download - DONE
+
+As built (differences from the plan, and why):
+
+- **Inventory** (`internal/remoteexec/inventory.go`, schema `inventory.schema.json`,
+  shipped in release archives): `defaults`, `hosts`, `groups` exactly as in §11.2, plus
+  per-host `agent_dir` and `address: local` (runs on the controller without SSH, handy
+  for listing the controller itself and for tests). Unknown keys are errors (strict YAML
+  decode) and a schema test keeps the loader and the schema in step. Groups are flat
+  (no nested groups) and `all` is reserved; nothing in the plan needed more.
+- **Selection:** `--limit` takes host/group names and `all`, keeps the given order and
+  de-duplicates; with no `--limit` every host runs, sorted by name. `--target` hosts are
+  appended after the inventory selection; `--limit` without `--inventory` is an error.
+- **`platform: windows`** is accepted in the inventory but the host is reported as
+  `error` ("not supported yet") rather than failing the whole inventory load, so a
+  mixed inventory is usable today.
+- **Parallelism:** `--forks` (default 5) via `ForEachHost`, a bounded worker pool that
+  returns reports in host order. Live table lines are mutex-guarded and prefixed
+  `[host]`; per-host result tables still print grouped at the end. After the first
+  Ctrl-C, hosts that haven't started are reported as `error: not started`.
+- **Agent download:** release builds fetch
+  `v<version>/ironstate_<version>_<os>_<arch>.tar.gz` plus `checksums.txt`, verify the
+  archive's SHA-256 against it, and cache the binary under the controller's
+  `UserCacheDir/ironstate/agents/<version>/<os>_<arch>/`. When the release has a
+  `checksums.txt.sigstore.json` bundle and `cosign` is on `PATH`, the checksums file is
+  verified first (same identity/issuer as the README's manual instructions); without
+  `cosign` that step is skipped, as `install.sh` does. `GITHUB_TOKEN` is sent only to
+  `https://github.com/` URLs (Go drops it on the redirect to the asset CDN). `dev` and
+  `-SNAPSHOT` builds never download; `--no-agent-download` disables it for release
+  builds. Concurrent hosts on the same platform share one download (mutex).
+- **`remote ping`** takes the same `--inventory`/`--limit`/`--forks` flags and prints
+  each host as it finishes.
+- **Verified live** from the Windows controller: inventory ping of snoke plus an
+  unreachable host in parallel (exit 3), sample-playbook dry-run on snoke via
+  `--limit snoke` with JSON output, and a controller stamped `0.7.0` downloading,
+  checksum-verifying and caching the real v0.7.0 Linux agent from GitHub, then running
+  it on snoke.
+
+Original scope:
 
 - Inventory file + schema, groups, `--limit`, `--forks`, multi-host table/json/ndjson.
 - Release download + controller-side agent cache (§6.3 step 4).

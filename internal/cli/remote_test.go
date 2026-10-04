@@ -119,9 +119,41 @@ func TestRemoteApplyNDJSONTagsEventsWithHost(t *testing.T) {
 
 func TestRemoteApplyRejectsInvalidTarget(t *testing.T) {
 	playbook := writePlaybook(t, "tasks: []\n")
-	_, err := runRemoteCLI(t, "--playbook", playbook, "--target", "-oProxyCommand=evil")
-	if ExitCodeFor(err) != 2 {
-		t.Fatalf("exit = %d (%v), want 2", ExitCodeFor(err), err)
+	for _, args := range [][]string{
+		{"--target", "-oProxyCommand=evil"},
+		{"--target", "local", "--limit", "web"},
+		{"--inventory", filepath.Join(t.TempDir(), "missing.yml")},
+	} {
+		_, err := runRemoteCLI(t, append([]string{"--playbook", playbook}, args...)...)
+		if ExitCodeFor(err) != 2 {
+			t.Errorf("%v: exit = %d (%v), want 2", args, ExitCodeFor(err), err)
+		}
+	}
+}
+
+func TestRemoteApplyInventoryWithLimit(t *testing.T) {
+	localTargetEnv(t)
+	inventory := filepath.Join(t.TempDir(), "inventory.yml")
+	content := "hosts:\n  one: { address: local }\n  two: { address: local }\n  skipped: { address: local }\ngroups:\n  pair: [one, two]\n"
+	if err := os.WriteFile(inventory, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	playbook := writePlaybook(t, "tasks:\n  - name: hi\n    log:\n      message: hello\n")
+	// forks 1: every host here is this machine, which allows one apply at a time.
+	out, err := runRemoteCLI(t, "--playbook", playbook, "--inventory", inventory, "--limit", "pair", "--forks", "1", "--output", "json", "--apply")
+	if err != nil {
+		t.Fatalf("Execute: %v\n%s", err, out)
+	}
+	var doc struct {
+		Hosts []struct {
+			Name, Address, Status string
+		} `json:"hosts"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Hosts) != 2 || doc.Hosts[0].Name != "one" || doc.Hosts[1].Name != "two" || doc.Hosts[0].Status != "ok" || doc.Hosts[1].Status != "ok" || doc.Hosts[0].Address != "local" {
+		t.Fatalf("hosts = %+v", doc.Hosts)
 	}
 }
 

@@ -96,6 +96,8 @@ func (f *fakeTarget) Exec(ctx context.Context, cmd remoteexec.RemoteCommand, std
 
 func (f *fakeTarget) Close() error { return nil }
 
+var box = remoteexec.Host{Name: "box", SSH: remoteexec.SSHTarget{User: "u", Host: "box"}}
+
 // hostOptions ships the test binary itself as the agent for the fake's
 // platform; the fake runs it locally.
 func hostOptions(f *fakeTarget) remoteexec.HostOptions {
@@ -105,7 +107,7 @@ func hostOptions(f *fakeTarget) remoteexec.HostOptions {
 	}
 	return remoteexec.HostOptions{
 		Agents: &remoteexec.AgentSource{Version: "test", Binaries: map[string]string{f.platform: exe}},
-		Dial:   func(string) (remoteexec.Transport, error) { return f, nil },
+		Dial:   func(remoteexec.Host) (remoteexec.Transport, error) { return f, nil },
 	}
 }
 
@@ -125,11 +127,11 @@ func TestApplyHostUploadsOnceThenReusesCachedAgent(t *testing.T) {
 	target := newFakeTarget(t, "nopasswd")
 	job := prepareSimple(t, "tasks:\n  - name: hi\n    log:\n      message: hello\n")
 
-	first := remoteexec.ApplyHost(context.Background(), "u@box", job, hostOptions(target))
+	first := remoteexec.ApplyHost(context.Background(), box, job, hostOptions(target))
 	if first.Status != remoteexec.StatusOK || !first.Uploaded {
 		t.Fatalf("first run: status=%s uploaded=%v err=%v", first.Status, first.Uploaded, first.Err)
 	}
-	second := remoteexec.ApplyHost(context.Background(), "u@box", job, hostOptions(target))
+	second := remoteexec.ApplyHost(context.Background(), box, job, hostOptions(target))
 	if second.Status != remoteexec.StatusOK || second.Uploaded {
 		t.Fatalf("second run: status=%s uploaded=%v err=%v", second.Status, second.Uploaded, second.Err)
 	}
@@ -141,7 +143,7 @@ func TestApplyHostUploadsOnceThenReusesCachedAgent(t *testing.T) {
 func TestApplyHostUnreachable(t *testing.T) {
 	target := newFakeTarget(t, "nopasswd")
 	target.exitCode = remoteexec.SSHExitUnreachable
-	report := remoteexec.ApplyHost(context.Background(), "box", prepareSimple(t, "tasks: []\n"), hostOptions(target))
+	report := remoteexec.ApplyHost(context.Background(), box, prepareSimple(t, "tasks: []\n"), hostOptions(target))
 	if report.Status != remoteexec.StatusUnreachable || !strings.Contains(report.Err.Error(), "Connection refused") {
 		t.Fatalf("status=%s err=%v", report.Status, report.Err)
 	}
@@ -153,7 +155,7 @@ func TestApplyHostUnreachable(t *testing.T) {
 func TestApplyHostRejectsBecomeWithoutPasswordlessSudo(t *testing.T) {
 	target := newFakeTarget(t, "password")
 	job := prepareSimple(t, "tasks:\n  - name: root\n    become: true\n    log:\n      message: hi\n")
-	report := remoteexec.ApplyHost(context.Background(), "box", job, hostOptions(target))
+	report := remoteexec.ApplyHost(context.Background(), box, job, hostOptions(target))
 	if report.Status != remoteexec.StatusError || !strings.Contains(report.Err.Error(), "become") {
 		t.Fatalf("status=%s err=%v", report.Status, report.Err)
 	}
@@ -169,7 +171,7 @@ func TestApplyHostRejectsUnsupportedFeatures(t *testing.T) {
 	}
 	for name, content := range cases {
 		t.Run(name, func(t *testing.T) {
-			report := remoteexec.ApplyHost(context.Background(), "box", prepareSimple(t, content), hostOptions(newFakeTarget(t, "nopasswd")))
+			report := remoteexec.ApplyHost(context.Background(), box, prepareSimple(t, content), hostOptions(newFakeTarget(t, "nopasswd")))
 			if report.Status != remoteexec.StatusError || !strings.Contains(report.Err.Error(), "preflight") {
 				t.Fatalf("status=%s err=%v", report.Status, report.Err)
 			}
@@ -180,7 +182,7 @@ func TestApplyHostRejectsUnsupportedFeatures(t *testing.T) {
 func TestApplyHostNeedsAgentForOtherPlatform(t *testing.T) {
 	target := newFakeTarget(t, "nopasswd")
 	target.probeOut = strings.Replace(target.probeOut, "arch="+map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[runtime.GOARCH], "arch=riscv64", 1)
-	report := remoteexec.ApplyHost(context.Background(), "box", prepareSimple(t, "tasks: []\n"), hostOptions(target))
+	report := remoteexec.ApplyHost(context.Background(), box, prepareSimple(t, "tasks: []\n"), hostOptions(target))
 	if report.Status != remoteexec.StatusError || !strings.Contains(report.Err.Error(), "unsupported target architecture") {
 		t.Fatalf("status=%s err=%v", report.Status, report.Err)
 	}
@@ -189,7 +191,7 @@ func TestApplyHostNeedsAgentForOtherPlatform(t *testing.T) {
 	if runtime.GOOS == "linux" && runtime.GOARCH == "arm64" {
 		other = "linux/amd64"
 	}
-	_, err := (&remoteexec.AgentSource{Version: "test"}).Resolve(other)
+	_, err := (&remoteexec.AgentSource{Version: "test"}).Resolve(context.Background(), other)
 	if err == nil || !strings.Contains(err.Error(), "--agent-binary "+other) {
 		t.Fatalf("Resolve(%s) err = %v, want --agent-binary hint", other, err)
 	}
@@ -197,8 +199,13 @@ func TestApplyHostNeedsAgentForOtherPlatform(t *testing.T) {
 
 func TestApplyHostRejectsNonPOSIXTarget(t *testing.T) {
 	target := newFakeTarget(t, "nopasswd")
+	windows := box
+	windows.Platform = "windows"
+	if report := remoteexec.ApplyHost(context.Background(), windows, prepareSimple(t, "tasks: []\n"), hostOptions(target)); report.Status != remoteexec.StatusError || !strings.Contains(report.Err.Error(), "windows") {
+		t.Fatalf("windows hint: status=%s err=%v", report.Status, report.Err)
+	}
 	target.probeOut = "'sh' is not recognized as an internal or external command\r\n"
-	report := remoteexec.ApplyHost(context.Background(), "box", prepareSimple(t, "tasks: []\n"), hostOptions(target))
+	report := remoteexec.ApplyHost(context.Background(), box, prepareSimple(t, "tasks: []\n"), hostOptions(target))
 	if report.Status != remoteexec.StatusError || !strings.Contains(report.Err.Error(), "POSIX") {
 		t.Fatalf("status=%s err=%v", report.Status, report.Err)
 	}
@@ -206,7 +213,7 @@ func TestApplyHostRejectsNonPOSIXTarget(t *testing.T) {
 
 func TestPingHostRunsAgentVersion(t *testing.T) {
 	target := newFakeTarget(t, "nopasswd")
-	report := remoteexec.PingHost(context.Background(), "box", hostOptions(target))
+	report := remoteexec.PingHost(context.Background(), box, hostOptions(target))
 	if report.Status != remoteexec.StatusOK || !strings.Contains(report.AgentVersion, "ironstate") {
 		t.Fatalf("status=%s version=%q err=%v", report.Status, report.AgentVersion, report.Err)
 	}

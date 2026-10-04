@@ -36,6 +36,9 @@ type SSHTarget struct {
 // String renders the target as given.
 func (t SSHTarget) String() string {
 	s := t.Host
+	if strings.Contains(s, ":") {
+		s = "[" + s + "]"
+	}
 	if t.User != "" {
 		s = t.User + "@" + s
 	}

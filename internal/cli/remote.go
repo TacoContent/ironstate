@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -23,11 +24,60 @@ import (
 
 // addRemoteFlags registers the flags shared by remote apply and 'remote ping'.
 func addRemoteFlags(flags *pflag.FlagSet) {
-	flags.StringArray("target", nil, "apply to a remote host over SSH ([user@]host[:port] or an ssh config alias; 'local' runs the agent locally); repeatable, hosts run one after another")
+	flags.StringArray("target", nil, "apply to a remote host over SSH ([user@]host[:port] or an ssh config alias; 'local' runs the agent locally); repeatable")
+	flags.String("inventory", "", "inventory file of remote hosts and groups (see inventory.schema.json)")
+	flags.StringSlice("limit", nil, "with --inventory: only these hosts/groups ('all' = every host); comma-separated or repeatable")
+	flags.Int("forks", 5, "how many hosts to run at once")
 	flags.StringArray("agent-binary", nil, "ironstate binary to ship for a target platform: os/arch=path (e.g. linux/arm64=./dist/ironstate); repeatable")
+	flags.Bool("no-agent-download", false, "never download a release agent binary for a target platform; use --agent-binary or the local agent cache")
 	flags.String("remote-agent-dir", "", "directory on targets for the cached agent binary (default: $XDG_CACHE_HOME or ~/.cache /ironstate/agent)")
 	flags.String("ssh-config", "", "ssh config file passed to ssh -F")
 	flags.Bool("ssh-accept-new-host-keys", false, "accept and remember host keys of never-seen targets (StrictHostKeyChecking=accept-new)")
+}
+
+// remoteRequested reports whether flags select remote hosts at all.
+func remoteRequested(flags *pflag.FlagSet) bool {
+	targets, _ := flags.GetStringArray("target")
+	inventory, _ := flags.GetString("inventory")
+	return len(targets) > 0 || inventory != ""
+}
+
+// resolveHosts returns the inventory selection followed by any --target
+// hosts, without duplicate names.
+func resolveHosts(flags *pflag.FlagSet) ([]remoteexec.Host, error) {
+	inventoryPath, _ := flags.GetString("inventory")
+	limit, _ := flags.GetStringSlice("limit")
+	targets, _ := flags.GetStringArray("target")
+	var hosts []remoteexec.Host
+	if inventoryPath != "" {
+		inv, err := remoteexec.LoadInventory(inventoryPath)
+		if err != nil {
+			return nil, err
+		}
+		if hosts, err = inv.Select(limit); err != nil {
+			return nil, err
+		}
+	} else if len(limit) > 0 {
+		return nil, fmt.Errorf("--limit needs --inventory")
+	}
+	seen := map[string]bool{}
+	for _, h := range hosts {
+		seen[h.Name] = true
+	}
+	for _, target := range targets {
+		host, err := remoteexec.HostFromTarget(target)
+		if err != nil {
+			return nil, err
+		}
+		if !seen[host.Name] {
+			seen[host.Name] = true
+			hosts = append(hosts, host)
+		}
+	}
+	if len(hosts) == 0 {
+		return nil, fmt.Errorf("no hosts selected")
+	}
+	return hosts, nil
 }
 
 func remoteHostOptions(flags *pflag.FlagSet) (remoteexec.HostOptions, error) {
@@ -41,23 +91,12 @@ func remoteHostOptions(flags *pflag.FlagSet) (remoteexec.HostOptions, error) {
 		}
 		binaries[platform] = file
 	}
-	opts.Agents = &remoteexec.AgentSource{Binaries: binaries, Version: version}
+	noDownload, _ := flags.GetBool("no-agent-download")
+	opts.Agents = &remoteexec.AgentSource{Binaries: binaries, Version: version, NoDownload: noDownload}
 	opts.AgentDir, _ = flags.GetString("remote-agent-dir")
 	opts.SSH.ConfigFile, _ = flags.GetString("ssh-config")
 	opts.SSH.AcceptNewHostKeys, _ = flags.GetBool("ssh-accept-new-host-keys")
 	return opts, nil
-}
-
-func validateTargets(targets []string) error {
-	for _, target := range targets {
-		if target == remoteexec.LocalTarget {
-			continue
-		}
-		if _, err := remoteexec.ParseSSHTarget(target); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // remoteSignals turns the first Ctrl-C into a graceful cancel (agents stop
@@ -86,14 +125,16 @@ func remoteSignals(parent context.Context, stderr io.Writer) (context.Context, <
 	}
 }
 
-func runRemoteApply(cmd *cobra.Command, cfg *config.Config, targets []string) error {
-	if err := validateTargets(targets); err != nil {
+func runRemoteApply(cmd *cobra.Command, cfg *config.Config) error {
+	hosts, err := resolveHosts(cmd.Flags())
+	if err != nil {
 		return NewLoadError(err)
 	}
 	opts, err := remoteHostOptions(cmd.Flags())
 	if err != nil {
 		return NewLoadError(err)
 	}
+	forks, _ := cmd.Flags().GetInt("forks")
 	view, err := newRemoteView(cmd, cfg.Output)
 	if err != nil {
 		return NewLoadError(err)
@@ -123,20 +164,19 @@ func runRemoteApply(cmd *cobra.Command, cfg *config.Config, targets []string) er
 	defer stopSignals()
 	opts.Cancel = cancelCh
 
-	reports := make([]remoteexec.HostReport, 0, len(targets))
-	for _, target := range targets {
-		select {
-		case <-cancelCh:
-			reports = append(reports, remoteexec.HostReport{Name: target, Status: remoteexec.StatusError, Err: fmt.Errorf("not started: run cancelled")})
-			continue
-		default:
+	reports := remoteexec.ForEachHost(hosts, forks, func(host remoteexec.Host) remoteexec.HostReport {
+		if remoteexec.Cancelled(cancelCh) {
+			report := remoteexec.NotStarted(host)
+			view.hostDone(report)
+			return report
 		}
-		view.hostStart(target)
-		opts.OnEvent = func(ev protocol.Event) { view.event(target, ev) }
-		report := remoteexec.ApplyHost(ctx, target, job, opts)
+		hostOpts := opts
+		hostOpts.OnEvent = func(ev protocol.Event) { view.event(host.Name, ev) }
+		view.hostStart(host)
+		report := remoteexec.ApplyHost(ctx, host, job, hostOpts)
 		view.hostDone(report)
-		reports = append(reports, report)
-	}
+		return report
+	})
 
 	code := remoteexec.ExitCode(reports)
 	if err := view.finish(job.Job.RunID, reports, code); err != nil {
@@ -190,6 +230,8 @@ type remoteView struct {
 	out    io.Writer
 	errOut io.Writer
 	events *protocol.Writer
+	// mu keeps concurrent hosts' live lines whole.
+	mu sync.Mutex
 }
 
 func newRemoteView(cmd *cobra.Command, format string) (*remoteView, error) {
@@ -205,10 +247,17 @@ func newRemoteView(cmd *cobra.Command, format string) (*remoteView, error) {
 	return v, nil
 }
 
-func (v *remoteView) hostStart(target string) {
-	if v.events == nil {
-		_, _ = fmt.Fprintln(v.errOut, ui.Bold("▶ "+target))
+func (v *remoteView) hostStart(host remoteexec.Host) {
+	if v.events != nil {
+		return
 	}
+	line := "▶ " + host.Name
+	if addr := host.Address(); addr != host.Name {
+		line += " (" + addr + ")"
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	_, _ = fmt.Fprintln(v.errOut, ui.Bold(line))
 }
 
 func (v *remoteView) event(target string, ev protocol.Event) {
@@ -227,6 +276,8 @@ func (v *remoteView) event(target string, ev protocol.Event) {
 	case protocol.LevelDanger:
 		msg = ui.BoldRed("✖ " + msg)
 	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	_, _ = fmt.Fprintln(v.errOut, msg)
 }
 
@@ -243,6 +294,8 @@ func (v *remoteView) hostDone(r remoteexec.HostReport) {
 	if r.Err != nil {
 		line += ": " + sanitizeRemote(r.Err.Error())
 	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	_, _ = fmt.Fprintln(v.errOut, line)
 }
 
@@ -382,6 +435,7 @@ func resultsFromJSON(in []engine.JSONResult) []engine.Result {
 
 type remoteJSONHost struct {
 	Name         string              `json:"name"`
+	Address      string              `json:"address,omitempty"`
 	ComputerName string              `json:"computer_name,omitempty"`
 	Platform     string              `json:"platform,omitempty"`
 	Status       string              `json:"status"`
@@ -411,6 +465,7 @@ func writeRemoteJSON(w io.Writer, runID string, reports []remoteexec.HostReport)
 	for _, r := range reports {
 		h := remoteJSONHost{
 			Name:         r.Name,
+			Address:      r.Address,
 			ComputerName: hostComputerName(r),
 			Platform:     r.Platform,
 			Status:       r.Status,
@@ -465,22 +520,22 @@ func newRemoteCommand() *cobra.Command {
 }
 
 func runRemotePing(cmd *cobra.Command, _ []string) error {
-	targets, _ := cmd.Flags().GetStringArray("target")
-	if len(targets) == 0 {
-		return NewLoadError(fmt.Errorf("at least one --target is required"))
-	}
-	if err := validateTargets(targets); err != nil {
+	hosts, err := resolveHosts(cmd.Flags())
+	if err != nil {
 		return NewLoadError(err)
 	}
 	opts, err := remoteHostOptions(cmd.Flags())
 	if err != nil {
 		return NewLoadError(err)
 	}
-	reports := make([]remoteexec.HostReport, 0, len(targets))
-	for _, target := range targets {
-		r := remoteexec.PingHost(cmd.Context(), target, opts)
-		reports = append(reports, r.HostReport)
-		line := fmt.Sprintf("%s %s", statusLabel(r.Status), target)
+	forks, _ := cmd.Flags().GetInt("forks")
+	var mu sync.Mutex
+	reports := remoteexec.ForEachHost(hosts, forks, func(host remoteexec.Host) remoteexec.HostReport {
+		r := remoteexec.PingHost(cmd.Context(), host, opts)
+		line := fmt.Sprintf("%s %s", statusLabel(r.Status), host.Name)
+		if host.Name != r.Address {
+			line += " (" + r.Address + ")"
+		}
 		if r.Platform != "" {
 			line += "  " + r.Platform
 		}
@@ -495,8 +550,11 @@ func runRemotePing(cmd *cobra.Command, _ []string) error {
 		} else if r.Err != nil {
 			line += ": " + sanitizeRemote(r.Err.Error())
 		}
+		mu.Lock()
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), line)
-	}
+		mu.Unlock()
+		return r.HostReport
+	})
 	if code := remoteexec.ExitCode(reports); code != 0 {
 		return &ExitCodeError{Code: code, Err: fmt.Errorf("remote ping: %s", summarizeStatuses(reports))}
 	}

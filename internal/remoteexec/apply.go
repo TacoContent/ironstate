@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/TacoContent/ironstate/internal/remoteexec/protocol"
@@ -31,13 +32,14 @@ type HostOptions struct {
 	AgentArgs []string
 	OnEvent   func(protocol.Event)
 	Cancel    <-chan struct{}
-	// Dial, if set, replaces the SSH transport for non-local targets.
-	Dial func(target string) (Transport, error)
+	// Dial, if set, replaces the SSH transport for non-local hosts.
+	Dial func(host Host) (Transport, error)
 }
 
 // HostReport is one target's outcome.
 type HostReport struct {
 	Name     string
+	Address  string
 	Status   string
 	Platform string
 	// Uploaded is true when the agent binary had to be (re)sent.
@@ -62,34 +64,37 @@ func ExitCode(reports []HostReport) int {
 	return code
 }
 
-// transportFor returns the transport for a target name.
-func transportFor(target string, opts HostOptions) (Transport, error) {
-	if target == LocalTarget {
+// transportFor returns the transport for a host.
+func transportFor(host Host, opts HostOptions) (Transport, error) {
+	if host.Local {
 		return LocalTransport{}, nil
 	}
-	parsed, err := ParseSSHTarget(target)
-	if err != nil {
-		return nil, err
-	}
 	if opts.Dial != nil {
-		return opts.Dial(target)
+		return opts.Dial(host)
 	}
-	return NewSSHTransport(parsed, opts.SSH), nil
+	return NewSSHTransport(host.SSH, opts.SSH), nil
 }
 
 // prepareAgent connects, probes, checks preconditions and ensures the
 // agent is present, returning the transport and the agent path to run.
-func prepareAgent(ctx context.Context, target string, job *PreparedJob, opts HostOptions, report *HostReport) (Transport, string, ProbeInfo, error) {
-	t, err := transportFor(target, opts)
+func prepareAgent(ctx context.Context, host Host, job *PreparedJob, opts HostOptions, report *HostReport) (Transport, string, ProbeInfo, error) {
+	if host.Platform == "windows" {
+		return nil, "", ProbeInfo{}, &StageError{Stage: "target", Err: errors.New("windows targets are not supported yet")}
+	}
+	t, err := transportFor(host, opts)
 	if err != nil {
 		return nil, "", ProbeInfo{}, &StageError{Stage: "target", Err: err}
 	}
-	if target == LocalTarget {
+	if host.Local {
 		exe, err := os.Executable()
 		report.Platform = "local"
 		return t, exe, ProbeInfo{}, err
 	}
-	info, err := Probe(ctx, t, opts.AgentDir)
+	agentDir := opts.AgentDir
+	if host.AgentDir != "" {
+		agentDir = host.AgentDir
+	}
+	info, err := Probe(ctx, t, agentDir)
 	if err != nil {
 		return t, "", info, err
 	}
@@ -99,7 +104,7 @@ func prepareAgent(ctx context.Context, target string, job *PreparedJob, opts Hos
 			return t, "", info, &StageError{Stage: "preflight", Err: err}
 		}
 	}
-	agent, err := opts.Agents.Resolve(info.Platform())
+	agent, err := opts.Agents.Resolve(ctx, info.Platform())
 	if err != nil {
 		return t, "", info, &StageError{Stage: "agent", Err: err}
 	}
@@ -128,12 +133,11 @@ func checkSupported(job *PreparedJob, info ProbeInfo) error {
 
 // ApplyHost runs job on one target end to end and never panics on a
 // per-host failure: every outcome is in the returned report.
-func ApplyHost(ctx context.Context, target string, job *PreparedJob, opts HostOptions) HostReport {
+func ApplyHost(ctx context.Context, host Host, job *PreparedJob, opts HostOptions) HostReport {
 	start := time.Now()
-	report := HostReport{Name: target}
-	defer func() { report.Duration = time.Since(start) }()
+	report := HostReport{Name: host.Name, Address: host.Address()}
 
-	t, agentPath, _, err := prepareAgent(ctx, target, job, opts, &report)
+	t, agentPath, _, err := prepareAgent(ctx, host, job, opts, &report)
 	if t != nil {
 		defer func() { _ = t.Close() }()
 	}
@@ -181,21 +185,28 @@ type PingReport struct {
 
 // PingHost connects, probes, ensures the agent and runs 'ironstate
 // version' with it, without applying anything.
-func PingHost(ctx context.Context, target string, opts HostOptions) PingReport {
+func PingHost(ctx context.Context, host Host, opts HostOptions) PingReport {
 	start := time.Now()
-	report := PingReport{HostReport: HostReport{Name: target}}
-	defer func() { report.Duration = time.Since(start) }()
+	report := PingReport{HostReport: HostReport{Name: host.Name, Address: host.Address()}}
+	done := func(err error) PingReport {
+		report.Duration = time.Since(start)
+		if err != nil {
+			report.Err = err
+			report.Status = statusForError(err)
+		} else {
+			report.Status = StatusOK
+		}
+		return report
+	}
 
-	t, agentPath, info, err := prepareAgent(ctx, target, nil, opts, &report.HostReport)
+	t, agentPath, info, err := prepareAgent(ctx, host, nil, opts, &report.HostReport)
 	if t != nil {
 		defer func() { _ = t.Close() }()
 	}
 	report.AgentPath = agentPath
 	report.Probe = info
 	if err != nil {
-		report.Err = err
-		report.Status = statusForError(err)
-		return report
+		return done(err)
 	}
 	var out bytes.Buffer
 	code, err := t.Exec(ctx, RemoteCommand{Program: agentPath, Args: []string{"version"}}, bytes.NewReader(nil), &out, &out)
@@ -203,11 +214,47 @@ func PingHost(ctx context.Context, target string, opts HostOptions) PingReport {
 		err = &StageError{Stage: "agent version", Unreachable: code == SSHExitUnreachable, Err: fmt.Errorf("exit %d: %s", code, strings.TrimSpace(out.String()))}
 	}
 	if err != nil {
-		report.Err = err
-		report.Status = statusForError(err)
-		return report
+		return done(err)
 	}
 	report.AgentVersion = strings.TrimSpace(out.String())
-	report.Status = StatusOK
-	return report
+	return done(nil)
+}
+
+// ForEachHost runs fn for every host with at most forks running at once
+// and returns the reports in host order.
+func ForEachHost(hosts []Host, forks int, fn func(Host) HostReport) []HostReport {
+	if forks < 1 {
+		forks = 1
+	}
+	reports := make([]HostReport, len(hosts))
+	sem := make(chan struct{}, forks)
+	var wg sync.WaitGroup
+	for i, host := range hosts {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(i int, host Host) {
+			defer func() { <-sem; wg.Done() }()
+			reports[i] = fn(host)
+		}(i, host)
+	}
+	wg.Wait()
+	return reports
+}
+
+// NotStarted is the report for a host skipped because the run was cancelled.
+func NotStarted(host Host) HostReport {
+	return HostReport{Name: host.Name, Address: host.Address(), Status: StatusError, Err: errors.New("not started: run cancelled")}
+}
+
+// Cancelled reports whether ch is closed.
+func Cancelled(ch <-chan struct{}) bool {
+	if ch == nil {
+		return false
+	}
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
+	}
 }

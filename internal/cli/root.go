@@ -88,8 +88,8 @@ func runApply(cmd *cobra.Command, _ []string) (err error) {
 	if noColor, _ := cmd.Flags().GetBool("no-color"); noColor {
 		ui.Enabled = false
 	}
-	if targets, _ := cmd.Flags().GetStringArray("target"); len(targets) > 0 {
-		return runRemoteApply(cmd, cfg, targets)
+	if remoteRequested(cmd.Flags()) {
+		return runRemoteApply(cmd, cfg)
 	}
 	out, err := newRunOutput(cmd, cfg.Output)
 	if err != nil {

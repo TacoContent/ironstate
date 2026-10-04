@@ -171,9 +171,12 @@ type AgentSource struct {
 	Binaries map[string]string
 	// Version is the controller's version; the agent must match it.
 	Version string
+	// NoDownload disables fetching release agents (--no-agent-download).
+	NoDownload bool
 
-	mu     sync.Mutex
-	hashes map[string]string
+	mu         sync.Mutex
+	hashes     map[string]string
+	downloadMu sync.Mutex
 }
 
 // LocalAgent is a resolved agent binary and its sha256.
@@ -183,8 +186,9 @@ type LocalAgent struct {
 }
 
 // Resolve picks the binary for platform: explicit flag, then this
-// executable when platforms match, then the local agent cache.
-func (s *AgentSource) Resolve(platform string) (LocalAgent, error) {
+// executable when platforms match, then the local agent cache, then a
+// verified download of the matching release.
+func (s *AgentSource) Resolve(ctx context.Context, platform string) (LocalAgent, error) {
 	candidate := s.Binaries[platform]
 	if candidate == "" && platform == runtime.GOOS+"/"+runtime.GOARCH {
 		exe, err := os.Executable()
@@ -199,6 +203,13 @@ func (s *AgentSource) Resolve(platform string) (LocalAgent, error) {
 				candidate = cached
 			}
 		}
+	}
+	if candidate == "" && !s.NoDownload && IsReleaseVersion(s.Version) {
+		downloaded, err := s.download(ctx, platform)
+		if err != nil {
+			return LocalAgent{}, fmt.Errorf("download ironstate %s for %s: %w (or pass --agent-binary %s=<path>)", s.Version, platform, err, platform)
+		}
+		candidate = downloaded
 	}
 	if candidate == "" {
 		return LocalAgent{}, fmt.Errorf("no ironstate %s binary for %s; pass --agent-binary %s=<path> (e.g. built with GOOS=%s GOARCH=%s go build ./cmd/ironstate)",
@@ -235,12 +246,15 @@ func (s *AgentSource) hash(p string) (string, error) {
 }
 
 func cachedAgentPath(version, platform string) (string, error) {
-	base, err := os.UserCacheDir()
+	base, err := UserCacheDir()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(base, "ironstate", "agents", safeVersion(version), strings.ReplaceAll(platform, "/", "_"), "ironstate"), nil
 }
+
+// UserCacheDir is the controller's cache root; overridable for tests.
+var UserCacheDir = os.UserCacheDir
 
 var unsafeVersionChars = regexp.MustCompile(`[^A-Za-z0-9._+-]`)
 

@@ -28,8 +28,12 @@ func TestSSHIntegration(t *testing.T) {
 		Agents: &remoteexec.AgentSource{Version: "integration", Binaries: map[string]string{platform: agentPath}},
 	}
 	ctx := context.Background()
+	host, err := remoteexec.HostFromTarget(target)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	ping := remoteexec.PingHost(ctx, target, opts)
+	ping := remoteexec.PingHost(ctx, host, opts)
 	if ping.Status != remoteexec.StatusOK {
 		t.Fatalf("ping: status=%s err=%v", ping.Status, ping.Err)
 	}
@@ -57,7 +61,7 @@ tasks:
 	}
 	defer func() { _ = job.Close() }()
 
-	report := remoteexec.ApplyHost(ctx, target, job, opts)
+	report := remoteexec.ApplyHost(ctx, host, job, opts)
 	if report.Status != remoteexec.StatusOK {
 		var stderr string
 		if report.Result != nil {

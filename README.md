@@ -129,12 +129,30 @@ Add `--target` to run the same playbook on other machines. ironstate copies itse
 
 ```text
 ironstate --playbook playbooks/camalot --apply --target rconr@snoke --target kresh.lan
-ironstate remote ping --target rconr@snoke        # connect, probe, check the agent runs; applies nothing
+ironstate --playbook playbooks/camalot --apply --inventory inventory.yml --limit linux --forks 4
+ironstate remote ping --inventory inventory.yml    # connect, probe, check the agent runs; applies nothing
 ```
 
+An inventory names hosts and groups; it holds connection data only (per-host configuration stays in the playbook's `hosts/`/`variables/` overlays, which each target picks from its own facts). Schema: [inventory.schema.json](inventory.schema.json).
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/TacoContent/ironstate/develop/inventory.schema.json
+defaults:
+  user: rconr
+hosts:
+  snoke: { address: 192.168.2.103 }
+  kresh: { address: kresh.lan, port: 2222 }
+  laptop: {}                 # address defaults to the name, e.g. an ~/.ssh/config alias
+  self: { address: local }   # this machine, no SSH
+groups:
+  linux: [snoke, kresh]
+```
+
+- **Selecting hosts**: `--limit` takes host and group names (comma-separated or repeated, `all` = every host); without it every inventory host runs. `--target` hosts are added on top. `--forks N` (default 5) runs that many hosts at once; live lines are prefixed `[host]`.
+
 - **Requirements**: an `ssh` client on the controller (`ironstate doctor` checks) and key-based access to a Linux or macOS target (amd64/arm64) with `sh` and `sha256sum` or `shasum`. Windows targets aren't supported yet. Auth is entirely your OpenSSH setup (`~/.ssh/config` aliases, ssh-agent, `ProxyJump`, `known_hosts`); ironstate always runs `ssh` with `BatchMode=yes` and never disables host-key checking. `--ssh-accept-new-host-keys` opts in to `StrictHostKeyChecking=accept-new`; `--ssh-config` passes a config file via `ssh -F`.
-- **Targets**: `[user@]host[:port]` or an ssh config alias; repeat `--target` for several hosts (run one after another). `--target local` runs the agent on this machine without SSH.
-- **Agent binary**: the controller ships its own binary when the target has the same OS/arch. For other platforms pass `--agent-binary linux/arm64=./ironstate-linux-arm64` (e.g. from the release archives or `GOOS=linux GOARCH=arm64 go build ./cmd/ironstate`). Targets cache it under `~/.cache/ironstate/agent/<version>-<sha>/`, verified by SHA-256 before every run; it's only re-uploaded when it changes. `--remote-agent-dir` picks another directory (e.g. when home is mounted `noexec`).
+- **Targets**: `[user@]host[:port]` or an ssh config alias; repeat `--target` for several hosts. `--target local` runs the agent on this machine without SSH.
+- **Agent binary**: the controller ships its own binary when the target has the same OS/arch. Otherwise a release build downloads the matching release archive from GitHub once, verifies it against the release's `checksums.txt` (and that file's cosign signature when `cosign` is on `PATH`; `GITHUB_TOKEN` is used if set), and caches it under your user cache dir (`ironstate/agents/<version>/<os>_<arch>/`). Development builds never download: pass `--agent-binary linux/arm64=./ironstate-linux-arm64` (e.g. from `GOOS=linux GOARCH=arm64 go build ./cmd/ironstate`); `--no-agent-download` forces that for release builds too. Targets cache the agent under `~/.cache/ironstate/agent/<version>-<sha>/`, verified by SHA-256 before every run; it's only re-uploaded when it changes. `--remote-agent-dir` (or `agent_dir` in the inventory) picks another directory (e.g. when home is mounted `noexec`).
 - **What's sent**: the playbook directory (minus `.git`, `.env`, `.secrets`, and anything matched by an `.ironstateignore` file of glob patterns), any `--vars-file`, an outside `filters.dir`, and the controller's `filters.*` config. `.env`/`.secrets` values and `--forward-env NAME` variables travel in memory, never written to the target's disk; `.secrets` values stay redacted in all output. Template expressions (`facts.*`, `lookup('env', ...)`, `lookup('url', ...)`) evaluate **on the target**.
 - **`become`**: requires passwordless sudo (or connecting as root) on the target; this is checked before anything runs.
 - **Not yet supported remotely**: playbooks declaring `plugins:` and git `uses:` sources are rejected up front.
@@ -142,7 +160,7 @@ ironstate remote ping --target rconr@snoke        # connect, probe, check the ag
 - **Output**: `table` shows each host's log lines live (prefixed `[host]`), a result table per host, then a per-host summary; `json` prints one document with a `hosts` array (status, facts, results, stats per host); `ndjson` streams every agent event tagged with `"host"`, then a final run-level `done`.
 - **Exit codes**: `0` all hosts ok; `1` any host failed; `2` controller-side load/config error; `3` a host was unreachable or couldn't be bootstrapped (nothing applied there - safe to retry).
 
-The design and remaining phases (inventory files, parallel hosts, Windows targets, sudo passwords) are in [docs/plans/remote-apply.md](docs/plans/remote-apply.md).
+The design and remaining phases (Windows targets, sudo passwords, reconnect/detach, plugins on targets) are in [docs/plans/remote-apply.md](docs/plans/remote-apply.md).
 
 ## External handler plugins
 
