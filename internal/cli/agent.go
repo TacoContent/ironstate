@@ -16,6 +16,7 @@ import (
 
 	ironexec "github.com/TacoContent/ironstate/internal/exec"
 	"github.com/TacoContent/ironstate/internal/remote"
+	"github.com/TacoContent/ironstate/internal/remoteexec"
 	"github.com/TacoContent/ironstate/internal/remoteexec/bundle"
 	"github.com/TacoContent/ironstate/internal/remoteexec/protocol"
 	"github.com/TacoContent/ironstate/internal/remoteexec/runstate"
@@ -174,10 +175,18 @@ func agentRun(cmd *cobra.Command, w *protocol.Writer) (int, string, error) {
 		}
 	}
 
-	// No TTY on the agent: remote 'uses:' must be approved on the controller.
-	origConfirm := remote.Confirm
-	remote.Confirm = func(remote.Kind, string) (bool, error) { return false, nil }
-	defer func() { remote.Confirm = origConfirm }()
+	// No TTY on the agent: trust was decided on the controller, which also
+	// pre-fetched every approved git source into the bundle.
+	approved := map[string]bool{}
+	for _, source := range job.ApprovedUses {
+		approved[source] = true
+	}
+	origConfirm, origCacheRoot, origOffline := remote.Confirm, remote.CacheRoot, remote.Offline
+	remote.Confirm = func(_ remote.Kind, source string) (bool, error) { return approved[source], nil }
+	usesRoot := filepath.Join(workDir, remoteexec.UsesBundleDir)
+	remote.CacheRoot = func() (string, error) { return usesRoot, nil }
+	remote.Offline = true
+	defer func() { remote.Confirm, remote.CacheRoot, remote.Offline = origConfirm, origCacheRoot, origOffline }()
 
 	origWD, err := os.Getwd()
 	if err != nil {
@@ -244,6 +253,9 @@ func agentApplyArgs(opts protocol.JobOptions) []string {
 	args := []string{"--playbook", opts.Playbook, "--output", "ndjson", "--no-color"}
 	if opts.DisableBecome {
 		args = append(args, "--disable-become")
+	}
+	if opts.AllowPluginInstall {
+		args = append(args, "--allow-plugin-install")
 	}
 	if opts.Apply {
 		args = append(args, "--apply")

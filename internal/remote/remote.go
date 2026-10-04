@@ -54,6 +54,11 @@ type Resolved struct {
 // CloneTimeout bounds a single git clone/fetch.
 var CloneTimeout = 2 * time.Minute
 
+// Offline makes git sources resolve only from CacheRoot, never fetching.
+// A remote-apply agent runs offline against sources the controller
+// pre-fetched into its bundle.
+var Offline bool
+
 // CacheRoot returns the directory git clones are cached under.
 // Overridable for tests.
 var CacheRoot = func() (string, error) {
@@ -231,7 +236,13 @@ func fetchGit(remote, ref string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolving remote cache directory: %w", err)
 	}
-	dest := filepath.Join(root, cacheKey(remote, ref))
+	dest := filepath.Join(root, CacheKey(remote, ref))
+	if Offline {
+		if fi, err := os.Stat(dest); err == nil && fi.IsDir() { //nolint:gosec // cache path derived from a hash, not user input
+			return dest, nil
+		}
+		return "", fmt.Errorf("uses source %s was not pre-fetched by the controller (remote apply bundles only literal git 'remote:' values the controller approved)", describeRemote(remote, ref))
+	}
 	if fi, err := os.Stat(dest); err == nil && fi.IsDir() { //nolint:gosec // cache path derived from a hash, not user input
 		refreshGit(dest, remote, ref)
 		return dest, nil
@@ -281,13 +292,20 @@ func refreshGit(dest, remote, ref string) {
 	}
 }
 
-// cacheKey derives a stable, filesystem-safe directory name for a
+// CacheKey derives a stable, filesystem-safe directory name for a
 // remote+ref pair, keeping a readable prefix for humans browsing the
 // cache.
-func cacheKey(remote, ref string) string {
+func CacheKey(remote, ref string) string {
 	sum := sha256.Sum256([]byte(remote + "\x00" + ref))
 	digest := hex.EncodeToString(sum[:])[:16]
 	return sanitizeName(remote) + "-" + digest
+}
+
+func describeRemote(remote, ref string) string {
+	if ref == "" {
+		return remote
+	}
+	return remote + "@" + ref
 }
 
 var unsafeNameChars = regexp.MustCompile(`[^A-Za-z0-9_.-]+`)

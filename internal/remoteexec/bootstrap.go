@@ -382,11 +382,19 @@ func RemoteAgentPath(info ProbeInfo, version string, agent LocalAgent) string {
 // uploading it only when missing or different. Returns whether it uploaded.
 func EnsureAgent(ctx context.Context, t Transport, info ProbeInfo, version string, agent LocalAgent) (string, bool, error) {
 	remotePath := RemoteAgentPath(info, version, agent)
+	uploaded, err := ensureRemoteFile(ctx, t, info, agent, remotePath, "agent")
+	return remotePath, uploaded, err
+}
+
+// ensureRemoteFile makes remotePath byte-identical to local, uploading only
+// when the target's SHA-256 differs. what names the file in errors.
+func ensureRemoteFile(ctx context.Context, t Transport, info ProbeInfo, local LocalAgent, remotePath, what string) (bool, error) {
 	if info.SkipAgentVerification {
-		return uploadAgentUnverified(ctx, t, info, remotePath, agent)
+		_, uploaded, err := uploadAgentUnverified(ctx, t, info, remotePath, local)
+		return uploaded, err
 	}
 	if info.SHATool == "" {
-		return remotePath, false, &StageError{Stage: "probe", Err: errors.New("target has no supported SHA-256 tool (need sha256sum, shasum, openssl, or BusyBox sha256sum); use --skip-agent-verification only for a trusted target")}
+		return false, &StageError{Stage: "probe", Err: errors.New("target has no supported SHA-256 tool (need sha256sum, shasum, openssl, or BusyBox sha256sum); use --skip-agent-verification only for a trusted target")}
 	}
 	var check RemoteCommand
 	if info.OS == "windows" {
@@ -394,48 +402,48 @@ func EnsureAgent(ctx context.Context, t Transport, info ProbeInfo, version strin
 	} else {
 		check = shCommand(checkScript, remotePath, info.SHATool)
 	}
-	out, err := execCapture(ctx, t, "check agent", check, nil)
+	out, err := execCapture(ctx, t, "check "+what, check, nil)
 	if err != nil {
-		return remotePath, false, err
+		return false, err
 	}
-	if remoteSHA(out) == agent.SHA256 {
-		return remotePath, false, nil
+	if remoteSHA(out) == local.SHA256 {
+		return false, nil
 	}
 	if info.OS == "windows" {
 		dir := remotePath[:strings.LastIndex(remotePath, `\`)]
-		if _, err := execCapture(ctx, t, "prepare agent upload", powerShellScript(powerShellPrepareUploadScript(dir)), nil); err != nil {
-			return remotePath, false, err
+		if _, err := execCapture(ctx, t, "prepare "+what+" upload", powerShellScript(powerShellPrepareUploadScript(dir)), nil); err != nil {
+			return false, err
 		}
 		random := make([]byte, 12)
 		if _, err := rand.Read(random); err != nil {
-			return remotePath, false, fmt.Errorf("create upload staging name: %w", err)
+			return false, fmt.Errorf("create upload staging name: %w", err)
 		}
 		name := ".upload-" + hex.EncodeToString(random)
 		tempPath := dir + `\` + name
 		uploader, ok := t.(FileUploader)
 		if !ok {
-			return remotePath, false, &StageError{Stage: "upload agent", Err: errors.New("SSH transport does not support SFTP file upload")}
+			return false, &StageError{Stage: "upload " + what, Err: errors.New("SSH transport does not support SFTP file upload")}
 		}
-		if err := uploader.UploadFile(ctx, agent.Path, tempPath); err != nil {
-			return remotePath, false, &StageError{Stage: "upload agent", Err: err}
+		if err := uploader.UploadFile(ctx, local.Path, tempPath); err != nil {
+			return false, &StageError{Stage: "upload " + what, Err: err}
 		}
-		out, err = execCapture(ctx, t, "verify uploaded agent", powerShellScript(powerShellFinalizeUploadScript(tempPath, remotePath, agent.SHA256)), nil)
+		out, err = execCapture(ctx, t, "verify uploaded "+what, powerShellScript(powerShellFinalizeUploadScript(tempPath, remotePath, local.SHA256)), nil)
 	} else {
-		f, openErr := os.Open(agent.Path)
+		f, openErr := os.Open(local.Path)
 		if openErr != nil {
-			return remotePath, false, openErr
+			return false, openErr
 		}
 		defer func() { _ = f.Close() }()
-		upload := shCommand(uploadScript, path.Dir(remotePath), remotePath, info.SHATool, agent.SHA256)
-		out, err = execCapture(ctx, t, "upload agent", upload, f)
+		upload := shCommand(uploadScript, path.Dir(remotePath), remotePath, info.SHATool, local.SHA256)
+		out, err = execCapture(ctx, t, "upload "+what, upload, f)
 	}
 	if err != nil {
-		return remotePath, false, err
+		return false, err
 	}
-	if got := remoteSHA(out); got != agent.SHA256 {
-		return remotePath, false, &StageError{Stage: "upload agent", Err: fmt.Errorf("remote sha256 %q does not match %s", got, agent.SHA256)}
+	if got := remoteSHA(out); got != local.SHA256 {
+		return false, &StageError{Stage: "upload " + what, Err: fmt.Errorf("remote sha256 %q does not match %s", got, local.SHA256)}
 	}
-	return remotePath, true, nil
+	return true, nil
 }
 
 func uploadAgentUnverified(ctx context.Context, t Transport, info ProbeInfo, remotePath string, agent LocalAgent) (string, bool, error) {

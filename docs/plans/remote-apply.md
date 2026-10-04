@@ -1,6 +1,6 @@
 # Remote apply over SSH
 
-Status: IN PROGRESS (phases 0-3 implemented; Windows host validation and detached-process verification remain), revised after design review (see §15)
+Status: IN PROGRESS (phases 0-5 implemented; phase 6 optional and not started; Windows host validation of admin-token semantics and detached-process survival remains), revised after design review (see §15)
 Owner: unassigned
 Target: unscheduled, phased rollout (see §12)
 
@@ -351,8 +351,8 @@ walks the task tree for `uses:` directives (`remote.Describe`, no fetch), prompt
 as it does locally, `remote.Resolve`s them into its own cache, and ships them in
 `uses/<hash>/`. The agent runs with `uses` resolution in **offline mode**: it maps each
 source to the bundled copy and errors (never fetches) if a source wasn't pre-bundled
-(e.g. a templated source depending on target facts). Phase 1 rejects remote `uses:`
-outright with a clear error; phase 5 adds pre-fetch.
+(e.g. a templated source depending on target facts). Implemented in phase 5; see its
+as-built notes in §12 for the exact rules.
 
 ### 8.3 Environment
 
@@ -369,11 +369,12 @@ forwarded (best-effort text scan).
 
 ### 8.4 Plugins
 
-Phase 1: a playbook that declares plugins fails remote apply with a clear error. Phase 5:
-the agent runs the existing plugin resolution against its own store using the shipped
-lock file; `--allow-plugin-install` is forwarded. Plugins are `go install`-distributed, so
-this requires Go on the target unless the plugin publishes release binaries — documented
-limitation, revisited with the plugin roadmap.
+Phase 1 rejected playbooks that declare plugins. Phase 5 (as built): for a target on
+the controller's own OS/arch, the controller copies each declared plugin it has
+installed (binary + manifest, SHA-256 verified like the agent) into the target's plugin
+store, so lockfile checksums match. Other targets resolve plugins from their own store;
+`--allow-plugin-install` is forwarded, which needs Go on the target. Lockfile checksums
+are per-platform, so a lockfile only verifies on targets of the platform that wrote it.
 
 ## 9. Protocol
 
@@ -519,10 +520,13 @@ ironstate remote logs   snoke [run_id]
 ironstate remote clean  --inventory inventory.yml           # remove cached agents/run logs
 ```
 
-New flags: `--target` (repeatable), `--inventory`, `--limit`, `--forks` (default 5),
-`--agent-binary`, `--ask-become-pass`, `--forward-env`,
-`--ssh-accept-new-host-keys`, `--ssh-option` (allow-listed `-o` keys), `--host-timeout`,
-`--keep-remote`. All also readable from `ironstate.yaml` under `remote:`.
+Implemented flags: `--target` (repeatable), `--inventory`, `--limit`, `--forks` (default 5),
+`--agent-binary`, `--no-agent-download`, `--remote-agent-dir`, `--skip-agent-verification`,
+`--ask-become-pass`, `--forward-env`, `--ssh-config`, `--ssh-accept-new-host-keys`,
+`--host-timeout`, `--remote-detach`, plus the existing `--allow-remote-uses` and
+`--allow-plugin-install`, which apply to remote runs too. `--ssh-option`, `--keep-remote`
+and the `ironstate.yaml` `remote:` section were designed but not built (see "Designed but
+not built" in §12).
 
 Dry run carries over unchanged: without `--apply` the job header says `apply: false` and
 every target runs in dry-run mode.
@@ -758,7 +762,7 @@ Implementation status:
   SFTP protocol stream and must have non-interactive shell output silenced. Administrator
   token semantics and sshd process-tree behavior still need host-level verification.
 
-### Phase 4: Resilience extras
+### Phase 4: Resilience extras - DONE
 
 - Connection retries with backoff, reconnect-and-read-run-log on interrupted streams,
   `remote logs`, `remote clean`, `--remote-detach`, `--host-timeout`.
@@ -782,9 +786,70 @@ Implementation status:
   the implementation uses `Start-Process` and should be validated on Windows sshd before
   relying on it for production runs.
 
-### Phase 5: `uses:` and plugins on targets
+### Phase 5: `uses:` and plugins on targets - DONE
 
 - Controller pre-fetch + offline agent mode for `uses:`; plugin resolution on target.
+
+As built (differences from the plan, and why):
+
+- **Scan, approve, fetch on the controller** (`internal/remoteexec/job.go`).
+  `Prepare` statically scans every YAML file in the playbook for `uses:` maps whose
+  `remote:` is a literal git source (not containing `${{`). Each source is approved with
+  the local rules unchanged: `trusted: true`, `isolate: true` or `--allow-remote-uses`
+  skip the prompt, and otherwise `remote.Confirm` asks (non-TTY declines). Approved
+  sources are cloned through the normal `remote.Resolve`, using the controller's git
+  credentials and its `remotes` cache. Each checkout is bundled at
+  `uses/<remote.CacheKey(remote, ref)>/`; `.git` is excluded by the bundler as always.
+  Fetched checkouts are scanned too, so `uses:` nested inside a remote source is fetched
+  as well. A fetch failure fails `Prepare` (exit 2) before any host runs.
+- **Offline agent.** New `remote.Offline` makes `fetchGit` resolve only from
+  `CacheRoot` and never run git. The agent sets `CacheRoot` to the bundle's `uses/` dir,
+  so the cache key already maps each source to its bundled copy with no separate
+  manifest.
+- **Trust travels as an approved list, not a flag.** The job header gains
+  `approved_uses` (sources rendered exactly as `remote.Describe` renders them,
+  including `path`). The agent's `remote.Confirm` approves only those. A source declined
+  on the controller is therefore skipped on the target with the usual warning, matching
+  a local run, instead of failing it. Forwarding `--allow-remote-uses` was rejected
+  because it would also approve anything the controller never saw.
+- **Templated git `remote:` values** can't be resolved before the run, so they aren't
+  pre-fetched. On the target they fail with "was not pre-fetched by the controller"
+  instead of silently fetching. Local `uses:` paths keep the §3 rule: they resolve on
+  the target, so keep them inside the playbook directory.
+- **Plugins** (`internal/remoteexec/plugins.go`). The phase-1 rejection is gone.
+  `Prepare` reads the entry document's `plugins:`. For a target whose OS/arch equals
+  the controller's, `EnsurePlugins` copies each declared plugin the controller has
+  installed (version from `ironstate.lock.yaml` when present) into
+  `<target state dir>/plugins/<org>/<name>/<version>/`. That path is exactly the agent's
+  `pluginhost.DefaultStore`, so the agent's normal resolution and lockfile checks
+  apply. The upload reuses the agent's verified path (`ensureRemoteFile`: check SHA-256,
+  upload only when it differs, verify before moving into place). The binary goes before
+  `manifest.json`, so a half-shipped plugin is never visible as installed. Plugins the
+  controller lacks are left to the target's store. `--allow-plugin-install` is
+  forwarded in the job options. Shipped plugins are reported per host (`plugins=` in
+  the table status line, `plugins_shipped` in JSON).
+- **Cross-platform plugins** were deliberately not cross-compiled on the controller:
+  the lockfile pins one platform's binary checksum, so a cross-built binary would fail
+  the lock check anyway. Mixed-platform fleets use each target's own store; the
+  limitation is documented in `docs/plugins.md`.
+- **Tests:** end-to-end through a real agent over the local transport cover a
+  prefetched source running offline, a prompted-then-approved source, a declined
+  source skipped with a warning, and a templated git source failing offline. A
+  fake-target test covers plugin shipping (verified upload, skipping plugins the
+  controller lacks, no re-upload when unchanged).
+
+### Designed but not built
+
+Items specified above that are intentionally deferred; none block the implemented
+phases:
+
+- `ironstate.yaml` `remote:` configuration section (all remote settings are flags).
+- `--ssh-option` allow-list and `--keep-remote` (the agent has a hidden
+  `--keep-work-dir` for debugging).
+- §7 `remote.bundle_root`, bundle size warn/fail caps, and the bundler's best-effort
+  path lint warnings.
+- §8.3 `remote ping` scan for unforwarded `lookup('env', ...)` names.
+- Phase 6 native SSH transport.
 
 ### Phase 6 (optional): Native SSH transport
 

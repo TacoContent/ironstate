@@ -24,6 +24,11 @@ hosts:
     platform: darwin
     user: ryan
 groups:
-  linux: [snoke, anaxes]
-  windows: [krayt, kresh]
-  darwin: [atrius]
+  linux: 
+    - snoke
+    - anaxes
+  windows:
+    - krayt
+    - kresh
+  darwin:
+    - atrius

@@ -48,7 +48,7 @@ The program is distributed as a single binary for Windows, Linux, and macOS. A p
 
 **--output**=*FORMAT*
 
-: Select result output format: **table** (the default) or **json**. JSON results are written to standard output; operational messages are written to standard error.
+: Select result output format: **table** (the default), **json**, or **ndjson**. JSON results are written to standard output; operational messages are written to standard error. **ndjson** streams one JSON event per line (**leaf_start**, **log**, **leaf_result**, **facts**, **summary**, **error**, **done**) as the run progresses; with remote targets every event carries a **host** field and a final run-level **done** reports the overall exit code.
 
 **-v**, **--verbose**
 
@@ -60,7 +60,71 @@ The program is distributed as a single binary for Windows, Linux, and macOS. A p
 
 **--allow-plugin-install**
 
-: Allow plugins declared by the playbook to be installed automatically. This downloads and executes third-party code and is separate from **--apply**.
+: Allow plugins declared by the playbook to be installed automatically. This downloads and executes third-party code and is separate from **--apply**. With remote targets the option is forwarded to each agent.
+
+**--allow-remote-uses**
+
+: Pre-approve every non-isolated remote **uses:** source instead of prompting. Required for non-interactive runs that use untrusted remote sources.
+
+# REMOTE APPLY OPTIONS
+
+Giving **--target** or **--inventory** applies the playbook to other machines over SSH. The controller ships the ironstate agent and a bundle of the playbook to each target, runs it there, and streams results back. Facts, overlays, templates, and handlers all evaluate on the target.
+
+**--target**=*[USER@]HOST[:PORT]*
+
+: Add a target. The host may be an ssh config alias. **local** runs the agent on this machine without SSH. May be repeated.
+
+**--inventory**=*FILE*
+
+: Inventory of hosts and groups (see **inventory.schema.json**). Without **--limit** every inventory host is selected.
+
+**--limit**=*NAME[,NAME...]*
+
+: Select inventory hosts or groups; **all** selects every host.
+
+**--forks**=*N*
+
+: Number of hosts processed at once. Defaults to 5.
+
+**--agent-binary**=*OS/ARCH=PATH*
+
+: ironstate binary to ship for a target platform, e.g. **linux/arm64=./ironstate-linux-arm64**. May be repeated. Without it the controller ships itself for a matching platform, then its local agent cache, then (release builds only) a checksum-verified download of the matching release.
+
+**--no-agent-download**
+
+: Never download a release agent.
+
+**--remote-agent-dir**=*DIR*
+
+: Directory on targets for the cached agent binary.
+
+**--skip-agent-verification**
+
+: Skip target-side SHA-256 verification of the agent for trusted hosts without a hash utility. The agent is re-uploaded on every run.
+
+**--ssh-config**=*FILE*
+
+: ssh configuration file passed to **ssh -F**.
+
+**--ssh-accept-new-host-keys**
+
+: Accept and remember host keys of never-seen targets (**StrictHostKeyChecking=accept-new**). Host-key checking is otherwise governed by the user's ssh configuration and is never disabled.
+
+**--forward-env**=*NAME*
+
+: Forward a controller environment variable to the targets. May be repeated. **.env** and **.secrets** values are always forwarded in memory.
+
+**--ask-become-pass**
+
+: Prompt once for the targets' sudo password. It is sent only over the agent's standard input and redacted from all output.
+
+**--host-timeout**=*DURATION*
+
+: Maximum time for one host's whole operation, e.g. **5m**. 0 disables the limit.
+
+**--remote-detach**
+
+: With **--apply**, start each agent in the background and return its run ID; collect results later with **remote logs**. Refused when the run needs **.env**, **.secrets**, forwarded variables, or a become password.
 
 **-h**, **--help**
 
@@ -168,6 +232,18 @@ Benchmark a plugin handler operation and emit JSON timing statistics.
 
 : Permit mutating install or uninstall operations.
 
+## remote ping
+
+Connect to the selected targets, probe their platform and sudo/elevation state, make sure the agent is present and verified, and run its **version** command. Nothing is applied. Accepts the target-selection, agent, and SSH options from REMOTE APPLY OPTIONS.
+
+## remote logs HOST [RUN-ID]
+
+Print the event log of a run kept on a target (the newest when *RUN-ID* is omitted). *HOST* is a target or, with **--inventory**, an inventory host name. Used to collect **--remote-detach** results and to inspect interrupted runs.
+
+## remote clean
+
+Remove cached agents, retained run logs, and staged detached jobs from the selected targets. Refused while an apply holds the target's lock; POSIX targets need the **flock** utility.
+
 # PLAYBOOK FORMAT
 
 A playbook is a YAML document containing variables and tasks:
@@ -197,6 +273,10 @@ A playbook may declare external plugins:
 
 A missing plugin is reported with the installation command. Automatic installation requires **--allow-plugin-install**. An optional **ironstate.lock.yaml** file pins plugin versions and checksums.
 
+For remote targets on the controller's own OS and architecture, the controller copies each declared plugin it has installed into the target's plugin cache, SHA-256 verified. Other targets use their own installed plugins. Lockfile checksums are platform-specific.
+
+Remote **uses:** sources are approved and cloned on the controller and shipped in the bundle; targets never run git. Only literal git **remote:** values can be pre-fetched.
+
 Built-in handlers are available under their normal names and under the namespaced aliases **ironstate.builtin.NAME**.
 
 # FILES
@@ -216,6 +296,18 @@ Built-in handlers are available under their normal names and under the namespace
 **$XDG_CACHE_HOME/ironstate/plugins/**
 
 : Plugin cache on systems following the XDG convention. On Windows, the platform user cache directory is used.
+
+**.ironstateignore**
+
+: Glob patterns (one per line) excluded from the bundle sent to remote targets. **.git**, **.env**, and **.secrets** are always excluded.
+
+**inventory.yml**
+
+: Remote-apply inventory given with **--inventory**; see **inventory.schema.json** for its format.
+
+**~/.cache/ironstate/runs/RUN-ID/events.ndjson**
+
+: Per-run event log kept on each remote target (the last 20 runs; **%LOCALAPPDATA%\ironstate** on Windows, **~/Library/Caches/ironstate** on macOS).
 
 # OUTPUT
 
@@ -240,6 +332,10 @@ Messages, progress, warnings, and plugin logs are written to standard error so t
 **2**
 
 : The playbook could not be loaded or parsed.
+
+**3**
+
+: Remote apply only: one or more targets were unreachable or could not be prepared, and none failed during apply. Nothing was applied on those targets, so the run is safe to retry.
 
 # ENVIRONMENT
 
@@ -278,8 +374,16 @@ Install and test an external handler:
     ironstate plugin install acme.hosts@v1.2.3
     ironstate plugin test acme.hosts --handler entry --item '{"path":"/tmp/hosts","ip":"10.0.0.12","hostname":"build.local"}'
 
+Apply to remote hosts from an inventory, four at a time:
+
+    ironstate --playbook playbooks/site --apply --inventory inventory.yml --limit linux --forks 4
+
+Check that a target is reachable and can run the agent:
+
+    ironstate remote ping --target admin@build.lan
+
 # SEE ALSO
 
-**go**(1), **git**(1)
+**go**(1), **git**(1), **ssh**(1), **ssh_config**(5)
 
 Project documentation: <https://github.com/TacoContent/ironstate>

@@ -12,6 +12,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/TacoContent/ironstate/internal/model"
 	"github.com/TacoContent/ironstate/internal/packages"
 	"github.com/TacoContent/ironstate/internal/pathutil"
 	"github.com/TacoContent/ironstate/internal/remote"
@@ -45,6 +46,11 @@ type JobSpec struct {
 	ControllerVersion string
 	// ForwardEnv adds controller environment values to the job's env.
 	ForwardEnv map[string]string
+	// AllowRemoteUses pre-approves non-isolated git 'uses:' sources instead
+	// of prompting on the controller (--allow-remote-uses).
+	AllowRemoteUses bool
+	// AllowPluginInstall is forwarded so agents may install missing plugins.
+	AllowPluginInstall bool
 }
 
 // PreparedJob is a job header plus its bundle, built once and reusable
@@ -53,9 +59,20 @@ type PreparedJob struct {
 	Job        protocol.Job
 	BundlePath string
 	// Features found by a static scan of the playbook's YAML files.
-	UsesBecome  bool
-	UsesPlugins bool
-	RemoteUses  []string
+	UsesBecome bool
+	Plugins    []model.Plugin
+	// PrefetchedUses describes the git 'uses:' sources shipped in the bundle.
+	PrefetchedUses []string
+
+	uses []usesRef
+	// root is the controller's playbook dir (for ironstate.lock.yaml).
+	root string
+}
+
+// usesRef is one literal git 'uses:' found by the static scan.
+type usesRef struct {
+	Remote, Ref, Path string
+	Isolated, Trusted bool
 }
 
 // Close removes the temporary bundle.
@@ -82,11 +99,18 @@ func Prepare(spec JobSpec) (*PreparedJob, error) {
 		Generated: map[string][]byte{},
 	}
 	opts := protocol.JobOptions{
-		Playbook:     path.Join(bundlePlaybookDir, filepath.Base(resolved)),
-		VarOverrides: spec.VarOverrides,
-		Tags:         spec.Tags,
-		Apply:        spec.Apply,
-		Verbose:      spec.Verbose,
+		Playbook:           path.Join(bundlePlaybookDir, filepath.Base(resolved)),
+		VarOverrides:       spec.VarOverrides,
+		Tags:               spec.Tags,
+		Apply:              spec.Apply,
+		Verbose:            spec.Verbose,
+		AllowPluginInstall: spec.AllowPluginInstall,
+	}
+	prepared := &PreparedJob{root: root}
+	scanPlaybook(prepared, root, resolved)
+	approved, err := prefetchUses(prepared, &bspec, spec.AllowRemoteUses)
+	if err != nil {
+		return nil, err
 	}
 
 	filtersSetting, err := bundleFilters(&bspec, root, spec.FiltersDir)
@@ -140,34 +164,80 @@ func Prepare(spec JobSpec) (*PreparedJob, error) {
 	for key, value := range spec.ForwardEnv {
 		env[key] = value
 	}
-	prepared := &PreparedJob{
-		Job: protocol.Job{
-			V:                 protocol.Version,
-			Type:              protocol.TypeJob,
-			RunID:             runID,
-			ControllerVersion: spec.ControllerVersion,
-			Options:           opts,
-			Env:               env,
-			SecretEnv:         secretEnv,
-			Bundle:            protocol.BundleInfo{Size: info.Size, SHA256: info.SHA256},
-		},
-		BundlePath: f.Name(),
+	prepared.Job = protocol.Job{
+		V:                 protocol.Version,
+		Type:              protocol.TypeJob,
+		RunID:             runID,
+		ControllerVersion: spec.ControllerVersion,
+		Options:           opts,
+		Env:               env,
+		SecretEnv:         secretEnv,
+		ApprovedUses:      approved,
+		Bundle:            protocol.BundleInfo{Size: info.Size, SHA256: info.SHA256},
 	}
-	scanPlaybook(prepared, root, resolved)
+	prepared.BundlePath = f.Name()
 	return prepared, nil
 }
 
-// scanPlaybook flags features remote targets can't support yet. Parse
-// errors are ignored here; the agent reports them properly.
+// UsesBundleDir is where pre-fetched git 'uses:' checkouts live in the
+// bundle; the agent points remote.CacheRoot at it.
+const UsesBundleDir = "uses"
+
+// prefetchUses approves (prompting as a local run would) and clones every
+// literal git 'uses:' source on the controller, adds each checkout to the
+// bundle, and follows 'uses:' nested inside fetched sources. Returns the
+// approved source descriptions for the agent's trust check.
+func prefetchUses(p *PreparedJob, bspec *bundle.Spec, allowRemote bool) ([]string, error) {
+	var approved []string
+	seenSource := map[string]bool{}
+	bundled := map[string]bool{}
+	for i := 0; i < len(p.uses); i++ {
+		ref := p.uses[i]
+		kind, source := remote.Describe(remote.Spec{Remote: ref.Remote, Path: ref.Path, Ref: ref.Ref})
+		if seenSource[source] {
+			continue
+		}
+		seenSource[source] = true
+		if remote.NeedsConfirmation(kind, ref.Isolated) && !ref.Trusted && !allowRemote {
+			ok, err := remote.Confirm(kind, source)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				remote.Warn("remote source '%s' was declined; targets will skip it", source)
+				continue
+			}
+		}
+		approved = append(approved, source)
+		key := remote.CacheKey(strings.TrimSpace(ref.Remote), strings.TrimSpace(ref.Ref))
+		if bundled[key] {
+			continue
+		}
+		res, err := remote.Resolve(remote.Spec{Remote: ref.Remote, Ref: ref.Ref}, "")
+		if err != nil {
+			return nil, fmt.Errorf("pre-fetch uses %s: %w", source, err)
+		}
+		bundled[key] = true
+		bspec.Dirs = append(bspec.Dirs, bundle.Dir{Source: res.Dir, Dest: UsesBundleDir + "/" + key})
+		p.PrefetchedUses = append(p.PrefetchedUses, source)
+		scanTree(p, res.Dir)
+	}
+	return approved, nil
+}
+
+// scanPlaybook records become, declared plugins, and literal git 'uses:'
+// sources. Parse errors are ignored here; the agent reports them properly.
 func scanPlaybook(p *PreparedJob, root, entry string) {
 	if data, err := os.ReadFile(entry); err == nil { //nolint:gosec // the operator's own playbook
 		var doc map[string]any
 		if yaml.Unmarshal(data, &doc) == nil {
-			if plugins, ok := doc["plugins"]; ok && plugins != nil {
-				p.UsesPlugins = true
-			}
+			p.Plugins, _ = model.Plugins(doc)
 		}
 	}
+	scanTree(p, root)
+}
+
+func scanTree(p *PreparedJob, root string) {
 	_ = filepath.WalkDir(root, func(file string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -205,8 +275,8 @@ func scanValue(p *PreparedJob, v any) {
 				}
 			case "uses":
 				if spec, ok := child.(map[string]any); ok {
-					if src, ok := spec["remote"].(string); ok && remote.Classify(src) == remote.KindGit {
-						p.RemoteUses = append(p.RemoteUses, src)
+					if ref, ok := literalGitUses(spec); ok {
+						p.uses = append(p.uses, ref)
 					}
 				}
 			}
@@ -217,6 +287,23 @@ func scanValue(p *PreparedJob, v any) {
 			scanValue(p, child)
 		}
 	}
+}
+
+// literalGitUses reads a 'uses:' spec whose remote is a literal git URL; a
+// templated remote can't be resolved before the run and isn't pre-fetched.
+func literalGitUses(spec map[string]any) (usesRef, bool) {
+	src, _ := spec["remote"].(string)
+	if strings.Contains(src, "${{") || remote.Classify(src) != remote.KindGit {
+		return usesRef{}, false
+	}
+	ref, _ := spec["ref"].(string)
+	sub, _ := spec["path"].(string)
+	isolated, _ := spec["isolate"].(bool)
+	trusted, _ := spec["trusted"].(bool)
+	if strings.Contains(ref, "${{") {
+		return usesRef{}, false
+	}
+	return usesRef{Remote: src, Ref: ref, Path: sub, Isolated: isolated, Trusted: trusted}, true
 }
 
 func becomeRequested(v any) bool {

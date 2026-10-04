@@ -123,7 +123,7 @@ func TestResolveGitSkipsRefreshForCommitSHA(t *testing.T) {
 	CacheRoot = func() (string, error) { return cache, nil }
 
 	spec := Spec{Remote: "git@github.com:camalot/shared.git", Ref: "0123abcd"}
-	if err := os.MkdirAll(filepath.Join(cache, cacheKey(spec.Remote, spec.Ref)), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Join(cache, CacheKey(spec.Remote, spec.Ref)), 0o750); err != nil {
 		t.Fatal(err)
 	}
 	RunGit = func(dir string, args ...string) error {
@@ -142,7 +142,7 @@ func TestResolveGitFallsBackToCacheWhenRefreshFails(t *testing.T) {
 	CacheRoot = func() (string, error) { return cache, nil }
 
 	spec := Spec{Remote: "git@github.com:camalot/shared.git", Ref: "main"}
-	dest := filepath.Join(cache, cacheKey(spec.Remote, spec.Ref))
+	dest := filepath.Join(cache, CacheKey(spec.Remote, spec.Ref))
 	if err := os.MkdirAll(dest, 0o750); err != nil {
 		t.Fatal(err)
 	}

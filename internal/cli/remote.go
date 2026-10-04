@@ -178,6 +178,7 @@ func runRemoteApply(cmd *cobra.Command, cfg *config.Config) error {
 	if err != nil {
 		return NewLoadError(err)
 	}
+	allowPluginInstall, _ := cmd.Flags().GetBool("allow-plugin-install")
 	job, err := remoteexec.Prepare(remoteexec.JobSpec{
 		Playbook:           cfg.Playbook,
 		VarsFiles:          cfg.VarsFiles,
@@ -189,6 +190,8 @@ func runRemoteApply(cmd *cobra.Command, cfg *config.Config) error {
 		FilterInterpreters: cfg.FilterInterpreters,
 		ControllerVersion:  version,
 		ForwardEnv:         forward,
+		AllowRemoteUses:    cfg.AllowRemoteUses,
+		AllowPluginInstall: allowPluginInstall,
 	})
 	if err != nil {
 		return NewLoadError(err)
@@ -373,6 +376,9 @@ func (v *remoteView) hostDone(r remoteexec.HostReport) {
 	if r.VerificationSkipped {
 		line += " agent-verification=skipped"
 	}
+	if len(r.PluginsShipped) > 0 {
+		line += " plugins=" + strings.Join(r.PluginsShipped, ",")
+	}
 	if r.Err != nil {
 		line += ": " + sanitizeRemote(r.Err.Error())
 	}
@@ -529,6 +535,7 @@ type remoteJSONHost struct {
 	Uploaded            bool                `json:"agent_uploaded"`
 	Detached            bool                `json:"detached"`
 	VerificationSkipped bool                `json:"agent_verification_skipped"`
+	PluginsShipped      []string            `json:"plugins_shipped,omitempty"`
 	Error               *string             `json:"error"`
 }
 
@@ -558,6 +565,7 @@ func writeRemoteJSON(w io.Writer, runID string, reports []remoteexec.HostReport)
 			Uploaded:            r.Uploaded,
 			Detached:            r.Detached,
 			VerificationSkipped: r.VerificationSkipped,
+			PluginsShipped:      r.PluginsShipped,
 			Results:             []engine.JSONResult{},
 		}
 		if r.Result != nil {

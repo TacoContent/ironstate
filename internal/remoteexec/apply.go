@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -46,7 +47,9 @@ type HostReport struct {
 	Status   string
 	Platform string
 	// Uploaded is true when the agent binary had to be (re)sent.
-	Uploaded            bool
+	Uploaded bool
+	// PluginsShipped lists plugins copied from the controller's store.
+	PluginsShipped      []string
 	Detached            bool
 	VerificationSkipped bool
 	Result              *HostResult
@@ -114,6 +117,9 @@ func prepareAgent(ctx context.Context, host Host, job *PreparedJob, opts HostOpt
 	}
 	remotePath, uploaded, err := EnsureAgent(ctx, t, info, opts.Agents.Version, agent)
 	report.Uploaded = uploaded
+	if err == nil && job != nil && len(job.Plugins) > 0 && info.Platform() == runtime.GOOS+"/"+runtime.GOARCH {
+		report.PluginsShipped, err = EnsurePlugins(ctx, t, info, job)
+	}
 	return t, remotePath, info, err
 }
 
@@ -155,14 +161,8 @@ func hostContext(parent context.Context, timeout time.Duration) (context.Context
 	return context.WithTimeout(parent, timeout)
 }
 
-// checkSupported rejects playbook features remote targets can't run yet.
+// checkSupported rejects runs a target can't perform.
 func checkSupported(job *PreparedJob, info ProbeInfo) error {
-	if job.UsesPlugins {
-		return errors.New("playbooks that declare 'plugins:' can't be applied remotely yet")
-	}
-	if len(job.RemoteUses) > 0 {
-		return fmt.Errorf("remote 'uses:' sources can't be applied remotely yet: %s", strings.Join(job.RemoteUses, ", "))
-	}
 	if job.UsesBecome && !job.Job.Options.DisableBecome && info.OS != "windows" && info.Sudo != "nopasswd" && job.Job.BecomePassword == "" {
 		reason := "sudo requires a password (or 'requiretty' is set)"
 		if info.Sudo == "missing" {

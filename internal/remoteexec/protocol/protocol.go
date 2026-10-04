@@ -63,7 +63,10 @@ type Job struct {
 	Env               map[string]string `json:"env,omitempty"`
 	SecretEnv         map[string]string `json:"secret_env,omitempty"`
 	BecomePassword    string            `json:"become_password,omitempty"`
-	Bundle            BundleInfo        `json:"bundle"`
+	// ApprovedUses lists remote 'uses:' sources (as remote.Describe renders
+	// them) the controller approved and pre-fetched into the bundle.
+	ApprovedUses []string   `json:"approved_uses,omitempty"`
+	Bundle       BundleInfo `json:"bundle"`
 }
 
 // JobOptions mirrors the apply flags forwarded to the agent. Paths are
@@ -76,6 +79,8 @@ type JobOptions struct {
 	Apply         bool     `json:"apply"`
 	Verbose       bool     `json:"verbose,omitempty"`
 	DisableBecome bool     `json:"disable_become,omitempty"`
+	// AllowPluginInstall lets the agent install missing plugins on the target.
+	AllowPluginInstall bool `json:"allow_plugin_install,omitempty"`
 }
 
 // BundleInfo describes the tar.gz payload following the header.

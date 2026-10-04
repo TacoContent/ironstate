@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/TacoContent/ironstate/internal/pluginhost"
+	"github.com/TacoContent/ironstate/internal/remote"
 	"github.com/TacoContent/ironstate/internal/remoteexec"
 )
 
@@ -257,18 +259,57 @@ func TestApplyHostSkipsAgentVerificationForTrustedHost(t *testing.T) {
 	}
 }
 
-func TestApplyHostRejectsUnsupportedFeatures(t *testing.T) {
-	cases := map[string]string{
-		"plugins":     "plugins:\n  - acme.tools@1.0.0\ntasks: []\n",
-		"remote uses": "tasks:\n  - name: r\n    uses:\n      remote: https://github.com/acme/roles.git\n",
+func TestEnsurePluginsShipsControllerPluginsVerified(t *testing.T) {
+	storeDir := t.TempDir()
+	binary := filepath.Join(t.TempDir(), "ironstate-handler-tools")
+	writeFile(t, binary, "plugin binary")
+	if _, err := pluginhost.NewStore(storeDir).StorePlugin(pluginhost.Manifest{Organization: "acme", Name: "tools", Version: "v1.0.0", Source: "github.com/acme/ironstate-handler-tools"}, binary); err != nil {
+		t.Fatal(err)
 	}
-	for name, content := range cases {
-		t.Run(name, func(t *testing.T) {
-			report := remoteexec.ApplyHost(context.Background(), box, prepareSimple(t, content), hostOptions(newFakeTarget(t, "nopasswd")))
-			if report.Status != remoteexec.StatusError || !strings.Contains(report.Err.Error(), "preflight") {
-				t.Fatalf("status=%s err=%v", report.Status, report.Err)
-			}
-		})
+	orig := remoteexec.PluginStore
+	remoteexec.PluginStore = func() (*pluginhost.Store, error) { return pluginhost.NewStore(storeDir), nil }
+	t.Cleanup(func() { remoteexec.PluginStore = orig })
+
+	job := prepareSimple(t, "plugins:\n  - use: acme.tools@v1.0.0\n  - use: acme.missing@v2.0.0\ntasks: []\n")
+	target := newFakeTarget(t, "nopasswd")
+	info := remoteexec.ProbeInfo{OS: "linux", Arch: "amd64", StateDir: "/home/u/.cache/ironstate", SHATool: "sha256sum"}
+	shipped, err := remoteexec.EnsurePlugins(context.Background(), target, info, job)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shipped) != 1 || shipped[0] != "acme.tools@v1.0.0" {
+		t.Fatalf("shipped = %v, want only the installed plugin", shipped)
+	}
+	dir := "/home/u/.cache/ironstate/plugins/acme/tools/v1.0.0/"
+	pluginFile := "ironstate-handler-tools"
+	if runtime.GOOS == "windows" {
+		pluginFile += ".exe"
+	}
+	for _, name := range []string{pluginFile, "manifest.json"} {
+		if _, ok := target.files[dir+name]; !ok {
+			t.Errorf("%s not uploaded; files = %v", dir+name, target.files)
+		}
+	}
+	uploads := target.uploads
+	if _, err := remoteexec.EnsurePlugins(context.Background(), target, info, job); err != nil || target.uploads != uploads {
+		t.Fatalf("second ensure re-uploaded (%d -> %d) or failed: %v", uploads, target.uploads, err)
+	}
+}
+
+func TestApplyHostAcceptsPluginsAndRemoteUses(t *testing.T) {
+	orig := remote.RunGit
+	remote.RunGit = func(_ string, args ...string) error {
+		return os.MkdirAll(args[len(args)-1], 0o750)
+	}
+	origRoot := remote.CacheRoot
+	cache := t.TempDir()
+	remote.CacheRoot = func() (string, error) { return cache, nil }
+	t.Cleanup(func() { remote.RunGit, remote.CacheRoot = orig, origRoot })
+
+	job := prepareSimple(t, "plugins:\n  - use: acme.tools@v1.0.0\ntasks:\n  - name: r\n    uses:\n      remote: https://github.com/acme/roles.git\n      trusted: true\n")
+	report := remoteexec.ApplyHost(context.Background(), box, job, hostOptions(newFakeTarget(t, "nopasswd")))
+	if report.Err != nil && strings.Contains(report.Err.Error(), "preflight") {
+		t.Fatalf("plugins/uses still rejected at preflight: %v", report.Err)
 	}
 }
 
