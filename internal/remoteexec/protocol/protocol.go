@@ -62,18 +62,20 @@ type Job struct {
 	Options           JobOptions        `json:"options"`
 	Env               map[string]string `json:"env,omitempty"`
 	SecretEnv         map[string]string `json:"secret_env,omitempty"`
+	BecomePassword    string            `json:"become_password,omitempty"`
 	Bundle            BundleInfo        `json:"bundle"`
 }
 
 // JobOptions mirrors the apply flags forwarded to the agent. Paths are
 // relative to the unpacked bundle root.
 type JobOptions struct {
-	Playbook     string   `json:"playbook"`
-	VarsFiles    []string `json:"vars_files,omitempty"`
-	VarOverrides []string `json:"var_overrides,omitempty"`
-	Tags         []string `json:"tags,omitempty"`
-	Apply        bool     `json:"apply"`
-	Verbose      bool     `json:"verbose,omitempty"`
+	Playbook      string   `json:"playbook"`
+	VarsFiles     []string `json:"vars_files,omitempty"`
+	VarOverrides  []string `json:"var_overrides,omitempty"`
+	Tags          []string `json:"tags,omitempty"`
+	Apply         bool     `json:"apply"`
+	Verbose       bool     `json:"verbose,omitempty"`
+	DisableBecome bool     `json:"disable_become,omitempty"`
 }
 
 // BundleInfo describes the tar.gz payload following the header.

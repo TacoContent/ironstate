@@ -151,6 +151,94 @@ tasks:
     cmds:
       - go run ./cmd/ironstate --playbook playbooks/sample --inventory playbooks/sample/inventory/main.yml --limit snoke --agent-binary linux/{{.SNOKE_ARCH}}=bin/ironstate-linux-{{.SNOKE_ARCH}} --apply {{.CLI_ARGS}}
 
+  remote:agent:linux-amd64:
+    desc: Build the linux/amd64 agent for all-host inventory runs
+    internal: true
+    env:
+      CGO_ENABLED: "0"
+      GOOS: linux
+      GOARCH: amd64
+    cmds:
+      - go build -o bin/ironstate-linux-amd64 ./cmd/ironstate
+
+  remote:agent:linux-arm64:
+    desc: Build the linux/arm64 agent for all-host inventory runs
+    internal: true
+    env:
+      CGO_ENABLED: "0"
+      GOOS: linux
+      GOARCH: arm64
+    cmds:
+      - go build -o bin/ironstate-linux-arm64 ./cmd/ironstate
+
+  remote:agent:windows-amd64:
+    desc: Build the windows/amd64 agent for all-host inventory runs
+    internal: true
+    env:
+      CGO_ENABLED: "0"
+      GOOS: windows
+      GOARCH: amd64
+    cmds:
+      - go build -o bin/ironstate-windows-amd64.exe ./cmd/ironstate
+
+  remote:agent:darwin-amd64:
+    desc: Build the darwin/amd64 agent for all-host inventory runs
+    internal: true
+    env:
+      CGO_ENABLED: "0"
+      GOOS: darwin
+      GOARCH: amd64
+    cmds:
+      - go build -o bin/ironstate-darwin-amd64 ./cmd/ironstate
+
+  remote:agent:windows-arm64:
+    desc: Build the windows/arm64 agent for all-host inventory runs
+    internal: true
+    env:
+      CGO_ENABLED: "0"
+      GOOS: windows
+      GOARCH: arm64
+    cmds:
+      - go build -o bin/ironstate-windows-arm64.exe ./cmd/ironstate
+
+  remote:agent:darwin-arm64:
+    desc: Build the darwin/arm64 agent for all-host inventory runs
+    internal: true
+    env:
+      CGO_ENABLED: "0"
+      GOOS: darwin
+      GOARCH: arm64
+    cmds:
+      - go build -o bin/ironstate-darwin-arm64 ./cmd/ironstate
+
+  remote:all:agents:
+    desc: Build agents for all supported OS/architectures in the inventory
+    deps:
+      - remote:agent:linux-amd64
+      - remote:agent:linux-arm64
+      - remote:agent:windows-amd64
+      # - remote:agent:windows-arm64
+      - remote:agent:darwin-amd64
+      # - remote:agent:darwin-arm64
+
+  remote:all:ping:
+    desc: Connect to and probe every host in the sample inventory
+    deps: [remote:all:agents]
+    cmds:
+      - go run ./cmd/ironstate remote ping --inventory playbooks/sample/inventory/main.yml --agent-binary linux/amd64=bin/ironstate-linux-amd64 --agent-binary linux/arm64=bin/ironstate-linux-arm64 --agent-binary windows/amd64=bin/ironstate-windows-amd64.exe --agent-binary windows/arm64=bin/ironstate-windows-arm64.exe --agent-binary darwin/amd64=bin/ironstate-darwin-amd64 {{.CLI_ARGS}}
+
+  remote:all:dry-run:
+    desc: Dry-run playbooks/sample against every host in the sample inventory
+    deps: [remote:all:agents]
+    cmds:
+      - go run ./cmd/ironstate --playbook playbooks/sample --inventory playbooks/sample/inventory/main.yml --agent-binary linux/amd64=bin/ironstate-linux-amd64 --agent-binary linux/arm64=bin/ironstate-linux-arm64 --agent-binary windows/amd64=bin/ironstate-windows-amd64.exe --agent-binary windows/arm64=bin/ironstate-windows-arm64.exe --agent-binary darwin/amd64=bin/ironstate-darwin-amd64 {{.CLI_ARGS}}
+
+  remote:all:apply:
+    desc: Apply playbooks/sample against every host in the sample inventory
+    deps: [remote:all:agents]
+    cmds:
+      - go run ./cmd/ironstate --playbook playbooks/sample --inventory playbooks/sample/inventory/main.yml --agent-binary linux/amd64=bin/ironstate-linux-amd64 --agent-binary linux/arm64=bin/ironstate-linux-arm64 --agent-binary windows/amd64=bin/ironstate-windows-amd64.exe --agent-binary windows/arm64=bin/ironstate-windows-arm64.exe --agent-binary darwin/amd64=bin/ironstate-darwin-amd64 --apply {{.CLI_ARGS}}
+
   build-snapshot:
     desc: 'CI job "build-snapshot": goreleaser snapshot of every target'
     env:

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/TacoContent/ironstate/internal/engine"
@@ -34,6 +35,7 @@ type HostResult struct {
 	// Diagnostics holds non-protocol stdout lines (e.g. shell rc noise).
 	Diagnostics []string
 	Stderr      string
+	RawLog      string
 }
 
 // RunOptions tunes one RunHost call.
@@ -100,7 +102,7 @@ func RunHost(ctx context.Context, t Transport, agentPath string, job *PreparedJo
 
 	stderr := &tailBuffer{max: maxStderrBytes}
 	args := append([]string{"agent", "--protocol", strconv.Itoa(protocol.Version)}, opts.AgentArgs...)
-	cmd := RemoteCommand{Program: agentPath, Args: args}
+	cmd := RemoteCommand{Program: agentPath, Args: args, Windows: strings.HasSuffix(strings.ToLower(agentPath), ".exe")}
 	exitCode, execErr := t.Exec(ctx, cmd, stdin, stdoutW, stderr)
 	_ = stdoutW.Close()
 	_ = controlW.Close()

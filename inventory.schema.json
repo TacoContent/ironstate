@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/TacoContent/ironstate/develop/inventory.schema.json",
   "title": "IronState Inventory",
-  "description": "Remote hosts for 'ironstate --inventory'. Connection data only: per-host configuration belongs in the playbook's hosts/ and variables/ overlays, which the agent selects from each target's own facts.",
+  "description": "Remote hosts for 'ironstate --inventory'. Connection/elevation settings only: per-host configuration belongs in the playbook's hosts/ and variables/ overlays, which the agent selects from each target's own facts.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -44,12 +44,21 @@
         "user": { "description": "SSH user.", "type": "string" },
         "port": { "description": "SSH port.", "type": "integer", "minimum": 1, "maximum": 65535 },
         "platform": {
-          "description": "Optional platform hint. Windows targets are not supported yet and are reported as errors.",
+          "description": "Optional platform hint; use windows to select the PowerShell bootstrap for a Windows OpenSSH target.",
           "enum": ["linux", "darwin", "windows"]
         },
         "agent_dir": {
           "description": "Directory on the target for the cached agent (overrides --remote-agent-dir).",
           "type": "string"
+        },
+        "become": {
+          "description": "Whether to honor playbook become directives for this host. Set false to run those tasks as the SSH user without sudo/elevation.",
+          "type": "boolean"
+        },
+        "verify_agent": {
+          "description": "Verify the target agent with a remote SHA-256 tool before execution. Set false only for trusted constrained targets without a SHA-256 utility; the agent is transferred over SSH and replaced on every run.",
+          "type": "boolean",
+          "default": true
         }
       }
     }

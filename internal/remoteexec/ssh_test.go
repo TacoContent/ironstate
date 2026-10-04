@@ -1,8 +1,12 @@
 package remoteexec
 
 import (
+	"encoding/base64"
+	"encoding/binary"
+	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf16"
 )
 
 func TestParseSSHTarget(t *testing.T) {
@@ -58,10 +62,76 @@ func TestPosixCommandLineQuotesEveryWord(t *testing.T) {
 	}
 }
 
+func TestPowerShellCommandLineEncodesStructuredInvocation(t *testing.T) {
+	program := `C:\Program Files\ironstate\ironstate.exe`
+	line, err := PowerShellProgramCommandLine(program, []string{"agent", `a'; Start-Process calc`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(line, program) || strings.Contains(line, "Start-Process") {
+		t.Fatalf("command data leaked into shell text: %s", line)
+	}
+	encoded := strings.TrimPrefix(line, "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand ")
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	units := make([]uint16, len(data)/2)
+	for i := range units {
+		units[i] = binary.LittleEndian.Uint16(data[i*2:])
+	}
+	script := string(utf16.Decode(units))
+	if !strings.Contains(script, "ConvertFrom-Json") || !strings.Contains(script, "@a") {
+		t.Fatalf("unexpected encoded PowerShell script: %s", script)
+	}
+}
+
+func TestPowerShellFinalizeUploadVerifiesBeforeMoving(t *testing.T) {
+	script := powerShellFinalizeUploadScript(`C:\cache\.upload`, `C:\cache\agent.exe`, strings.Repeat("a", 64))
+	if !strings.Contains(script, "Get-FileHash") || !strings.Contains(script, "Move-Item") || !strings.Contains(script, "uploaded agent sha256 mismatch") {
+		t.Fatalf("finalize script does not verify the staged agent: %s", script)
+	}
+}
+
+func TestSFTPBatchPutQuotesPaths(t *testing.T) {
+	local := filepath.Join("build dir", `ironstate"agent.exe`)
+	got := sftpBatchPut(local, `C:\Users\deploy\AppData\Local\ironstate\agent.exe`)
+	localQuoted := strings.ReplaceAll(filepath.ToSlash(local), `"`, `\"`)
+	want := "put \"" + localQuoted + "\" \"C:/Users/deploy/AppData/Local/ironstate/agent.exe\"\n"
+	if got != want {
+		t.Fatalf("SFTP batch = %q, want %q", got, want)
+	}
+}
+
+func TestSFTPStartupNoiseHint(t *testing.T) {
+	got := sftpStartupNoiseHint("Received message too long 1282367844Ensure the remote shell produces no output")
+	if !strings.Contains(got, `emitted "Load"`) || !strings.Contains(got, "PowerShell startup scripts") {
+		t.Fatalf("hint = %q", got)
+	}
+	if got := sftpStartupNoiseHint("Connection closed"); got != "" {
+		t.Fatalf("unexpected hint = %q", got)
+	}
+}
+
+func TestAgentVersionTextStripsCLIXML(t *testing.T) {
+	output := `#< CLIXMLironstate dev (commit none, built unknown)<Objs Version="1.1.0.1"><Obj S="progress">Preparing modules for first use.</Obj></Objs>`
+	if got, want := agentVersionText(output), "ironstate dev (commit none, built unknown)"; got != want {
+		t.Fatalf("agentVersionText() = %q, want %q", got, want)
+	}
+}
+
 func TestRemoteScriptsAreSingleLine(t *testing.T) {
 	for name, script := range map[string]string{"probe": probeScript, "check": checkScript, "upload": uploadScript} {
 		if strings.ContainsAny(script, "\n\r!") {
 			t.Errorf("%s script must be one line without '!': %q", name, script)
+		}
+	}
+}
+
+func TestProbeScriptSupportsEmbeddedLinuxHashCommands(t *testing.T) {
+	for _, tool := range []string{"sha=openssl", "sha=busybox", "openssl dgst -sha256", "busybox sha256sum"} {
+		if !strings.Contains(probeScript, tool) && !strings.Contains(hashSnippet, tool) {
+			t.Errorf("probe/hash scripts do not support %q", tool)
 		}
 	}
 }
@@ -77,9 +147,7 @@ func TestParseProbe(t *testing.T) {
 	}
 	cases := map[string]string{
 		"no sentinels": "hello\n",
-		"windows":      strings.Replace(good, "os=Linux", "os=MINGW64_NT", 1),
 		"arm32":        strings.Replace(good, "arch=aarch64", "arch=armv7l", 1),
-		"no sha tool":  strings.Replace(good, "sha=sha256sum\n", "", 1),
 		"noexec":       strings.Replace(good, "exec=ok\n", "", 1),
 		"relative dir": strings.Replace(good, "agent_dir=/root", "agent_dir=root", 1),
 	}
@@ -87,6 +155,26 @@ func TestParseProbe(t *testing.T) {
 		if _, err := parseProbe(out); err == nil {
 			t.Errorf("%s: parseProbe accepted", name)
 		}
+	}
+	noSHA := strings.Replace(good, "sha=sha256sum\n", "", 1)
+	if info, err := parseProbe(noSHA); err != nil || info.SHATool != "" {
+		t.Errorf("probe without hash utility = %+v, %v", info, err)
+	}
+}
+
+func TestParseWindowsProbe(t *testing.T) {
+	out := probeBegin + "\nos=windows\narch=AMD64\nuid=deploy\nagent_dir=C:\\Users\\deploy\\AppData\\Local\\ironstate\\agent\nsha=powershell\nsudo=na\nexec=ok\nadmin=yes\n" + probeEnd
+	info, err := parseProbe(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Platform() != "windows/amd64" || !info.Admin || info.Sudo != "na" {
+		t.Fatalf("info = %+v", info)
+	}
+	want := `C:\Users\deploy\AppData\Local\ironstate\agent\v1.0.0-0123456789ab\ironstate.exe`
+	got := RemoteAgentPath(info, "v1.0.0", LocalAgent{SHA256: "0123456789abcdef"})
+	if got != want {
+		t.Fatalf("agent path = %q, want %q", got, want)
 	}
 }
 

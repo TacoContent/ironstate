@@ -1,15 +1,21 @@
 package remoteexec
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 )
 
 // LocalTarget is the reserved target name for running the agent as a
@@ -108,6 +114,8 @@ func (t *SSHTarget) setPort(p, original string) error {
 type SSHOptions struct {
 	// SSHPath defaults to "ssh" on PATH.
 	SSHPath string
+	// SFTPPath defaults to "sftp" on PATH.
+	SFTPPath string
 	// ConfigFile, if set, is passed as 'ssh -F'.
 	ConfigFile        string
 	ConnectTimeout    time.Duration
@@ -133,6 +141,13 @@ func (t *SSHTransport) sshPath() string {
 		return t.Options.SSHPath
 	}
 	return "ssh"
+}
+
+func (t *SSHTransport) sftpPath() string {
+	if t.Options.SFTPPath != "" {
+		return t.Options.SFTPPath
+	}
+	return "sftp"
 }
 
 // baseArgs are the ssh options shared by every invocation, ending with
@@ -168,7 +183,17 @@ func (t *SSHTransport) baseArgs() []string {
 
 // Exec implements Transport. Exit code 255 is OpenSSH's own failure.
 func (t *SSHTransport) Exec(ctx context.Context, cmd RemoteCommand, stdin io.Reader, stdout, stderr io.Writer) (int, error) {
-	line, err := PosixCommandLine(cmd)
+	var line string
+	var err error
+	if cmd.Windows {
+		if cmd.Script != "" {
+			line, err = PowerShellCommandLine(cmd.Script)
+		} else {
+			line, err = PowerShellProgramCommandLine(cmd.Program, cmd.Args)
+		}
+	} else {
+		line, err = PosixCommandLine(cmd)
+	}
 	if err != nil {
 		return -1, err
 	}
@@ -184,6 +209,122 @@ func (t *SSHTransport) Exec(ctx context.Context, cmd RemoteCommand, stdin io.Rea
 		return -1, fmt.Errorf("ssh client not found on PATH: %w", err)
 	}
 	return code, err
+}
+
+// UploadFile sends a file using OpenSSH's SFTP subsystem. The batch command
+// contains only quoted paths; file contents never pass through a shell.
+func (t *SSHTransport) UploadFile(ctx context.Context, localPath, remotePath string) error {
+	args := []string{"-b", "-", "-o", "BatchMode=yes"}
+	timeout := t.Options.ConnectTimeout
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	args = append(args, "-o", fmt.Sprintf("ConnectTimeout=%d", int(timeout.Seconds())), "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4")
+	if t.Options.ConfigFile != "" {
+		args = append(args, "-F", t.Options.ConfigFile)
+	}
+	if t.Options.AcceptNewHostKeys {
+		args = append(args, "-o", "StrictHostKeyChecking=accept-new")
+	}
+	if t.controlPath != "" {
+		args = append(args, "-o", "ControlMaster=auto", "-o", "ControlPath="+t.controlPath, "-o", "ControlPersist=60")
+	}
+	if t.Target.Port != 0 {
+		args = append(args, "-P", strconv.Itoa(t.Target.Port))
+	}
+	if t.Target.User != "" {
+		args = append(args, "-o", "User="+t.Target.User)
+	}
+	args = append(args, t.Target.Host)
+
+	c := exec.CommandContext(ctx, t.sftpPath(), args...) //nolint:gosec // destination and local path are passed as argv/batch data
+	c.Stdin = strings.NewReader(sftpBatchPut(localPath, remotePath))
+	var stdout, stderr bytes.Buffer
+	c.Stdout = &stdout
+	c.Stderr = &stderr
+	c.WaitDelay = waitDelay
+	isolateSignals(c)
+	code, err := runCommand(c)
+	if err != nil {
+		return fmt.Errorf("run sftp: %w", err)
+	}
+	if code != 0 {
+		detail := strings.TrimSpace(strings.Join([]string{stdout.String(), stderr.String()}, "\n"))
+		if hint := sftpStartupNoiseHint(detail); hint != "" {
+			return fmt.Errorf("sftp upload failed: %s", hint)
+		}
+		return fmt.Errorf("sftp exited %d: %s", code, detail)
+	}
+	return nil
+}
+
+func sftpStartupNoiseHint(message string) string {
+	const marker = "Received message too long "
+	_, suffix, ok := strings.Cut(message, marker)
+	if !ok {
+		return ""
+	}
+	digits := strings.TrimLeft(suffix, " \t")
+	end := strings.IndexFunc(digits, func(r rune) bool { return r < '0' || r > '9' })
+	if end >= 0 {
+		digits = digits[:end]
+	}
+	value, err := strconv.ParseUint(digits, 10, 32)
+	if err != nil {
+		return ""
+	}
+	var prefix [4]byte
+	binary.BigEndian.PutUint32(prefix[:], uint32(value))
+	for _, b := range prefix {
+		if b < 0x20 || b > 0x7e {
+			return ""
+		}
+	}
+	return fmt.Sprintf("remote SFTP startup emitted %q before its protocol handshake; silence stdout from non-interactive shell/PowerShell startup scripts", string(prefix[:]))
+}
+
+func sftpBatchPut(localPath, remotePath string) string {
+	localPath = filepath.ToSlash(localPath)
+	remotePath = strings.ReplaceAll(remotePath, `\`, "/")
+	return "put " + sftpQuote(localPath) + " " + sftpQuote(remotePath) + "\n"
+}
+
+func sftpQuote(value string) string {
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(value) + `"`
+}
+
+// PowerShellCommandLine encodes a script as UTF-16LE, as required by
+// powershell.exe -EncodedCommand. The encoded text contains no shell syntax.
+func PowerShellCommandLine(script string) (string, error) {
+	if strings.ContainsRune(script, '\x00') {
+		return "", errors.New("PowerShell script contains a NUL")
+	}
+	encoded := base64.StdEncoding.EncodeToString(utf16LE(script))
+	return "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand " + encoded, nil
+}
+
+func utf16LE(script string) []byte {
+	units := utf16.Encode([]rune(script))
+	encoded := make([]byte, len(units)*2)
+	for i, unit := range units {
+		binary.LittleEndian.PutUint16(encoded[i*2:], unit)
+	}
+	return encoded
+}
+
+// PowerShellProgramCommandLine invokes a structured program/argv pair without
+// interpolating any of its values into PowerShell source.
+func PowerShellProgramCommandLine(program string, args []string) (string, error) {
+	payload, err := json.Marshal(struct {
+		Program string   `json:"program"`
+		Args    []string `json:"args"`
+	}{program, args})
+	if err != nil {
+		return "", err
+	}
+	data := base64.StdEncoding.EncodeToString(payload)
+	script := "$d=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + data + "'))|ConvertFrom-Json; $a=@($d.args); & $d.program @a; if ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }; exit 0"
+	return PowerShellCommandLine(script)
 }
 
 // Close tears down the multiplexed master connection, if any.

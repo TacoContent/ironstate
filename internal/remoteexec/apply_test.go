@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/TacoContent/ironstate/internal/remoteexec"
 )
@@ -28,6 +29,8 @@ type fakeTarget struct {
 	uploads  int
 	stateDir string
 	platform string
+	logData  string
+	cleaned  bool
 }
 
 func newFakeTarget(t *testing.T, sudo string) *fakeTarget {
@@ -88,6 +91,20 @@ func (f *fakeTarget) Exec(ctx context.Context, cmd remoteexec.RemoteCommand, std
 		f.files[params[1]] = sum
 		f.uploads++
 		_, _ = fmt.Fprintf(stdout, "sha256=%s\n", sum)
+	case strings.HasPrefix(script, ": ironstate-upload-unverified;"):
+		h := sha256.New()
+		if _, err := io.Copy(h, stdin); err != nil {
+			return 1, err
+		}
+		f.files[params[1]] = hex.EncodeToString(h.Sum(nil))
+		f.uploads++
+		_, _ = io.WriteString(stdout, "uploaded=1\n")
+	case strings.HasPrefix(script, `cat "$1"`):
+		_, _ = io.WriteString(stdout, f.logData)
+	case strings.HasPrefix(script, "latest="):
+		_, _ = io.WriteString(stdout, "run-123")
+	case strings.HasPrefix(script, "if ! command -v flock"):
+		f.cleaned = true
 	default:
 		f.t.Fatalf("unexpected script %q", script)
 	}
@@ -95,6 +112,32 @@ func (f *fakeTarget) Exec(ctx context.Context, cmd remoteexec.RemoteCommand, std
 }
 
 func (f *fakeTarget) Close() error { return nil }
+
+type flakyTarget struct {
+	target   *fakeTarget
+	failures int
+	failed   int
+}
+
+func (f *flakyTarget) Exec(ctx context.Context, cmd remoteexec.RemoteCommand, stdin io.Reader, stdout, stderr io.Writer) (int, error) {
+	if f.failed < f.failures {
+		f.failed++
+		_, _ = io.WriteString(stderr, "ssh: connect to host x port 22: Connection refused")
+		return remoteexec.SSHExitUnreachable, nil
+	}
+	return f.target.Exec(ctx, cmd, stdin, stdout, stderr)
+}
+
+func (f *flakyTarget) Close() error { return nil }
+
+type blockingTarget struct{}
+
+func (blockingTarget) Exec(ctx context.Context, _ remoteexec.RemoteCommand, _ io.Reader, _, _ io.Writer) (int, error) {
+	<-ctx.Done()
+	return -1, ctx.Err()
+}
+
+func (blockingTarget) Close() error { return nil }
 
 var box = remoteexec.Host{Name: "box", SSH: remoteexec.SSHTarget{User: "u", Host: "box"}}
 
@@ -152,6 +195,32 @@ func TestApplyHostUnreachable(t *testing.T) {
 	}
 }
 
+func TestPingHostRetriesTransientBootstrapFailures(t *testing.T) {
+	target := newFakeTarget(t, "nopasswd")
+	flaky := &flakyTarget{target: target, failures: 2}
+	opts := hostOptions(target)
+	opts.Dial = func(remoteexec.Host) (remoteexec.Transport, error) { return flaky, nil }
+	report := remoteexec.PingHost(context.Background(), box, opts)
+	if report.Status != remoteexec.StatusOK || flaky.failed != 2 {
+		t.Fatalf("status=%s failed attempts=%d err=%v", report.Status, flaky.failed, report.Err)
+	}
+}
+
+func TestPingHostTimeoutCancelsProbe(t *testing.T) {
+	opts := remoteexec.HostOptions{
+		HostTimeout: 20 * time.Millisecond,
+		Dial:        func(remoteexec.Host) (remoteexec.Transport, error) { return blockingTarget{}, nil },
+	}
+	started := time.Now()
+	report := remoteexec.PingHost(context.Background(), box, opts)
+	if report.Err == nil || !strings.Contains(report.Err.Error(), "deadline exceeded") {
+		t.Fatalf("status=%s err=%v", report.Status, report.Err)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("host timeout took %s", elapsed)
+	}
+}
+
 func TestApplyHostRejectsBecomeWithoutPasswordlessSudo(t *testing.T) {
 	target := newFakeTarget(t, "password")
 	job := prepareSimple(t, "tasks:\n  - name: root\n    become: true\n    log:\n      message: hi\n")
@@ -161,6 +230,30 @@ func TestApplyHostRejectsBecomeWithoutPasswordlessSudo(t *testing.T) {
 	}
 	if target.uploads != 0 {
 		t.Error("agent uploaded despite failed preflight")
+	}
+}
+
+func TestApplyHostDisablesBecomeWhenInventorySaysFalse(t *testing.T) {
+	target := newFakeTarget(t, "missing")
+	host := box
+	host.DisableBecome = true
+	job := prepareSimple(t, "tasks:\n  - name: current user\n    become: true\n    log:\n      message: runs without sudo\n")
+	report := remoteexec.ApplyHost(context.Background(), host, job, hostOptions(target))
+	if report.Status != remoteexec.StatusOK {
+		t.Fatalf("status=%s err=%v", report.Status, report.Err)
+	}
+}
+
+func TestApplyHostSkipsAgentVerificationForTrustedHost(t *testing.T) {
+	target := newFakeTarget(t, "missing")
+	target.probeOut = strings.Replace(target.probeOut, "sha=sha256sum\n", "", 1)
+	host := box
+	host.DisableBecome = true
+	host.SkipAgentVerification = true
+	job := prepareSimple(t, "tasks:\n  - name: current user\n    become: true\n    log:\n      message: runs without sudo\n")
+	report := remoteexec.ApplyHost(context.Background(), host, job, hostOptions(target))
+	if report.Status != remoteexec.StatusOK || !report.VerificationSkipped || !report.Uploaded {
+		t.Fatalf("status=%s verificationSkipped=%t uploaded=%t err=%v", report.Status, report.VerificationSkipped, report.Uploaded, report.Err)
 	}
 }
 
@@ -197,17 +290,25 @@ func TestApplyHostNeedsAgentForOtherPlatform(t *testing.T) {
 	}
 }
 
-func TestApplyHostRejectsNonPOSIXTarget(t *testing.T) {
-	target := newFakeTarget(t, "nopasswd")
-	windows := box
-	windows.Platform = "windows"
-	if report := remoteexec.ApplyHost(context.Background(), windows, prepareSimple(t, "tasks: []\n"), hostOptions(target)); report.Status != remoteexec.StatusError || !strings.Contains(report.Err.Error(), "windows") {
-		t.Fatalf("windows hint: status=%s err=%v", report.Status, report.Err)
+type windowsProbeTransport struct{}
+
+func (windowsProbeTransport) Exec(_ context.Context, cmd remoteexec.RemoteCommand, _ io.Reader, stdout, _ io.Writer) (int, error) {
+	if !cmd.Windows || cmd.Script == "" {
+		return 1, fmt.Errorf("expected encoded PowerShell command")
 	}
-	target.probeOut = "'sh' is not recognized as an internal or external command\r\n"
-	report := remoteexec.ApplyHost(context.Background(), box, prepareSimple(t, "tasks: []\n"), hostOptions(target))
-	if report.Status != remoteexec.StatusError || !strings.Contains(report.Err.Error(), "POSIX") {
-		t.Fatalf("status=%s err=%v", report.Status, report.Err)
+	_, _ = io.WriteString(stdout, "__IRONSTATE_BEGIN__\nos=windows\narch=AMD64\nuid=deploy\nagent_dir=C:\\Users\\deploy\\AppData\\Local\\ironstate\\agent\nsha=powershell\nsudo=na\nexec=ok\nadmin=yes\n__IRONSTATE_END__\n")
+	return 0, nil
+}
+
+func (windowsProbeTransport) Close() error { return nil }
+
+func TestProbeWindowsHintUsesPowerShell(t *testing.T) {
+	info, err := remoteexec.ProbeWithHint(context.Background(), windowsProbeTransport{}, "", "windows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Platform() != "windows/amd64" || !info.Admin {
+		t.Fatalf("probe info = %+v", info)
 	}
 }
 
@@ -219,6 +320,28 @@ func TestPingHostRunsAgentVersion(t *testing.T) {
 	}
 	if report.Probe.Sudo != "nopasswd" {
 		t.Errorf("probe sudo = %q", report.Probe.Sudo)
+	}
+}
+
+func TestReadHostLogsRestoresEvents(t *testing.T) {
+	target := newFakeTarget(t, "nopasswd")
+	target.logData = "{\"v\":1,\"type\":\"hello\",\"run_id\":\"run-123\"}\n{\"v\":1,\"type\":\"done\",\"exit_code\":0}\n"
+	result, err := remoteexec.ReadHostLogs(context.Background(), box, hostOptions(target), "run-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Completed || result.Hello == nil || !strings.Contains(result.RawLog, `"type":"done"`) {
+		t.Fatalf("recovered result = %+v", result)
+	}
+}
+
+func TestCleanHostRemovesStateUnderLock(t *testing.T) {
+	target := newFakeTarget(t, "nopasswd")
+	if err := remoteexec.CleanHost(context.Background(), box, hostOptions(target)); err != nil {
+		t.Fatal(err)
+	}
+	if !target.cleaned {
+		t.Fatal("remote cleanup script was not run")
 	}
 }
 

@@ -2,11 +2,13 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/TacoContent/ironstate/internal/remoteexec/protocol"
 )
@@ -162,5 +164,36 @@ func TestRemotePingLocal(t *testing.T) {
 	out, err := runRemoteCLI(t, "remote", "ping", "--target", "local")
 	if err != nil || !strings.Contains(out, "ok") || !strings.Contains(out, "ironstate") {
 		t.Fatalf("ping: %v\n%s", err, out)
+	}
+}
+
+func TestRemoteDetachRequiresApply(t *testing.T) {
+	playbook := writePlaybook(t, "tasks: []\n")
+	_, err := runRemoteCLI(t, "--playbook", playbook, "--target", "local", "--remote-detach")
+	if ExitCodeFor(err) != 2 || !strings.Contains(err.Error(), "requires --apply") {
+		t.Fatalf("error = %v, want detach validation load error", err)
+	}
+}
+
+func TestRemoteManagementCommandsAreAvailable(t *testing.T) {
+	_, logsErr := runRemoteCLI(t, "remote", "logs", "local")
+	if logsErr == nil || !strings.Contains(logsErr.Error(), "not supported") {
+		t.Fatalf("remote logs error = %v", logsErr)
+	}
+	cleanOut, cleanErr := runRemoteCLI(t, "remote", "clean", "--target", "local")
+	if ExitCodeFor(cleanErr) != 3 || !strings.Contains(cleanOut, "not supported") {
+		t.Fatalf("remote clean output=%s error=%v", cleanOut, cleanErr)
+	}
+}
+
+func TestInterruptContextCancelsOnSignal(t *testing.T) {
+	interrupts := make(chan os.Signal, 1)
+	ctx, stop := interruptContext(context.Background(), interrupts)
+	defer stop()
+	interrupts <- os.Interrupt
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("interrupt did not cancel context")
 	}
 }

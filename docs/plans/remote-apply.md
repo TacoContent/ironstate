@@ -1,6 +1,6 @@
 # Remote apply over SSH
 
-Status: DRAFT (design only, not implemented), revised after design review (see §15)
+Status: IN PROGRESS (phases 0-3 implemented; Windows host validation and detached-process verification remain), revised after design review (see §15)
 Owner: unassigned
 Target: unscheduled, phased rollout (see §12)
 
@@ -231,7 +231,7 @@ stateDiagram-v2
 
 One exec, detects the target's default shell and platform:
 
-1. POSIX attempt: `uname -s -m; printf '%s\n' "$HOME"; command -v sha256sum shasum`.
+1. POSIX attempt: `uname -s -m; printf '%s\n' "$HOME"; command -v sha256sum shasum openssl busybox`.
 2. If the output doesn't parse (Windows `cmd.exe`/`powershell` default shell), Windows
    attempt: `powershell -NoProfile -NonInteractive -EncodedCommand <b64>` printing
    `$env:PROCESSOR_ARCHITECTURE`, `$env:LOCALAPPDATA`, OS version as one JSON line.
@@ -244,7 +244,10 @@ An inventory `platform:` hint skips the failed first attempt. The probe also rep
   home mounts), falling back to an inventory/config `agent_dir` override, else a clear
   error;
 - `sudo -n true` result (POSIX), so a playbook with `become` fails fast with "sudo needs a
-  password (use --ask-become-pass) or has requiretty" rather than mid-run.
+  password (use --ask-become-pass) or has requiretty" rather than mid-run. Hosts marked
+  `become: false` in inventory bypass the become requirement and run as the SSH user.
+- SHA-256 support via `sha256sum`, `shasum`, `openssl dgst -sha256`, or BusyBox's
+  `sha256sum` applet, covering common embedded Linux systems.
 
 Unsupported targets (anything other than linux/darwin/windows on amd64/arm64, matching
 `.goreleaser.yaml`) fail at probe. Linux/darwin/windows builds are `CGO_ENABLED=0`, so
@@ -530,7 +533,7 @@ itself and get identical reporting. `localhost` is an ordinary SSH target.
 
 ### 11.2 Inventory
 
-Deliberately minimal; connection data only. Configuration differences between hosts
+Deliberately minimal; connection and elevation settings only. Configuration differences between hosts
 still belong in the playbook's existing `hosts/`/`variables/` overlay chain, which
 **already works per target** because the agent gathers the target's own facts.
 
@@ -542,6 +545,7 @@ defaults:
 hosts:
   snoke:   { address: snoke.lan }
   kresh:   { address: 10.0.0.12, platform: linux }
+  router:  { address: router.lan, become: false }
   krayt:   { address: krayt.lan, platform: windows, user: rconr }
 groups:
   linux: [snoke, kresh]
@@ -549,6 +553,8 @@ groups:
 ```
 
 - `address` defaults to the inventory key, so an `~/.ssh/config` `Host` alias "just works".
+- `become: false` disables playbook become directives for that host. Tasks run as the SSH
+  user; this does not elevate privileges. Omitted `become` honors the playbook as written.
 - Inventory names are labels only; overlay selection uses the target's real
   `computer_name`. A host whose inventory name differs from its hostname is reported with
   both.
@@ -696,9 +702,8 @@ As built (differences from the plan, and why):
 - **Selection:** `--limit` takes host/group names and `all`, keeps the given order and
   de-duplicates; with no `--limit` every host runs, sorted by name. `--target` hosts are
   appended after the inventory selection; `--limit` without `--inventory` is an error.
-- **`platform: windows`** is accepted in the inventory but the host is reported as
-  `error` ("not supported yet") rather than failing the whole inventory load, so a
-  mixed inventory is usable today.
+- **`platform: windows`** is accepted in inventory and selects the PowerShell bootstrap;
+  Windows target support was implemented in phase 3.
 - **Parallelism:** `--forks` (default 5) via `ForEachHost`, a bounded worker pool that
   returns reports in host order. Live table lines are mutex-guarded and prefixed
   `[host]`; per-host result tables still print grouped at the end. After the first
@@ -728,18 +733,54 @@ Original scope:
 
 ### Phase 3: Windows targets and become
 
-- Starts with a spike to confirm three assumptions before building: raw binary stdin
-  through Windows sshd into `[Console]::OpenStandardInput()` (else sftp fallback), admin
-  sessions receive an elevated token, and process-tree behavior on disconnect.
+- Starts with a spike to confirm Windows OpenSSH SFTP behavior, admin sessions receiving
+  an elevated token, and process-tree behavior on disconnect.
 - Windows probe/upload/run via `powershell -EncodedCommand`, path handling, Windows
   agent cache dir.
 - `--ask-become-pass` (`sudo -S -k`) on POSIX; documented Windows elevation model.
 - Integration test: Windows runner with OpenSSH Server, including a full-size agent upload.
 
+Implementation status:
+
+- Windows probe, agent cache verification, and agent launch use UTF-16LE
+  `-EncodedCommand` PowerShell scripts. Agent binaries transfer through OpenSSH SFTP,
+  then PowerShell verifies the hash and atomically moves the staged file into the cache;
+  cache paths use `.exe` and Windows separators. The integration test accepts a configured
+  Windows target through the same `IRONSTATE_SSH_TEST_*` variables as the POSIX test.
+- `--ask-become-pass` prompts once without echo. The password is carried only in the job
+  header on stdin, registered for redaction on both sides, and supplied to POSIX sudo via
+  `-S -k -p ''`. Windows agent `become` is a no-op only when the SSH process token is
+  elevated; otherwise each affected leaf fails before its handler test or mutation.
+- Inventory `become: false` explicitly disables playbook become directives for that host;
+  the agent runs those tasks as the SSH user. The setting does not grant privileges.
+- Verified live on `kresh`: Windows agent SFTP upload, hash verification, cached reuse, and
+  clean `remote ping` version output. `krayt` still emits `Load...` startup text into its
+  SFTP protocol stream and must have non-interactive shell output silenced. Administrator
+  token semantics and sshd process-tree behavior still need host-level verification.
+
 ### Phase 4: Resilience extras
 
 - Connection retries with backoff, reconnect-and-read-run-log on interrupted streams,
   `remote logs`, `remote clean`, `--remote-detach`, `--host-timeout`.
+
+Implementation status:
+
+- Bootstrap retries up to three times with exponential backoff for SSH-unreachable and
+  SFTP transport failures only. Apply itself is never automatically rerun. `--host-timeout`
+  bounds each host's complete operation, including bootstrap and recovery.
+- An interrupted non-cancelled apply reconnects and reconstructs its result from the
+  target's append-only event log. `remote logs <host> [run_id]` reads a selected or latest
+  log; `--inventory` resolves an inventory host label. `remote clean --inventory <file>`
+  clears agent caches and run logs while holding the target's apply lock. POSIX cleanup
+  requires the `flock` utility and refuses to proceed if it is unavailable.
+- `--remote-detach` requires `--apply`, starts a background agent, and reports the run ID
+  for later retrieval with `remote logs`. To avoid persisting known credentials, it
+  rejects jobs with `.env`, `.secrets`, forwarded environment values, or a become password.
+  The staged job file is private, removed by the agent after bundle receipt, and contains
+  the playbook bundle; do not place secrets directly in bundled playbook or vars files.
+- Detached Windows process survival across OpenSSH session teardown remains unverified;
+  the implementation uses `Start-Process` and should be validated on Windows sshd before
+  relying on it for production runs.
 
 ### Phase 5: `uses:` and plugins on targets
 
@@ -761,6 +802,9 @@ Original scope:
   contain non-secret config files (that's inherent: they're needed to run).
 - Agent integrity: sha256 verified before exec; release downloads checksum-verified
   (+ cosign when available).
+- `verify_agent: false` / `--skip-agent-verification` is an explicit trusted-host
+  exception for systems without a SHA-256 utility. The controller re-uploads on every
+  run, but cannot detect target-side modification of the cached agent before execution.
 - Untrusted output: remote strings sanitized for terminal control sequences; event line
   length capped (e.g. 8 MiB) to bound controller memory.
 - Elevation: become password in-memory only, registered with `internal/secrets` on the

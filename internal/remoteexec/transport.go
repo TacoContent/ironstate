@@ -17,6 +17,9 @@ import (
 type RemoteCommand struct {
 	Program string
 	Args    []string
+	Windows bool
+	// Script, when set, is a fixed PowerShell script instead of a program invocation.
+	Script string
 }
 
 // Transport runs commands on one target.
@@ -25,6 +28,12 @@ type Transport interface {
 	// code. err is reserved for failures to run it at all.
 	Exec(ctx context.Context, cmd RemoteCommand, stdin io.Reader, stdout, stderr io.Writer) (int, error)
 	Close() error
+}
+
+// FileUploader transfers a local file through the SSH file-transfer subsystem.
+// Windows OpenSSH targets use this instead of raw exec-channel stdin.
+type FileUploader interface {
+	UploadFile(ctx context.Context, localPath, remotePath string) error
 }
 
 // LocalTransport runs the agent as a local child process (no SSH). Used by

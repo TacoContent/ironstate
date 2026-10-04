@@ -55,6 +55,36 @@ func TestLoadInventoryAppliesDefaults(t *testing.T) {
 	}
 }
 
+func TestInventoryBecomeFalseDisablesPlaybookBecome(t *testing.T) {
+	inventory := "defaults:\n  become: false\nhosts:\n  router: {address: router.lan}\n  server: {address: server.lan, become: true}\n  admin: {address: admin.lan, become: false}\n"
+	inv, err := LoadInventory(writeInventory(t, inventory))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !inv.hosts["router"].DisableBecome || inv.hosts["server"].DisableBecome || !inv.hosts["admin"].DisableBecome {
+		t.Fatalf("become overrides: router=%t server=%t admin=%t", inv.hosts["router"].DisableBecome, inv.hosts["server"].DisableBecome, inv.hosts["admin"].DisableBecome)
+	}
+}
+
+func TestInventoryAgentVerificationDefaultsOnAndCanBeDisabled(t *testing.T) {
+	inventory := "defaults:\n  verify_agent: false\nhosts:\n  router: {address: router.lan}\n  server: {address: server.lan, verify_agent: true}\n  localhash: {address: localhash.lan, verify_agent: false}\n"
+	inv, err := LoadInventory(writeInventory(t, inventory))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !inv.hosts["router"].SkipAgentVerification || inv.hosts["server"].SkipAgentVerification || !inv.hosts["localhash"].SkipAgentVerification {
+		t.Fatalf("verification overrides: router=%t server=%t localhash=%t", inv.hosts["router"].SkipAgentVerification, inv.hosts["server"].SkipAgentVerification, inv.hosts["localhash"].SkipAgentVerification)
+	}
+
+	defaultInventory, err := LoadInventory(writeInventory(t, "hosts:\n  strict: {address: strict.lan}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if defaultInventory.hosts["strict"].SkipAgentVerification {
+		t.Fatal("verification should be enabled by default")
+	}
+}
+
 func TestInventorySelect(t *testing.T) {
 	inv, err := LoadInventory(writeInventory(t, sampleInventory))
 	if err != nil {

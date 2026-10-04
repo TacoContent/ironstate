@@ -249,13 +249,14 @@ type RequiredToolsProvider interface {
 
 // Options configures RunLeaves/Run's dispatch behavior.
 type Options struct {
-	Handlers map[string]Handler
-	Facts    map[string]any
-	Vars     map[string]any
-	Filters  expr.Filters
-	Apply    bool
-	Verbose  bool // when true, also prints a (dim) line for every skipped/unchanged leaf
-	Progress func(stage, detail string, index, total int)
+	Handlers      map[string]Handler
+	Facts         map[string]any
+	Vars          map[string]any
+	Filters       expr.Filters
+	Apply         bool
+	Verbose       bool // when true, also prints a (dim) line for every skipped/unchanged leaf
+	DisableBecome bool
+	Progress      func(stage, detail string, index, total int)
 	// OnFactsGathered, if set, is called exactly once by Run - after
 	// every 'fact'/FactProducer leaf has dispatched (the facts-first
 	// phase, in full - see Run), before any other leaf runs - with the
@@ -531,6 +532,9 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 			effectiveApply := opts.Apply || hasEmbeddedShell || module == "assert" || isFactProducer(handler) || isReadOnly(handler)
 
 			become := resolveBecome(leaf.Become)
+			if opts.DisableBecome {
+				become = ironexec.Become{}
+			}
 			if leaf.Isolated && become.Enabled {
 				Warn("[%s] %s: 'become' is not permitted inside an isolated 'uses'; running unelevated.", module, label)
 				become = ironexec.Become{}
@@ -750,6 +754,9 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 	state, _ := item["state"].(string)
 	if state == "" {
 		state = "present"
+	}
+	if err := ironexec.ValidateBecome(become); err != nil {
+		return Result{}, fmt.Errorf("%s %s: become: %w", module, label, err)
 	}
 
 	ctx := Context{Flat: flatContext, Filters: filters, Apply: apply, Become: become}

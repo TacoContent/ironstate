@@ -2,6 +2,7 @@ package remoteexec_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -42,7 +43,8 @@ func TestSSHIntegration(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	writeFile(t, dir+"/site.yml", `
+	platformOS, _, _ := strings.Cut(platform, "/")
+	writeFile(t, dir+"/site.yml", fmt.Sprintf(`
 vars:
   greeting: hello
 tasks:
@@ -52,8 +54,8 @@ tasks:
   - name: check
     assert:
       that:
-        - "facts.platform == 'linux'"
-`)
+				- "facts.platform == '%s'"
+`, platformOS))
 	writeFile(t, dir+"/.secrets", "SSH_IT_SECRET=very-secret-value\n")
 	job, err := remoteexec.Prepare(remoteexec.JobSpec{Playbook: dir, Apply: true, EnvFile: dir + "/.env", SecretsFile: dir + "/.secrets"})
 	if err != nil {

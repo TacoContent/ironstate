@@ -15,11 +15,13 @@ import (
 
 // Host is one target: a display name plus how to reach it.
 type Host struct {
-	Name     string
-	Local    bool
-	SSH      SSHTarget
-	Platform string // optional hint: linux | darwin | windows
-	AgentDir string // overrides --remote-agent-dir for this host
+	Name                  string
+	Local                 bool
+	SSH                   SSHTarget
+	Platform              string // optional hint: linux | darwin | windows
+	AgentDir              string // overrides --remote-agent-dir for this host
+	DisableBecome         bool   // inventory become:false runs playbook tasks as the SSH user
+	SkipAgentVerification bool
 }
 
 // Address renders how the host is reached.
@@ -42,8 +44,8 @@ func HostFromTarget(target string) (Host, error) {
 	return Host{Name: target, SSH: t}, nil
 }
 
-// Inventory is a parsed inventory file (connection data only; per-host
-// configuration belongs in the playbook's hosts/ and variables/ overlays).
+// Inventory is a parsed inventory file (connection/elevation settings only;
+// per-host configuration belongs in the playbook's hosts/ and variables/ overlays).
 type Inventory struct {
 	Defaults HostSpec            `yaml:"defaults"`
 	Hosts    map[string]HostSpec `yaml:"hosts"`
@@ -54,11 +56,13 @@ type Inventory struct {
 
 // HostSpec is one inventory entry; empty fields fall back to defaults.
 type HostSpec struct {
-	Address  string `yaml:"address"`
-	User     string `yaml:"user"`
-	Port     int    `yaml:"port"`
-	Platform string `yaml:"platform"`
-	AgentDir string `yaml:"agent_dir"`
+	Address     string `yaml:"address"`
+	User        string `yaml:"user"`
+	Port        int    `yaml:"port"`
+	Platform    string `yaml:"platform"`
+	AgentDir    string `yaml:"agent_dir"`
+	Become      *bool  `yaml:"become"`
+	VerifyAgent *bool  `yaml:"verify_agent"`
 }
 
 // AllGroup selects every inventory host.
@@ -125,10 +129,27 @@ func (inv *Inventory) resolve(name string, spec HostSpec) (Host, error) {
 		address = name
 	}
 	host := Host{
-		Name:     name,
-		Platform: pick(spec.Platform, inv.Defaults.Platform),
-		AgentDir: pick(spec.AgentDir, inv.Defaults.AgentDir),
+		Name:          name,
+		Platform:      pick(spec.Platform, inv.Defaults.Platform),
+		AgentDir:      pick(spec.AgentDir, inv.Defaults.AgentDir),
+		DisableBecome: false,
 	}
+	become := true
+	if inv.Defaults.Become != nil {
+		become = *inv.Defaults.Become
+	}
+	if spec.Become != nil {
+		become = *spec.Become
+	}
+	host.DisableBecome = !become
+	verifyAgent := true
+	if inv.Defaults.VerifyAgent != nil {
+		verifyAgent = *inv.Defaults.VerifyAgent
+	}
+	if spec.VerifyAgent != nil {
+		verifyAgent = *spec.VerifyAgent
+	}
+	host.SkipAgentVerification = !verifyAgent
 	switch host.Platform {
 	case "", "linux", "darwin", "windows":
 	default:

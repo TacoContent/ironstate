@@ -2,6 +2,7 @@ package exec
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -46,6 +47,39 @@ func TestWrapForBecomeEnabledPrependsSudo(t *testing.T) {
 		t.Fatalf("exe = %q, want /usr/bin/sudo", exe)
 	}
 	assertArgs(t, args, []string{"apt-get", "install", "-y", "pkg"})
+}
+
+func TestWrapForBecomePasswordUsesNonInteractiveSudo(t *testing.T) {
+	withSudoPath(t, "/usr/bin/sudo", nil)
+	SetBecomePassword("example-password")
+	t.Cleanup(func() { SetBecomePassword("") })
+
+	exe, args, err := WrapForBecome(Become{Enabled: true}, "apt-get", []string{"install", "pkg"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exe != "/usr/bin/sudo" {
+		t.Fatalf("exe = %q", exe)
+	}
+	assertArgs(t, args, []string{"-S", "-k", "-p", "", "apt-get", "install", "pkg"})
+}
+
+func TestRemoteWindowsBecomeRequiresElevatedSession(t *testing.T) {
+	SetRemoteWindowsMode(true, false)
+	t.Cleanup(func() { SetRemoteWindowsMode(false, false) })
+	if err := ValidateBecome(Become{Enabled: true}); err == nil || !strings.Contains(err.Error(), "SSH session is not elevated") {
+		t.Fatalf("ValidateBecome error = %v", err)
+	}
+
+	SetRemoteWindowsMode(true, true)
+	exe, args, err := WrapForBecome(Become{Enabled: true}, "winget", []string{"install", "tool"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exe != "winget" {
+		t.Fatalf("exe = %q, want original command", exe)
+	}
+	assertArgs(t, args, []string{"install", "tool"})
 }
 
 func TestWrapForBecomeWithUserAddsDashU(t *testing.T) {

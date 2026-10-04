@@ -10,9 +10,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	ironexec "github.com/TacoContent/ironstate/internal/exec"
 	"github.com/TacoContent/ironstate/internal/remote"
 	"github.com/TacoContent/ironstate/internal/remoteexec/bundle"
 	"github.com/TacoContent/ironstate/internal/remoteexec/protocol"
@@ -34,6 +36,8 @@ func newAgentCommand() *cobra.Command {
 	cmd.Flags().Int("protocol", protocol.Version, "protocol version the controller speaks")
 	cmd.Flags().Bool("keep-work-dir", false, "keep the unpacked bundle after the run (debugging)")
 	cmd.Flags().String("state-dir", "", "directory for the apply lock and run logs (default: user cache dir/ironstate)")
+	cmd.Flags().Bool("detached", false, "run without a live controller control channel (internal)")
+	cmd.Flags().String("detached-job-file", "", "staged detached job file to remove after loading (internal)")
 	return cmd
 }
 
@@ -47,9 +51,12 @@ const (
 )
 
 func runAgent(cmd *cobra.Command, _ []string) error {
+	detached, _ := cmd.Flags().GetBool("detached")
 	protoOut := cmd.OutOrStdout()
 	// Nothing but protocol events may reach the protocol stream.
-	if protoOut == os.Stdout {
+	if detached {
+		protoOut = io.Discard
+	} else if protoOut == os.Stdout {
 		protoFile, err := protectStdout()
 		if err != nil {
 			return &ExitCodeError{Code: 2, Err: fmt.Errorf("protect stdout: %w", err)}
@@ -79,6 +86,7 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 // agentRun returns the exit code to report, the failing phase, and the
 // error behind it.
 func agentRun(cmd *cobra.Command, w *protocol.Writer) (int, string, error) {
+	detached, _ := cmd.Flags().GetBool("detached")
 	if v, _ := cmd.Flags().GetInt("protocol"); v != protocol.Version {
 		return 2, phaseJob, fmt.Errorf("controller requested protocol %d, agent speaks %d", v, protocol.Version)
 	}
@@ -87,11 +95,32 @@ func agentRun(cmd *cobra.Command, w *protocol.Writer) (int, string, error) {
 	if err != nil {
 		return 2, phaseJob, err
 	}
+	if job.BecomePassword != "" {
+		secrets.Register(job.BecomePassword)
+		ironexec.SetBecomePassword(job.BecomePassword)
+		defer ironexec.SetBecomePassword("")
+	}
+	ironexec.SetRemoteWindowsMode(runtime.GOOS == "windows", ironexec.WindowsAdmin())
+	defer ironexec.SetRemoteWindowsMode(false, false)
 
 	stateDir, _ := cmd.Flags().GetString("state-dir")
 	if stateDir == "" {
 		if stateDir, err = runstate.DefaultDir(); err != nil {
 			return 2, phaseLock, err
+		}
+	}
+	detachedJobFile, _ := cmd.Flags().GetString("detached-job-file")
+	if detached != (detachedJobFile != "") {
+		return 2, phaseJob, errors.New("detached mode requires exactly one staged job file")
+	}
+	if detached {
+		want := filepath.Join(stateDir, "detached", job.RunID+".job")
+		matches := filepath.Clean(detachedJobFile) == filepath.Clean(want)
+		if runtime.GOOS == "windows" {
+			matches = strings.EqualFold(filepath.Clean(detachedJobFile), filepath.Clean(want))
+		}
+		if !matches {
+			return 2, phaseJob, errors.New("detached job file is outside the expected state directory")
 		}
 	}
 	lock, err := runstate.Acquire(stateDir, job.RunID)
@@ -124,7 +153,14 @@ func agentRun(cmd *cobra.Command, w *protocol.Writer) (int, string, error) {
 	if err := receiveBundle(in, job.Bundle, tempDir, workDir); err != nil {
 		return 2, phaseBundle, err
 	}
-	go watchControl(in, w)
+	if detached {
+		_ = os.Stdin.Close()
+		if err := os.Remove(detachedJobFile); err != nil {
+			return 2, phaseBundle, fmt.Errorf("remove staged detached job: %w", err)
+		}
+	} else {
+		go watchControl(in, w)
+	}
 
 	for key, value := range job.SecretEnv {
 		secrets.Register(value)
@@ -206,6 +242,9 @@ func receiveBundle(in io.Reader, info protocol.BundleInfo, tempDir, workDir stri
 
 func agentApplyArgs(opts protocol.JobOptions) []string {
 	args := []string{"--playbook", opts.Playbook, "--output", "ndjson", "--no-color"}
+	if opts.DisableBecome {
+		args = append(args, "--disable-become")
+	}
 	if opts.Apply {
 		args = append(args, "--apply")
 	}

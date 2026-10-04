@@ -26,12 +26,15 @@ var bootstrapPhases = map[string]bool{"job": true, "lock": true, "bundle": true}
 
 // HostOptions configures ApplyHost/PingHost.
 type HostOptions struct {
-	SSH       SSHOptions
-	Agents    *AgentSource
-	AgentDir  string
-	AgentArgs []string
-	OnEvent   func(protocol.Event)
-	Cancel    <-chan struct{}
+	SSH                   SSHOptions
+	Agents                *AgentSource
+	AgentDir              string
+	AgentArgs             []string
+	HostTimeout           time.Duration
+	Detach                bool
+	SkipAgentVerification bool
+	OnEvent               func(protocol.Event)
+	Cancel                <-chan struct{}
 	// Dial, if set, replaces the SSH transport for non-local hosts.
 	Dial func(host Host) (Transport, error)
 }
@@ -43,10 +46,12 @@ type HostReport struct {
 	Status   string
 	Platform string
 	// Uploaded is true when the agent binary had to be (re)sent.
-	Uploaded bool
-	Result   *HostResult
-	Err      error
-	Duration time.Duration
+	Uploaded            bool
+	Detached            bool
+	VerificationSkipped bool
+	Result              *HostResult
+	Err                 error
+	Duration            time.Duration
 }
 
 // ExitCode maps a set of reports to the remote-run exit code:
@@ -78,9 +83,6 @@ func transportFor(host Host, opts HostOptions) (Transport, error) {
 // prepareAgent connects, probes, checks preconditions and ensures the
 // agent is present, returning the transport and the agent path to run.
 func prepareAgent(ctx context.Context, host Host, job *PreparedJob, opts HostOptions, report *HostReport) (Transport, string, ProbeInfo, error) {
-	if host.Platform == "windows" {
-		return nil, "", ProbeInfo{}, &StageError{Stage: "target", Err: errors.New("windows targets are not supported yet")}
-	}
 	t, err := transportFor(host, opts)
 	if err != nil {
 		return nil, "", ProbeInfo{}, &StageError{Stage: "target", Err: err}
@@ -94,11 +96,13 @@ func prepareAgent(ctx context.Context, host Host, job *PreparedJob, opts HostOpt
 	if host.AgentDir != "" {
 		agentDir = host.AgentDir
 	}
-	info, err := Probe(ctx, t, agentDir)
+	info, err := ProbeWithHint(ctx, t, agentDir, host.Platform)
 	if err != nil {
 		return t, "", info, err
 	}
 	report.Platform = info.Platform()
+	info.SkipAgentVerification = host.SkipAgentVerification || opts.SkipAgentVerification
+	report.VerificationSkipped = info.SkipAgentVerification
 	if job != nil {
 		if err := checkSupported(job, info); err != nil {
 			return t, "", info, &StageError{Stage: "preflight", Err: err}
@@ -113,6 +117,44 @@ func prepareAgent(ctx context.Context, host Host, job *PreparedJob, opts HostOpt
 	return t, remotePath, info, err
 }
 
+const bootstrapAttempts = 3
+
+func prepareAgentWithRetry(ctx context.Context, host Host, job *PreparedJob, opts HostOptions, report *HostReport) (Transport, string, ProbeInfo, error) {
+	for attempt := 0; attempt < bootstrapAttempts; attempt++ {
+		transport, path, info, err := prepareAgent(ctx, host, job, opts, report)
+		if err == nil || attempt == bootstrapAttempts-1 || !retryableBootstrapError(err) {
+			return transport, path, info, err
+		}
+		if transport != nil {
+			_ = transport.Close()
+		}
+		delay := time.Duration(1<<attempt) * 250 * time.Millisecond
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, "", info, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return nil, "", ProbeInfo{}, errors.New("bootstrap retries exhausted")
+}
+
+func retryableBootstrapError(err error) bool {
+	var stage *StageError
+	if errors.As(err, &stage) && stage.Unreachable {
+		return true
+	}
+	return strings.Contains(err.Error(), "sftp exited 255:")
+}
+
+func hostContext(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if timeout <= 0 {
+		return context.WithCancel(parent)
+	}
+	return context.WithTimeout(parent, timeout)
+}
+
 // checkSupported rejects playbook features remote targets can't run yet.
 func checkSupported(job *PreparedJob, info ProbeInfo) error {
 	if job.UsesPlugins {
@@ -121,7 +163,7 @@ func checkSupported(job *PreparedJob, info ProbeInfo) error {
 	if len(job.RemoteUses) > 0 {
 		return fmt.Errorf("remote 'uses:' sources can't be applied remotely yet: %s", strings.Join(job.RemoteUses, ", "))
 	}
-	if job.UsesBecome && info.Sudo != "nopasswd" {
+	if job.UsesBecome && !job.Job.Options.DisableBecome && info.OS != "windows" && info.Sudo != "nopasswd" && job.Job.BecomePassword == "" {
 		reason := "sudo requires a password (or 'requiretty' is set)"
 		if info.Sudo == "missing" {
 			reason = "sudo is not installed"
@@ -136,8 +178,14 @@ func checkSupported(job *PreparedJob, info ProbeInfo) error {
 func ApplyHost(ctx context.Context, host Host, job *PreparedJob, opts HostOptions) HostReport {
 	start := time.Now()
 	report := HostReport{Name: host.Name, Address: host.Address()}
+	ctx, cancel := hostContext(ctx, opts.HostTimeout)
+	defer cancel()
 
-	t, agentPath, _, err := prepareAgent(ctx, host, job, opts, &report)
+	hostJob := *job
+	hostJob.Job = job.Job
+	hostJob.Job.Options = job.Job.Options
+	hostJob.Job.Options.DisableBecome = host.DisableBecome
+	t, agentPath, info, err := prepareAgentWithRetry(ctx, host, &hostJob, opts, &report)
 	if t != nil {
 		defer func() { _ = t.Close() }()
 	}
@@ -147,8 +195,29 @@ func ApplyHost(ctx context.Context, host Host, job *PreparedJob, opts HostOption
 		report.Duration = time.Since(start)
 		return report
 	}
+	if opts.Detach {
+		err = StartDetached(ctx, t, agentPath, info, &hostJob)
+		report.Duration = time.Since(start)
+		report.Detached = err == nil
+		report.Result = &HostResult{RunID: hostJob.Job.RunID}
+		if err != nil {
+			report.Err = err
+			report.Status = StatusError
+		} else {
+			report.Status = StatusOK
+		}
+		return report
+	}
 
-	result, err := RunHost(ctx, t, agentPath, job, RunOptions{OnEvent: opts.OnEvent, Cancel: opts.Cancel, AgentArgs: opts.AgentArgs})
+	result, err := RunHost(ctx, t, agentPath, &hostJob, RunOptions{OnEvent: opts.OnEvent, Cancel: opts.Cancel, AgentArgs: opts.AgentArgs})
+	if err != nil && result != nil && !result.Completed && !host.Local && ctx.Err() == nil {
+		if recovered, recoveryErr := RecoverRunLog(ctx, t, info, hostJob.Job.RunID); recovered != nil {
+			result = recovered
+			if recoveryErr == nil && recovered.Completed {
+				err = nil
+			}
+		}
+	}
 	report.Result = result
 	report.Duration = time.Since(start)
 	switch {
@@ -188,6 +257,8 @@ type PingReport struct {
 func PingHost(ctx context.Context, host Host, opts HostOptions) PingReport {
 	start := time.Now()
 	report := PingReport{HostReport: HostReport{Name: host.Name, Address: host.Address()}}
+	ctx, cancel := hostContext(ctx, opts.HostTimeout)
+	defer cancel()
 	done := func(err error) PingReport {
 		report.Duration = time.Since(start)
 		if err != nil {
@@ -199,7 +270,7 @@ func PingHost(ctx context.Context, host Host, opts HostOptions) PingReport {
 		return report
 	}
 
-	t, agentPath, info, err := prepareAgent(ctx, host, nil, opts, &report.HostReport)
+	t, agentPath, info, err := prepareAgentWithRetry(ctx, host, nil, opts, &report.HostReport)
 	if t != nil {
 		defer func() { _ = t.Close() }()
 	}
@@ -208,16 +279,35 @@ func PingHost(ctx context.Context, host Host, opts HostOptions) PingReport {
 	if err != nil {
 		return done(err)
 	}
-	var out bytes.Buffer
-	code, err := t.Exec(ctx, RemoteCommand{Program: agentPath, Args: []string{"version"}}, bytes.NewReader(nil), &out, &out)
+	var out, stderr bytes.Buffer
+	code, err := t.Exec(ctx, RemoteCommand{Program: agentPath, Args: []string{"version"}, Windows: strings.HasSuffix(strings.ToLower(agentPath), ".exe")}, bytes.NewReader(nil), &out, &stderr)
 	if err == nil && code != 0 {
-		err = &StageError{Stage: "agent version", Unreachable: code == SSHExitUnreachable, Err: fmt.Errorf("exit %d: %s", code, strings.TrimSpace(out.String()))}
+		detail := strings.TrimSpace(strings.Join([]string{out.String(), stderr.String()}, "\n"))
+		err = &StageError{Stage: "agent version", Unreachable: code == SSHExitUnreachable, Err: fmt.Errorf("exit %d: %s", code, detail)}
 	}
 	if err != nil {
 		return done(err)
 	}
-	report.AgentVersion = strings.TrimSpace(out.String())
+	report.AgentVersion = agentVersionText(out.String(), stderr.String())
 	return done(nil)
+}
+
+func agentVersionText(outputs ...string) string {
+	for _, output := range outputs {
+		index := strings.Index(output, "ironstate ")
+		if index < 0 {
+			continue
+		}
+		version := output[index:]
+		if end := strings.IndexAny(version, "\r\n<"); end >= 0 {
+			version = version[:end]
+		}
+		return strings.TrimSpace(version)
+	}
+	if len(outputs) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(outputs[0])
 }
 
 // ForEachHost runs fn for every host with at most forks running at once

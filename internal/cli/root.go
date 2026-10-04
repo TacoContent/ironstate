@@ -59,6 +59,10 @@ func newRootCommand() (*cobra.Command, error) {
 	flags.Bool("allow-remote-uses", false, "pre-approve non-isolated remote 'uses:' sources instead of prompting (required for non-interactive runs)")
 	addRemoteFlags(flags)
 	flags.StringArray("forward-env", nil, "with --target: forward this controller environment variable to the targets (repeatable)")
+	flags.Bool("ask-become-pass", false, "prompt once for the remote sudo password and send it only over the agent stdin channel")
+	flags.Bool("remote-detach", false, "start remote agents in the background and collect their results later with remote logs")
+	flags.Bool("disable-become", false, "internal: run without playbook become directives")
+	_ = flags.MarkHidden("disable-become")
 
 	cmd.AddCommand(newVersionCommand())
 	cmd.AddCommand(newFiltersCommand())
@@ -282,6 +286,7 @@ func runApply(cmd *cobra.Command, _ []string) (err error) {
 	// engine.Options.OnFactsGathered's doc comment.
 	var factsErr, cancelErr error
 	start := time.Now()
+	disableBecome, _ := cmd.Flags().GetBool("disable-become")
 	results, stopped, err := engine.Run(filtered, engine.Options{
 		Handlers:        registry.Handlers(),
 		Facts:           hostFacts,
@@ -289,6 +294,7 @@ func runApply(cmd *cobra.Command, _ []string) (err error) {
 		Filters:         fset,
 		Apply:           cfg.Apply,
 		Verbose:         cfg.Verbose,
+		DisableBecome:   disableBecome,
 		Progress:        out.step,
 		OnFactsGathered: func(allFacts map[string]any) { factsErr = out.facts(allFacts) },
 		OnResult:        out.result,
