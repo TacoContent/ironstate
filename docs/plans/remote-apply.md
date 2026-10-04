@@ -1,6 +1,6 @@
 # Remote apply over SSH
 
-Status: DRAFT (design only, not implemented), revised after design review (see §15)
+Status: IN PROGRESS (phases 0-5 implemented; phase 6 optional and not started; Windows host validation of admin-token semantics and detached-process survival remains), revised after design review (see §15)
 Owner: unassigned
 Target: unscheduled, phased rollout (see §12)
 
@@ -116,7 +116,7 @@ flowchart TB
         inv["inventory: parse, groups, --limit"]
         transport["transport: Transport interface<br/>OpenSSH impl (phase 1), native impl (later)"]
         boot["bootstrap: probe, agent resolve, upload, verify"]
-        bundle["bundle: build/extract tar.gz + manifest"]
+        bundle["bundle: build/extract tar.gz"]
         proto["protocol: job header, event types, version"]
         runner["hostrun: per-host state machine"]
         agg["aggregate: multi-host results, exit code"]
@@ -231,7 +231,7 @@ stateDiagram-v2
 
 One exec, detects the target's default shell and platform:
 
-1. POSIX attempt: `uname -s -m; printf '%s\n' "$HOME"; command -v sha256sum shasum`.
+1. POSIX attempt: `uname -s -m; printf '%s\n' "$HOME"; command -v sha256sum shasum openssl busybox`.
 2. If the output doesn't parse (Windows `cmd.exe`/`powershell` default shell), Windows
    attempt: `powershell -NoProfile -NonInteractive -EncodedCommand <b64>` printing
    `$env:PROCESSOR_ARCHITECTURE`, `$env:LOCALAPPDATA`, OS version as one JSON line.
@@ -244,7 +244,10 @@ An inventory `platform:` hint skips the failed first attempt. The probe also rep
   home mounts), falling back to an inventory/config `agent_dir` override, else a clear
   error;
 - `sudo -n true` result (POSIX), so a playbook with `become` fails fast with "sudo needs a
-  password (use --ask-become-pass) or has requiretty" rather than mid-run.
+  password (use --ask-become-pass) or has requiretty" rather than mid-run. Hosts marked
+  `become: false` in inventory bypass the become requirement and run as the SSH user.
+- SHA-256 support via `sha256sum`, `shasum`, `openssl dgst -sha256`, or BusyBox's
+  `sha256sum` applet, covering common embedded Linux systems.
 
 Unsupported targets (anything other than linux/darwin/windows on amd64/arm64, matching
 `.goreleaser.yaml`) fail at probe. Linux/darwin/windows builds are `CGO_ENABLED=0`, so
@@ -294,12 +297,14 @@ the agent's stdin after the job header. Unpacked by the agent (in Go, so no remo
 
 | Bundle path | Source on controller | Notes |
 | --- | --- | --- |
-| `playbook/` | bundle root: playbook dir by default, `remote.bundle_root` to widen (e.g. repo root when a playbook uses `../shared/...`) | honors `.ironstateignore` (gitignore syntax); `.git/` always excluded; symlinks stored as links and rejected on extract if they escape the work dir |
-| `filters/` | the controller's resolved `filters.dir` (relative or absolute) | only if it exists; agent's `filters.dir` points here |
-| `config.yaml` | controller's effective config (minus remote-only keys) | agent loads this instead of a cwd `ironstate.yaml` |
+| `playbook/` | bundle root: playbook dir by default, `remote.bundle_root` to widen (e.g. repo root when a playbook uses `../shared/...`) | honors `.ironstateignore` (glob per line: base-name match, or path match if the pattern has a `/`; trailing `/` = dirs only); `.git/`, `.env`, `.secrets` always excluded at any depth; symlinks stored as links and rejected on extract if they escape the work dir |
+| `filters/` | the controller's resolved `filters.dir`, only when it lies **outside** the playbook dir (a relative `filters.dir` resolves against the playbook dir, so it's usually already inside `playbook/`) | agent's `filters.dir` is set to `../filters` |
+| `ironstate.yaml` | controller's effective `filters.*` config | agent runs with cwd = bundle root, so this is picked up like a local `ironstate.yaml` |
 | `vars-files/NN-<name>` | each `--vars-file`, in order | order preserved via `NN` prefix |
 | `uses/<hash>/` | pre-fetched `uses:` sources (phase 5) | see §8.2 |
-| `manifest.json` | generated | file list + sha256 per file, effective config, playbook entry path |
+
+No per-file manifest: the job header's whole-bundle sha256 already covers integrity, and
+the entry playbook path travels in the header's options.
 
 Not in the bundle (sent in the in-memory job header instead, never written to target disk):
 `.env`/`.secrets` key/values, `--var` overrides, become password, forwarded env vars.
@@ -346,8 +351,8 @@ walks the task tree for `uses:` directives (`remote.Describe`, no fetch), prompt
 as it does locally, `remote.Resolve`s them into its own cache, and ships them in
 `uses/<hash>/`. The agent runs with `uses` resolution in **offline mode**: it maps each
 source to the bundled copy and errors (never fetches) if a source wasn't pre-bundled
-(e.g. a templated source depending on target facts). Phase 1 rejects remote `uses:`
-outright with a clear error; phase 5 adds pre-fetch.
+(e.g. a templated source depending on target facts). Implemented in phase 5; see its
+as-built notes in §12 for the exact rules.
 
 ### 8.3 Environment
 
@@ -364,11 +369,12 @@ forwarded (best-effort text scan).
 
 ### 8.4 Plugins
 
-Phase 1: a playbook that declares plugins fails remote apply with a clear error. Phase 5:
-the agent runs the existing plugin resolution against its own store using the shipped
-lock file; `--allow-plugin-install` is forwarded. Plugins are `go install`-distributed, so
-this requires Go on the target unless the plugin publishes release binaries — documented
-limitation, revisited with the plugin roadmap.
+Phase 1 rejected playbooks that declare plugins. Phase 5 (as built): for a target on
+the controller's own OS/arch, the controller copies each declared plugin it has
+installed (binary + manifest, SHA-256 verified like the agent) into the target's plugin
+store, so lockfile checksums match. Other targets resolve plugins from their own store;
+`--allow-plugin-install` is forwarded, which needs Go on the target. Lockfile checksums
+are per-platform, so a lockfile only verifies on targets of the platform that wrote it.
 
 ## 9. Protocol
 
@@ -514,10 +520,13 @@ ironstate remote logs   snoke [run_id]
 ironstate remote clean  --inventory inventory.yml           # remove cached agents/run logs
 ```
 
-New flags: `--target` (repeatable), `--inventory`, `--limit`, `--forks` (default 5),
-`--agent-binary`, `--ask-become-pass`, `--forward-env`,
-`--ssh-accept-new-host-keys`, `--ssh-option` (allow-listed `-o` keys), `--host-timeout`,
-`--keep-remote`. All also readable from `ironstate.yaml` under `remote:`.
+Implemented flags: `--target` (repeatable), `--inventory`, `--limit`, `--forks` (default 5),
+`--agent-binary`, `--no-agent-download`, `--remote-agent-dir`, `--skip-agent-verification`,
+`--ask-become-pass`, `--forward-env`, `--ssh-config`, `--ssh-accept-new-host-keys`,
+`--host-timeout`, `--remote-detach`, plus the existing `--allow-remote-uses` and
+`--allow-plugin-install`, which apply to remote runs too. `--ssh-option`, `--keep-remote`
+and the `ironstate.yaml` `remote:` section were designed but not built (see "Designed but
+not built" in §12).
 
 Dry run carries over unchanged: without `--apply` the job header says `apply: false` and
 every target runs in dry-run mode.
@@ -528,7 +537,7 @@ itself and get identical reporting. `localhost` is an ordinary SSH target.
 
 ### 11.2 Inventory
 
-Deliberately minimal; connection data only. Configuration differences between hosts
+Deliberately minimal; connection and elevation settings only. Configuration differences between hosts
 still belong in the playbook's existing `hosts/`/`variables/` overlay chain, which
 **already works per target** because the agent gathers the target's own facts.
 
@@ -540,6 +549,7 @@ defaults:
 hosts:
   snoke:   { address: snoke.lan }
   kresh:   { address: 10.0.0.12, platform: linux }
+  router:  { address: router.lan, become: false }
   krayt:   { address: krayt.lan, platform: windows, user: rconr }
 groups:
   linux: [snoke, kresh]
@@ -547,6 +557,8 @@ groups:
 ```
 
 - `address` defaults to the inventory key, so an `~/.ssh/config` `Host` alias "just works".
+- `become: false` disables playbook become directives for that host. Tasks run as the SSH
+  user; this does not elevate privileges. Omitted `become` honors the playbook as written.
 - Inventory names are labels only; overlay selection uses the target's real
   `computer_name`. A host whose inventory name differs from its hostname is reported with
   both.
@@ -582,7 +594,7 @@ groups:
 
 Each phase is independently shippable and testable.
 
-### Phase 0: Local refactors (no SSH)
+### Phase 0: Local refactors (no SSH) - DONE
 
 - `engine.EventSink` interface; `Info/Warn/Danger`, progress, facts panel, results and
   summary all flow through it. Existing table/json output become sinks (output identical,
@@ -595,7 +607,34 @@ Each phase is independently shippable and testable.
 - A `localTransport` (spawns `ironstate agent` as a child process) to test the whole
   controller↔agent path end-to-end in `go test` without SSH.
 
-### Phase 1: Single POSIX target over OpenSSH
+As built (differences from the bullets above, and why):
+
+- **Sink lives in `internal/cli`, not `internal/engine`.** `cli.runOutput` has two
+  implementations: `consoleOutput` (table/json + spinner, byte-identical to before) and
+  `ndjsonOutput`. The engine only gained `Options.OnResult`; its existing `Progress` and
+  `OnFactsGathered` callbacks were already the right hooks, and the log hooks were
+  already swappable package vars. A new engine interface would have duplicated them.
+- `engine.JSONResult`/`ToJSONResult` exported (was `jsonResult`) so `--output json` and
+  `leaf_result` events share one redacted shape; `engine.Stats` gained JSON tags.
+- Packages: `internal/remoteexec` (`Prepare` builds job + bundle, `RunHost` drives one
+  agent and collects a `HostResult`, `Transport` + `LocalTransport`),
+  `internal/remoteexec/bundle`, `internal/remoteexec/protocol`.
+- `packages.ParseEnvFile` added (read `.env`/`.secrets` without `os.Setenv`) for the
+  controller side.
+- Agent stdout protection is the `os.Stdout = os.Stderr` swap only; the fd-level redirect
+  and SIGPIPE/SIGHUP handling stay in phase 1 as planned (they only matter once a real
+  SSH channel can drop). The agent declines every `uses:` trust prompt (no TTY).
+- The agent verifies the bundle sha256 against a temp copy *before* extracting, and
+  extraction runs in a fresh `MkdirTemp` dir removed afterwards (`--keep-work-dir` for
+  debugging).
+- End-to-end tests re-exec the test binary as the agent (`TestMain` +
+  `IRONSTATE_TEST_RUN_AGENT=1`), so no prebuilt binary is needed. Covered: vars-file +
+  `--var` + `.env` + `.secrets` forwarding with redaction, `include:` from the bundle,
+  stopped run (exit 1), load error (exit 2), tampered bundle, event ordering.
+- New fuzz targets (`FuzzExtract`, `FuzzReadJob`, `FuzzParseEvent`) added to `ci.yml`
+  and the Taskfile `fuzz-smoke` task.
+
+### Phase 1: Single POSIX target over OpenSSH - DONE
 
 - OpenSSH transport, `--target` (repeatable but sequential), `--target local`,
   Linux/macOS targets only.
@@ -611,29 +650,206 @@ Each phase is independently shippable and testable.
 - Integration test: containerized `sshd` (Linux) in CI.
 - README section + `doctor` check for `ssh` on PATH.
 
-### Phase 2: Inventory, parallelism, agent download
+As built (differences from the plan, and why):
+
+- **Execs per host: probe, check, [upload], run.** The probe can't know the agent's
+  path before the controller picks a binary for the reported OS/arch, so the "is the
+  cached agent byte-identical?" check is its own tiny exec. With multiplexing (POSIX
+  controllers) the extra exec is ~free; on Windows controllers it's one more handshake.
+- **Remote scripts** (`internal/remoteexec/bootstrap.go`) are single-line, `!`-free
+  `sh -c` bodies with positional args, each word single-quoted by `PosixCommandLine`,
+  so bash/zsh/fish/tcsh login shells all pass them through unchanged. A test enforces
+  the single-line rule.
+- **Control channel stays open.** After the bundle the controller keeps the agent's
+  stdin open; `{"type":"cancel"}` or EOF (controller/SSH gone) both make the agent stop
+  before its next leaf (`engine.Options.Cancelled`). The controller closes the channel
+  when `done` arrives, because `exec.Cmd` waits for stdin copying to finish;
+  `WaitDelay` (5s) covers an agent that dies without `done`.
+- **Ctrl-C:** `ssh`/the local agent run in their own process group
+  (`Setpgid`/`CREATE_NEW_PROCESS_GROUP`), otherwise the terminal's SIGINT would kill
+  `ssh` before the graceful cancel could be sent.
+- **Agent failure phases.** `error` events carry `phase` (`job`, `lock`, `bundle`,
+  `apply`). The controller maps `job`/`lock`/`bundle` failures to host status `error`
+  (exit 3, nothing applied, retryable) and `apply` failures to `failed` (exit 1). So
+  "another run in progress" is a retryable 3.
+- **Run log** is opened append-only (not exclusive): one run can target the same machine
+  twice through two aliases; the lock keeps those passes sequential.
+- **`become` preflight** is a static scan of every YAML file in the playbook dir:
+  any truthy or templated `become` counts. Conservative on purpose; a false positive
+  just asks for passwordless sudo.
+- **Flags added beyond the plan:** `--ssh-config` (`ssh -F`, used by the integration
+  test and handy for per-project configs), `--remote-agent-dir` (the planned noexec
+  escape hatch), and `--forward-env` (pulled forward from §8.3; ~10 lines). The
+  `ironstate.yaml` `remote:` section is not wired yet; flags only.
+- **Integration test** (`scripts/ssh-integration.sh`, used by both `task test:ssh` and
+  the `ssh-integration` CI job) runs `lscr.io/linuxserver/openssh-server` with a fresh
+  key. It uses `StrictHostKeyChecking accept-new` in its throwaway ssh config instead of
+  `ssh-keyscan`: Windows' bundled `ssh-keyscan` couldn't negotiate a key exchange with
+  OpenSSH 10. Skips loudly when docker is missing, like `task race` does without cgo.
+- **Verified live from a Windows controller** (Windows OpenSSH client, no multiplexing)
+  against that container: ping, apply with table/json output, cached-agent reuse,
+  `become` with NOPASSWD sudo (uid 0), the `become` preflight without it, and an
+  unreachable host (exit 3). A real mid-leaf SSH disconnect was not exercised live; that
+  path (control-channel EOF / stream EPIPE → stop after current leaf → `done` in the
+  run log) is covered by the protocol unit tests and the local-transport cancel test.
+
+### Phase 2: Inventory, parallelism, agent download - DONE
+
+As built (differences from the plan, and why):
+
+- **Inventory** (`internal/remoteexec/inventory.go`, schema `inventory.schema.json`,
+  shipped in release archives): `defaults`, `hosts`, `groups` exactly as in §11.2, plus
+  per-host `agent_dir` and `address: local` (runs on the controller without SSH, handy
+  for listing the controller itself and for tests). Unknown keys are errors (strict YAML
+  decode) and a schema test keeps the loader and the schema in step. Groups are flat
+  (no nested groups) and `all` is reserved; nothing in the plan needed more.
+- **Selection:** `--limit` takes host/group names and `all`, keeps the given order and
+  de-duplicates; with no `--limit` every host runs, sorted by name. `--target` hosts are
+  appended after the inventory selection; `--limit` without `--inventory` is an error.
+- **`platform: windows`** is accepted in inventory and selects the PowerShell bootstrap;
+  Windows target support was implemented in phase 3.
+- **Parallelism:** `--forks` (default 5) via `ForEachHost`, a bounded worker pool that
+  returns reports in host order. Live table lines are mutex-guarded and prefixed
+  `[host]`; per-host result tables still print grouped at the end. After the first
+  Ctrl-C, hosts that haven't started are reported as `error: not started`.
+- **Agent download:** release builds fetch
+  `v<version>/ironstate_<version>_<os>_<arch>.tar.gz` plus `checksums.txt`, verify the
+  archive's SHA-256 against it, and cache the binary under the controller's
+  `UserCacheDir/ironstate/agents/<version>/<os>_<arch>/`. When the release has a
+  `checksums.txt.sigstore.json` bundle and `cosign` is on `PATH`, the checksums file is
+  verified first (same identity/issuer as the README's manual instructions); without
+  `cosign` that step is skipped, as `install.sh` does. `GITHUB_TOKEN` is sent only to
+  `https://github.com/` URLs (Go drops it on the redirect to the asset CDN). `dev` and
+  `-SNAPSHOT` builds never download; `--no-agent-download` disables it for release
+  builds. Concurrent hosts on the same platform share one download (mutex).
+- **`remote ping`** takes the same `--inventory`/`--limit`/`--forks` flags and prints
+  each host as it finishes.
+- **Verified live** from the Windows controller: inventory ping of snoke plus an
+  unreachable host in parallel (exit 3), sample-playbook dry-run on snoke via
+  `--limit snoke` with JSON output, and a controller stamped `0.7.0` downloading,
+  checksum-verifying and caching the real v0.7.0 Linux agent from GitHub, then running
+  it on snoke.
+
+Original scope:
 
 - Inventory file + schema, groups, `--limit`, `--forks`, multi-host table/json/ndjson.
 - Release download + controller-side agent cache (§6.3 step 4).
 
 ### Phase 3: Windows targets and become
 
-- Starts with a spike to confirm three assumptions before building: raw binary stdin
-  through Windows sshd into `[Console]::OpenStandardInput()` (else sftp fallback), admin
-  sessions receive an elevated token, and process-tree behavior on disconnect.
+- Starts with a spike to confirm Windows OpenSSH SFTP behavior, admin sessions receiving
+  an elevated token, and process-tree behavior on disconnect.
 - Windows probe/upload/run via `powershell -EncodedCommand`, path handling, Windows
   agent cache dir.
 - `--ask-become-pass` (`sudo -S -k`) on POSIX; documented Windows elevation model.
 - Integration test: Windows runner with OpenSSH Server, including a full-size agent upload.
 
-### Phase 4: Resilience extras
+Implementation status:
+
+- Windows probe, agent cache verification, and agent launch use UTF-16LE
+  `-EncodedCommand` PowerShell scripts. Agent binaries transfer through OpenSSH SFTP,
+  then PowerShell verifies the hash and atomically moves the staged file into the cache;
+  cache paths use `.exe` and Windows separators. The integration test accepts a configured
+  Windows target through the same `IRONSTATE_SSH_TEST_*` variables as the POSIX test.
+- `--ask-become-pass` prompts once without echo. The password is carried only in the job
+  header on stdin, registered for redaction on both sides, and supplied to POSIX sudo via
+  `-S -k -p ''`. Windows agent `become` is a no-op only when the SSH process token is
+  elevated; otherwise each affected leaf fails before its handler test or mutation.
+- Inventory `become: false` explicitly disables playbook become directives for that host;
+  the agent runs those tasks as the SSH user. The setting does not grant privileges.
+- Verified live on `kresh`: Windows agent SFTP upload, hash verification, cached reuse, and
+  clean `remote ping` version output. `krayt` still emits `Load...` startup text into its
+  SFTP protocol stream and must have non-interactive shell output silenced. Administrator
+  token semantics and sshd process-tree behavior still need host-level verification.
+
+### Phase 4: Resilience extras - DONE
 
 - Connection retries with backoff, reconnect-and-read-run-log on interrupted streams,
   `remote logs`, `remote clean`, `--remote-detach`, `--host-timeout`.
 
-### Phase 5: `uses:` and plugins on targets
+Implementation status:
+
+- Bootstrap retries up to three times with exponential backoff for SSH-unreachable and
+  SFTP transport failures only. Apply itself is never automatically rerun. `--host-timeout`
+  bounds each host's complete operation, including bootstrap and recovery.
+- An interrupted non-cancelled apply reconnects and reconstructs its result from the
+  target's append-only event log. `remote logs <host> [run_id]` reads a selected or latest
+  log; `--inventory` resolves an inventory host label. `remote clean --inventory <file>`
+  clears agent caches and run logs while holding the target's apply lock. POSIX cleanup
+  requires the `flock` utility and refuses to proceed if it is unavailable.
+- `--remote-detach` requires `--apply`, starts a background agent, and reports the run ID
+  for later retrieval with `remote logs`. To avoid persisting known credentials, it
+  rejects jobs with `.env`, `.secrets`, forwarded environment values, or a become password.
+  The staged job file is private, removed by the agent after bundle receipt, and contains
+  the playbook bundle; do not place secrets directly in bundled playbook or vars files.
+- Detached Windows process survival across OpenSSH session teardown remains unverified;
+  the implementation uses `Start-Process` and should be validated on Windows sshd before
+  relying on it for production runs.
+
+### Phase 5: `uses:` and plugins on targets - DONE
 
 - Controller pre-fetch + offline agent mode for `uses:`; plugin resolution on target.
+
+As built (differences from the plan, and why):
+
+- **Scan, approve, fetch on the controller** (`internal/remoteexec/job.go`).
+  `Prepare` statically scans every YAML file in the playbook for `uses:` maps whose
+  `remote:` is a literal git source (not containing `${{`). Each source is approved with
+  the local rules unchanged: `trusted: true`, `isolate: true` or `--allow-remote-uses`
+  skip the prompt, and otherwise `remote.Confirm` asks (non-TTY declines). Approved
+  sources are cloned through the normal `remote.Resolve`, using the controller's git
+  credentials and its `remotes` cache. Each checkout is bundled at
+  `uses/<remote.CacheKey(remote, ref)>/`; `.git` is excluded by the bundler as always.
+  Fetched checkouts are scanned too, so `uses:` nested inside a remote source is fetched
+  as well. A fetch failure fails `Prepare` (exit 2) before any host runs.
+- **Offline agent.** New `remote.Offline` makes `fetchGit` resolve only from
+  `CacheRoot` and never run git. The agent sets `CacheRoot` to the bundle's `uses/` dir,
+  so the cache key already maps each source to its bundled copy with no separate
+  manifest.
+- **Trust travels as an approved list, not a flag.** The job header gains
+  `approved_uses` (sources rendered exactly as `remote.Describe` renders them,
+  including `path`). The agent's `remote.Confirm` approves only those. A source declined
+  on the controller is therefore skipped on the target with the usual warning, matching
+  a local run, instead of failing it. Forwarding `--allow-remote-uses` was rejected
+  because it would also approve anything the controller never saw.
+- **Templated git `remote:` values** can't be resolved before the run, so they aren't
+  pre-fetched. On the target they fail with "was not pre-fetched by the controller"
+  instead of silently fetching. Local `uses:` paths keep the §3 rule: they resolve on
+  the target, so keep them inside the playbook directory.
+- **Plugins** (`internal/remoteexec/plugins.go`). The phase-1 rejection is gone.
+  `Prepare` reads the entry document's `plugins:`. For a target whose OS/arch equals
+  the controller's, `EnsurePlugins` copies each declared plugin the controller has
+  installed (version from `ironstate.lock.yaml` when present) into
+  `<target state dir>/plugins/<org>/<name>/<version>/`. That path is exactly the agent's
+  `pluginhost.DefaultStore`, so the agent's normal resolution and lockfile checks
+  apply. The upload reuses the agent's verified path (`ensureRemoteFile`: check SHA-256,
+  upload only when it differs, verify before moving into place). The binary goes before
+  `manifest.json`, so a half-shipped plugin is never visible as installed. Plugins the
+  controller lacks are left to the target's store. `--allow-plugin-install` is
+  forwarded in the job options. Shipped plugins are reported per host (`plugins=` in
+  the table status line, `plugins_shipped` in JSON).
+- **Cross-platform plugins** were deliberately not cross-compiled on the controller:
+  the lockfile pins one platform's binary checksum, so a cross-built binary would fail
+  the lock check anyway. Mixed-platform fleets use each target's own store; the
+  limitation is documented in `docs/plugins.md`.
+- **Tests:** end-to-end through a real agent over the local transport cover a
+  prefetched source running offline, a prompted-then-approved source, a declined
+  source skipped with a warning, and a templated git source failing offline. A
+  fake-target test covers plugin shipping (verified upload, skipping plugins the
+  controller lacks, no re-upload when unchanged).
+
+### Designed but not built
+
+Items specified above that are intentionally deferred; none block the implemented
+phases:
+
+- `ironstate.yaml` `remote:` configuration section (all remote settings are flags).
+- `--ssh-option` allow-list and `--keep-remote` (the agent has a hidden
+  `--keep-work-dir` for debugging).
+- §7 `remote.bundle_root`, bundle size warn/fail caps, and the bundler's best-effort
+  path lint warnings.
+- §8.3 `remote ping` scan for unforwarded `lookup('env', ...)` names.
+- Phase 6 native SSH transport.
 
 ### Phase 6 (optional): Native SSH transport
 
@@ -651,6 +867,9 @@ Each phase is independently shippable and testable.
   contain non-secret config files (that's inherent: they're needed to run).
 - Agent integrity: sha256 verified before exec; release downloads checksum-verified
   (+ cosign when available).
+- `verify_agent: false` / `--skip-agent-verification` is an explicit trusted-host
+  exception for systems without a SHA-256 utility. The controller re-uploads on every
+  run, but cannot detect target-side modification of the cached agent before execution.
 - Untrusted output: remote strings sanitized for terminal control sequences; event line
   length capped (e.g. 8 MiB) to bound controller memory.
 - Elevation: become password in-memory only, registered with `internal/secrets` on the

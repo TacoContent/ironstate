@@ -78,11 +78,11 @@ func PrintTable(w io.Writer, results []Result) error {
 
 // Stats summarizes a run's results - counts consumed by PrintSummary.
 type Stats struct {
-	Total       int
-	Installed   int
-	Uninstalled int
-	Skipped     int
-	Failed      int
+	Total       int `json:"total"`
+	Installed   int `json:"installed"`
+	Uninstalled int `json:"uninstalled"`
+	Skipped     int `json:"skipped"`
+	Failed      int `json:"failed"`
 }
 
 // ComputeStats tallies results into a Stats summary.
@@ -141,10 +141,11 @@ func PrintSummary(w io.Writer, stats Stats, elapsed time.Duration) error {
 	return nil
 }
 
-// jsonResult is Result's '--output json' shape: exported field names,
+// JSONResult is Result's '--output json' shape: exported field names,
 // snake_case exec sub-fields, matching internal/expr's/YAML's own
-// convention elsewhere in this codebase.
-type jsonResult struct {
+// convention elsewhere in this codebase. Also the 'leaf_result' payload of
+// the remote-apply event protocol.
+type JSONResult struct {
 	Module     string         `json:"module"`
 	Package    string         `json:"package"`
 	State      string         `json:"state"`
@@ -152,41 +153,49 @@ type jsonResult struct {
 	Apply      bool           `json:"apply"`
 	Failed     bool           `json:"failed"`
 	DurationMS float64        `json:"duration_ms"`
-	Exec       jsonExecResult `json:"exec"`
+	Exec       JSONExecResult `json:"exec"`
 }
 
-type jsonExecResult struct {
+// JSONExecResult is ExecResult's JSON shape.
+type JSONExecResult struct {
 	RC          int            `json:"rc"`
 	Stdout      string         `json:"stdout"`
 	StdoutLines []string       `json:"stdout_lines"`
 	Stderr      string         `json:"stderr"`
 	StderrLines []string       `json:"stderr_lines"`
 	Extra       map[string]any `json:"extra,omitempty"`
+	// Truncated is set when stdout/stderr were cut to bound event size.
+	Truncated bool `json:"truncated,omitempty"`
+}
+
+// ToJSONResult converts r to its redacted JSON shape.
+func ToJSONResult(r Result) JSONResult {
+	return JSONResult{
+		Module:     secrets.Redact(r.Module),
+		Package:    secrets.Redact(r.Package),
+		State:      secrets.Redact(r.State),
+		Action:     r.Action,
+		Apply:      r.Apply,
+		Failed:     r.Failed,
+		DurationMS: float64(r.Duration) / float64(time.Millisecond),
+		Exec: JSONExecResult{
+			RC:          r.Exec.RC,
+			Stdout:      secrets.Redact(r.Exec.Stdout),
+			StdoutLines: redactStrings(r.Exec.StdoutLines),
+			Stderr:      secrets.Redact(r.Exec.Stderr),
+			StderrLines: redactStrings(r.Exec.StderrLines),
+			Extra:       r.Exec.Extra,
+		},
+	}
 }
 
 // PrintJSON renders results as a JSON array on w - the '--output json'
 // format (additive, not a compatibility requirement; see
 // docs/plans/go-rewrite.md §1).
 func PrintJSON(w io.Writer, results []Result) error {
-	out := make([]jsonResult, len(results))
+	out := make([]JSONResult, len(results))
 	for i, r := range results {
-		out[i] = jsonResult{
-			Module:     secrets.Redact(r.Module),
-			Package:    secrets.Redact(r.Package),
-			State:      secrets.Redact(r.State),
-			Action:     r.Action,
-			Apply:      r.Apply,
-			Failed:     r.Failed,
-			DurationMS: float64(r.Duration) / float64(time.Millisecond),
-			Exec: jsonExecResult{
-				RC:          r.Exec.RC,
-				Stdout:      secrets.Redact(r.Exec.Stdout),
-				StdoutLines: redactStrings(r.Exec.StdoutLines),
-				Stderr:      secrets.Redact(r.Exec.Stderr),
-				StderrLines: redactStrings(r.Exec.StderrLines),
-				Extra:       r.Exec.Extra,
-			},
-		}
+		out[i] = ToJSONResult(r)
 	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")

@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -112,7 +113,11 @@ func setRegistryValue(k registry.Key, name, valueType string, value any) error {
 		if err != nil {
 			return err
 		}
-		return k.SetDWordValue(name, uint32(n)) //nolint:gosec // a DWord registry value is inherently 32-bit; truncation on overflow matches the original PowerShell's own '[int32] $Value' cast
+		// Negative int32 values keep the original's '[int32] $Value' two's-complement meaning.
+		if n < math.MinInt32 || n > math.MaxUint32 {
+			return fmt.Errorf("DWord value %d for %q is outside the 32-bit range", n, name)
+		}
+		return k.SetDWordValue(name, uint32(n)) //nolint:gosec // range-checked above
 	case "QWord":
 		n, err := toInt64(value)
 		if err != nil {

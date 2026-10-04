@@ -163,11 +163,12 @@ func statPath(path string, follow bool) (map[string]any, error) {
 	return data, nil
 }
 
-// Literal newlines (not '\n' escapes) so GNU '-c' and BSD '-f' agree.
 // Field order: raw mode, symbolic perms, uid, owner, gid, group, inode,
-// device, link count, size, atime, mtime, ctime.
+// device, link count, size, atime, mtime, ctime. Coreutils gets '\n'
+// escapes via --printf: MSYS2's stat.exe (Git for Windows) splits argv on
+// literal newlines. BSD stat (Unix only) takes literal newlines.
 const (
-	statCoreutilsFormat = "%f\n%A\n%u\n%U\n%g\n%G\n%i\n%d\n%h\n%s\n%X\n%Y\n%Z"
+	statCoreutilsFormat = `%f\n%A\n%u\n%U\n%g\n%G\n%i\n%d\n%h\n%s\n%X\n%Y\n%Z\n`
 	statBSDFormat       = "%p\n%Sp\n%u\n%Su\n%g\n%Sg\n%i\n%d\n%l\n%z\n%a\n%m\n%c"
 )
 
@@ -181,7 +182,7 @@ func statViaCLI(backend statBackend, path string, follow bool) (map[string]any, 
 		args = append(args, "-f", statBSDFormat)
 		modeBase = 8
 	} else {
-		args = append(args, "-c", statCoreutilsFormat)
+		args = append(args, "--printf="+statCoreutilsFormat)
 	}
 	args = append(args, "--", path)
 

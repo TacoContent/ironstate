@@ -11,6 +11,7 @@ tasks:
               Write-Output "Running async task"
               Start-Sleep -Seconds 5
               Write-Output "Async task completed"
+          continue_on_error: true
 
   - name: Wait for async example to complete (with continue on error)
     continue_on_error: true
