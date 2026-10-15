@@ -1,4 +1,94 @@
 
+## [v0.8.0](https://github.com/tacocontent/ironstate/releases/tag/v0.8.0) - 2026-10-15
+
+### 🚀 FEATURES
+
+#### _GENERAL_
+
+- Added environment variables support -[@camalot](https://github.com/camalot)
+
+- Implement phase 0 & 1 of remote apply -[@camalot](https://github.com/camalot)
+
+- Implement phase 2 and 3 -[@camalot](https://github.com/camalot)
+
+- Implement phase 4 of remote apply -[@camalot](https://github.com/camalot)
+
+- Implement phase 5 -[@camalot](https://github.com/camalot)
+
+
+### 🐛 BUG FIXES
+
+#### _GENERAL_
+
+- Update the validate action -[@camalot](https://github.com/camalot)
+
+- Update templates -[@camalot](https://github.com/camalot)
+
+- Update remote playbooks on load -[@camalot](https://github.com/camalot)
+
+- Remove roles that are now remote -[@camalot](https://github.com/camalot)
+
+- Update example playbook -[@camalot](https://github.com/camalot)
+
+- fix: update example playbook -[@camalot](https://github.com/camalot)
+
+- Adjust task to target snoke specifically -[@camalot](https://github.com/camalot)
+
+- Resolve ssh-integration testing -[@camalot](https://github.com/camalot)
+
+- Windows stat test fix when Git for Windows stat used -[@camalot](https://github.com/camalot)
+
+- Codeql fixes -[@camalot](https://github.com/camalot)
+
+
+### 💼 OTHER
+
+#### _GENERAL_
+
+- Merge branch 'develop' of github.com:TacoContent/ironstate into develop -[@camalot](https://github.com/camalot)
+
+- Develop' of github.com:TacoContent/ironstate: -[@camalot](https://github.com/camalot)
+
+- Merge pull request  from TacoContent/remote-exec[#17](https://github.com/tacocontent/ironstate/issues/17)  [#17](https://github.com/tacocontent/ironstate/pull/17) -[@camalot](https://github.com/camalot)
+
+- Remote exec [#17](https://github.com/tacocontent/ironstate/pull/17) -[@camalot](https://github.com/camalot)
+
+
+### 📚 DOCUMENTATION
+
+#### _GENERAL_
+
+- Begin plan for remote execution -[@camalot](https://github.com/camalot)
+
+
+## GitHub
+
+### 💛 Contributors
+
+
+- [@camalot](https://github.com/camalot) in
+[#17](https://github.com/tacocontent/ironstate/pull/17)
+
+## 📈 Commit Statistics
+
+
+- `20` commits contributed to the release.
+- `15` days have passed between the first and last commit.
+- `15` commits parsed as conventional.
+- `1` linked issue detected in commits.
+  - [#17](https://github.com/tacocontent/ironstate/issues/17) (referenced 1 time)
+- `15` days  have passed between releases.
+
+
+![Statistics](https://quickchart.io/chart?c={type:'bar',data:{labels:['Commits','Contributors','Days%20Between%20Commits','Conventional%20Commits','Referenced%20Links','Days%20Since%20Last%20Release'],datasets:[{label:'Release',data:[20,1,15,15,1,15]}]}})
+
+
+
+---
+
+
+**Full Changelog**: https://github.com/tacocontent/ironstate/compare/v0.7.0...v0.8.0
+
 ## [v0.7.0](https://github.com/tacocontent/ironstate/releases/tag/v0.7.0) - 2026-09-30
 
 ### 🚀 FEATURES
