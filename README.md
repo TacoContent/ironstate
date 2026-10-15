@@ -113,6 +113,8 @@ ironstate version
 
 **Output**: on a real terminal, results print as a colored table with a per-module emoji, a host-facts panel up front, and a final summary block with elapsed time - a "changed" leaf (installed/removed) reads brighter than an already-satisfied skip, and a failure reads in a danger red. `--output json` switches to a plain JSON array on stdout instead (informational/progress lines go to stderr, so this stream stays clean and pipeable, e.g. `... --output json | jq`); colors auto-disable when not attached to a terminal, honor `NO_COLOR`/`IRONSTATE_NO_COLOR`, or can be forced off with `--no-color`.
 
+`--output ndjson` streams one JSON event per line on stdout as the run progresses (`leaf_start`, `log`, `leaf_result`, `facts`, `summary`, then a final `done` carrying the exit code; failures add an `error` event). Every line starts with `{"v":1,`, messages are secret-redacted and never colored. This is the same stream the remote-apply agent speaks (see [docs/plans/remote-apply.md](docs/plans/remote-apply.md)).
+
 Each dispatched result in `--output json` also includes `duration_ms`, measuring the leaf's template resolution and handler dispatch time. Installed plugin handlers can be measured independently with:
 
 ```text
@@ -120,6 +122,52 @@ ironstate plugin bench acme.hosts --handler entry --item '{"hostname":"build.loc
 ```
 
 The benchmark emits JSON with total, average, minimum, and maximum nanosecond/millisecond timings. Supported operations are `test`, `describe`, `install`, and `uninstall`; use `--apply` only when intentionally benchmarking a mutating operation.
+
+## Remote apply over SSH
+
+Add `--target` to run the same playbook on other machines. ironstate copies itself to the target, runs there as an agent, and streams results back, so facts, `hosts/`/`variables/` overlays, `when`, and `become` all behave as if `ironstate` had been run locally on that host.
+
+```text
+ironstate --playbook playbooks/camalot --apply --target rconr@snoke --target kresh.lan
+ironstate --playbook playbooks/camalot --apply --inventory inventory.yml --limit linux --forks 4
+ironstate remote ping --inventory inventory.yml    # connect, probe, check the agent runs; applies nothing
+ironstate remote logs kresh --inventory inventory.yml [run_id]
+ironstate remote clean --inventory inventory.yml
+```
+
+An inventory names hosts and groups and holds connection/elevation settings (per-host configuration stays in the playbook's `hosts/`/`variables/` overlays, which each target picks from its own facts). Schema: [inventory.schema.json](inventory.schema.json).
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/TacoContent/ironstate/develop/inventory.schema.json
+defaults:
+  user: rconr
+hosts:
+  snoke: { address: 192.168.2.103 }
+  kresh: { address: kresh.lan, port: 2222 }
+  laptop: {}                 # address defaults to the name, e.g. an ~/.ssh/config alias
+  router: { address: router.lan, become: false } # honor no playbook become directives
+  self: { address: local }   # this machine, no SSH
+groups:
+  linux: [snoke, kresh]
+```
+
+- **Selecting hosts**: `--limit` takes host and group names (comma-separated or repeated, `all` = every host); without it every inventory host runs. `--target` hosts are added on top. `--forks N` (default 5) runs that many hosts at once; live lines are prefixed `[host]`.
+
+- **Requirements**: an `ssh` client on the controller (`ironstate doctor` checks) and key-based access to a Linux, macOS, or Windows OpenSSH Server target (amd64/arm64). POSIX targets need `sh` and a SHA-256 utility (`sha256sum`, `shasum`, `openssl`, or BusyBox `sha256sum`); Windows targets use PowerShell and `Get-FileHash`. Auth is entirely your OpenSSH setup (`~/.ssh/config` aliases, ssh-agent, `ProxyJump`, `known_hosts`); ironstate always runs `ssh` with `BatchMode=yes` and never disables host-key checking. `--ssh-accept-new-host-keys` opts in to `StrictHostKeyChecking=accept-new`; `--ssh-config` passes a config file via `ssh -F`.
+- **Targets**: `[user@]host[:port]` or an ssh config alias; repeat `--target` for several hosts. `--target local` runs the agent on this machine without SSH.
+- **Agent binary**: the controller ships its own binary when the target has the same OS/arch. Otherwise a release build downloads the matching release archive from GitHub once, verifies it against the release's `checksums.txt` (and that file's cosign signature when `cosign` is on `PATH`; `GITHUB_TOKEN` is used if set), and caches it under your user cache dir (`ironstate/agents/<version>/<os>_<arch>/`). Development builds never download: pass `--agent-binary linux/arm64=./ironstate-linux-arm64` (e.g. from `GOOS=linux GOARCH=arm64 go build ./cmd/ironstate`) or `--agent-binary windows/arm64=./ironstate-windows-arm64.exe`; `--no-agent-download` forces that for release builds too. POSIX targets cache the agent under `~/.cache/ironstate/agent/<version>-<sha>/`; Windows targets use `%LOCALAPPDATA%\ironstate\agent\<version>-<sha>\`. Both are SHA-256 verified before every run and re-uploaded only when the binary changes. `--remote-agent-dir` (or `agent_dir` in the inventory) selects another directory.
+- **Agent verification**: remote SHA-256 verification is enabled by default. For a trusted constrained host without a hash utility, set `verify_agent: false` for that inventory host or pass `--skip-agent-verification`. The controller then re-uploads the agent on every run over SSH and reports `agent-verification=skipped`; this weakens protection against a modified target-side binary.
+- **What's sent**: the playbook directory (minus `.git`, `.env`, `.secrets`, and anything matched by an `.ironstateignore` file of glob patterns), any `--vars-file`, an outside `filters.dir`, and the controller's `filters.*` config. `.env`/`.secrets` values and `--forward-env NAME` variables travel in memory, never written to the target's disk; `.secrets` values stay redacted in all output. Template expressions (`facts.*`, `lookup('env', ...)`, `lookup('url', ...)`) evaluate **on the target**.
+- **`become`**: POSIX targets need passwordless sudo or `--ask-become-pass`, which prompts once without echo and sends the password only through the agent stdin protocol. Windows targets require an already elevated OpenSSH session; `become: true` is a no-op there, and a non-elevated session fails the leaf clearly.
+- **Inventory `become`**: set a host's `become: false` when that account already has the privileges it needs or the target has no sudo. This disables playbook `become` directives for that host, so tasks run as the SSH user; it does not grant privileges.
+- **Remote `uses:` sources**: git `uses:` sources are resolved on the controller, not the target. Trust prompts work exactly as in a local run (`trusted: true`, `isolate: true`, or `--allow-remote-uses` skip the prompt; a declined source is skipped on every target with a warning). Approved sources are cloned with your local git credentials and shipped inside the bundle (without `.git`), including `uses:` nested inside them; targets need neither git nor network access and never fetch. Only literal `remote:` values can be pre-fetched: a templated git `remote: "${{ ... }}"` fails on the target with a clear "not pre-fetched" error. Local `uses:` paths resolve on the target like any other path, so keep them inside the playbook directory.
+- **Plugins**: playbooks declaring `plugins:` run remotely. When the target has the controller's OS/arch, the controller copies each declared plugin it has installed (binary + manifest, SHA-256 verified, re-uploaded only when changed) into the target's plugin store, so `ironstate.lock.yaml` checksums match. Otherwise the target uses its own installed plugins (`ironstate plugin install` there), and `--allow-plugin-install` is forwarded so the agent may install a missing plugin itself (that needs Go on the target). Lockfile checksums are per-platform, so a lockfile written on one OS/arch only verifies on targets of that platform.
+- **Reliability**: one apply at a time per target (a second concurrent run fails immediately). Transient SSH/bootstrap failures retry up to three times; `--host-timeout 5m` bounds a host operation. Every run's events are written to the target's cache `runs/<run_id>/events.ndjson` (last 20 kept); interrupted streams are recovered from that log when possible. `remote logs <host> [run_id]` fetches a log, and `remote clean --inventory inventory.yml` removes agent caches and logs while refusing to clean during an active run. Ctrl-C asks each agent to stop after its current task; a second Ctrl-C aborts.
+- **Detached apply**: `--remote-detach --apply` starts the target agent in the background; use `ironstate remote logs <host> <run_id>` to collect results. Detached mode rejects `.env`, `.secrets`, forwarded environment values, and become passwords because the staged job is temporarily stored on the target. Do not put secrets directly in bundled playbook or vars files. Windows process survival after sshd disconnect still needs live validation.
+- **Output**: `table` shows each host's log lines live (prefixed `[host]`), a result table per host, then a per-host summary; `json` prints one document with a `hosts` array (status, facts, results, stats per host); `ndjson` streams every agent event tagged with `"host"`, then a final run-level `done`.
+- **Exit codes**: `0` all hosts ok; `1` any host failed; `2` controller-side load/config error; `3` a host was unreachable or couldn't be bootstrapped (nothing applied there - safe to retry).
+
+The design and implementation notes, including remaining Windows-host validation, are in [docs/plans/remote-apply.md](docs/plans/remote-apply.md).
 
 ## External handler plugins
 
@@ -1754,3 +1802,7 @@ There are two ways to pre-approve a source instead:
 - `--allow-remote-uses` on the command line — pre-approves **every** remote source in the run.
 
 In a non-interactive run (CI, a scheduled task) there is nothing to answer the prompt, so a source that is neither `trusted` nor pre-approved on the command line is **declined by default**. Only mark a source trusted where you actually trust it, and ideally with `ref:` pinned to an exact commit.
+
+### `uses` with remote apply
+
+With `--target`/`--inventory`, the controller does all of the above (prompting, cloning, caching) before any host runs, then ships each approved checkout inside the bundle; the target only ever reads that copy and never runs git. See [Remote apply over SSH](#remote-apply-over-ssh).

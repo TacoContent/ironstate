@@ -178,6 +178,14 @@ func (s *Store) BinaryPath(namespace, version string) (string, error) {
 	return path, nil
 }
 
+// ManifestPath returns the manifest.json path for an installed plugin version.
+func (s *Store) ManifestPath(namespace, version string) (string, error) {
+	if err := validateIdentity(namespace); err != nil || !validPathPart(version) {
+		return "", fmt.Errorf("invalid plugin reference %s@%s", namespace, version)
+	}
+	return filepath.Join(s.versionDir(namespace, version), "manifest.json"), nil
+}
+
 // ResolveVersion resolves latest to the greatest installed semantic version,
 // or confirms an exact installed version.
 func (s *Store) ResolveVersion(namespace, requested string) (Manifest, error) {

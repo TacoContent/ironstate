@@ -13,6 +13,21 @@ import (
 // (itself mirroring apply.sh's `source .env`/`.secrets`). A missing file
 // is not an error (matches "if (-not (Test-Path $Path)) { return }").
 func ImportEnvFile(path string) (map[string]string, error) {
+	loaded, err := ParseEnvFile(path)
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range loaded {
+		if err := os.Setenv(key, value); err != nil {
+			return nil, err
+		}
+	}
+	return loaded, nil
+}
+
+// ParseEnvFile reads KEY=VALUE lines like ImportEnvFile without touching
+// the process environment. A missing file yields an empty map.
+func ParseEnvFile(path string) (map[string]string, error) {
 	f, err := os.Open(path) //nolint:gosec // fixed, caller-configured dotenv path, same trust boundary as the rest of this tool
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -42,9 +57,6 @@ func ImportEnvFile(path string) (map[string]string, error) {
 			}
 		}
 		loaded[key] = value
-		if err := os.Setenv(key, value); err != nil {
-			return nil, err
-		}
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err

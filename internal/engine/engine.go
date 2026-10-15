@@ -249,13 +249,14 @@ type RequiredToolsProvider interface {
 
 // Options configures RunLeaves/Run's dispatch behavior.
 type Options struct {
-	Handlers map[string]Handler
-	Facts    map[string]any
-	Vars     map[string]any
-	Filters  expr.Filters
-	Apply    bool
-	Verbose  bool // when true, also prints a (dim) line for every skipped/unchanged leaf
-	Progress func(stage, detail string, index, total int)
+	Handlers      map[string]Handler
+	Facts         map[string]any
+	Vars          map[string]any
+	Filters       expr.Filters
+	Apply         bool
+	Verbose       bool // when true, also prints a (dim) line for every skipped/unchanged leaf
+	DisableBecome bool
+	Progress      func(stage, detail string, index, total int)
 	// OnFactsGathered, if set, is called exactly once by Run - after
 	// every 'fact'/FactProducer leaf has dispatched (the facts-first
 	// phase, in full - see Run), before any other leaf runs - with the
@@ -268,6 +269,12 @@ type Options struct {
 	// RunLeaves alone (called directly, bypassing Run's phase split)
 	// never invokes this.
 	OnFactsGathered func(facts map[string]any)
+	// OnResult, if set, is called with each leaf's Result as soon as it is
+	// recorded, so callers can stream results instead of waiting for Run.
+	OnResult func(Result)
+	// Cancelled, if set, is checked before each leaf; a non-nil error stops
+	// the run there (the in-flight leaf always finishes) and is returned.
+	Cancelled func() error
 }
 
 // Run dispatches leaves in two phases — every 'fact' leaf first, in
@@ -376,6 +383,11 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 	var results []Result
 	total := len(leaves)
 	for i, leaf := range leaves {
+		if opts.Cancelled != nil {
+			if err := opts.Cancelled(); err != nil {
+				return results, true, err
+			}
+		}
 		if leaf.ID != "" && strings.HasPrefix(leaf.ID, "$") {
 			leaf.SecretID = true
 			leaf.ID = strings.TrimPrefix(leaf.ID, "$")
@@ -499,6 +511,9 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 					Duration: time.Since(started),
 				}
 				results = append(results, result)
+				if opts.OnResult != nil {
+					opts.OnResult(result)
+				}
 				if leaf.ContinueOnError {
 					Danger("[%s] %s failed (rc=%d); continuing (continue_on_error).", module, label, result.Exec.RC)
 					return false, nil
@@ -517,6 +532,9 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 			effectiveApply := opts.Apply || hasEmbeddedShell || module == "assert" || isFactProducer(handler) || isReadOnly(handler)
 
 			become := resolveBecome(leaf.Become)
+			if opts.DisableBecome {
+				become = ironexec.Become{}
+			}
 			if leaf.Isolated && become.Enabled {
 				Warn("[%s] %s: 'become' is not permitted inside an isolated 'uses'; running unelevated.", module, label)
 				become = ironexec.Become{}
@@ -541,6 +559,9 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 			result.Failed = failed
 			result.Duration = time.Since(started)
 			results = append(results, result)
+			if opts.OnResult != nil {
+				opts.OnResult(result)
+			}
 
 			if failed {
 				if leaf.ContinueOnError {
@@ -733,6 +754,9 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 	state, _ := item["state"].(string)
 	if state == "" {
 		state = "present"
+	}
+	if err := ironexec.ValidateBecome(become); err != nil {
+		return Result{}, fmt.Errorf("%s %s: become: %w", module, label, err)
 	}
 
 	ctx := Context{Flat: flatContext, Filters: filters, Apply: apply, Become: become}

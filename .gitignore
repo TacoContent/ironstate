@@ -44,6 +44,7 @@ go.work
 # binary output directories
 /bin/
 /dist/
+/.codeql/
 
 # Binaries for programs and plugins
 *.exe

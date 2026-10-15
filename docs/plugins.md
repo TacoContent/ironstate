@@ -244,6 +244,15 @@ plugins:
 
 The lockfile takes precedence for version selection. A checksum mismatch is a hard error; ironstate does not silently fall back to another installed version.
 
+## Plugins with remote apply
+
+Playbooks that declare plugins can be applied to remote targets (`--target`/`--inventory`, see the README's "Remote apply over SSH"). Handlers always run on the target, so the target needs the plugin binary for its own OS/arch:
+
+- **Same OS/arch as the controller:** before the run, the controller copies each declared plugin it has installed (binary and `manifest.json`, at the lockfile's version when one exists) into the target's plugin cache. Each file is SHA-256 verified on the target and re-uploaded only when it changes, and the copied binary is byte-identical to the controller's, so `ironstate.lock.yaml` checksums still match. Shipped plugins appear in the host's status line (`plugins=...`) and as `plugins_shipped` in JSON output.
+- **Different OS/arch:** the target uses plugins already installed there (`ironstate plugin install` on the target). `--allow-plugin-install` is forwarded, so the agent may install a missing plugin itself, which needs Go on the target.
+
+Lockfile checksums describe one platform's binary. A lockfile written on one OS/arch only verifies on targets of that same platform; for mixed fleets, either keep the lockfile on the platform you apply to, or install the plugin on each target platform and accept that the lockfile will reject the other platforms' binaries.
+
 ## Protocol and compatibility
 
 Plugins communicate over HashiCorp go-plugin's gRPC transport. The SDK centralizes the magic-cookie handshake and protocol version. Protocol version compatibility is exact in v1: a host and plugin with different protocol versions do not run together. Upgrade the plugin or ironstate as indicated by the error.

@@ -1,6 +1,7 @@
 tasks:
 
   - name: Leet Filter Test
+    continue_on_error: true
     log:
       message: ${{ 'The quick brown fox jumps over the lazy dog.' | leet }}
 
@@ -14,26 +15,31 @@ tasks:
         nu:   ${{ facts.shell_nu }} (${{ facts.nu_version }})
 
   - name: PowerShell Filter Test
+    continue_on_error: true
     when: shell_pwsh
     log:
       message: ${{ 'hello from pwsh' | pwsh_shout }}
 
   - name: Bash Filter Test
+    continue_on_error: true
     when: shell_bash
     log:
       message: ${{ 'hello from bash' | buffalo }}
 
   - name: Zsh Filter Test
+    continue_on_error: true
     when: shell_zsh
     log:
       message: ${{ 'hello from zsh' | zsh_shout }}
 
   - name: Fish Filter Test
+    continue_on_error: true
     when: shell_fish
     log:
       message: ${{ 'hello from fish' | fish_shout }}
 
   - name: Nu Filter Test
+    continue_on_error: true
     when: shell_nu
     log:
       message: ${{ 'hello from nu' | nu_shout }}

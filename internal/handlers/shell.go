@@ -149,7 +149,34 @@ func shellHostInvocation(hostSpec string) []string {
 	if preset, ok := shellHostPresets[hostSpec]; ok {
 		return preset
 	}
+	if fileExists(hostSpec) {
+		return []string{hostSpec}
+	}
 	return strings.Fields(hostSpec)
+}
+
+func isPowerShellHost(hostSpec string) bool {
+	hostSpec = strings.Trim(hostSpec, `"'`)
+	base := hostSpec[strings.LastIndexAny(hostSpec, `/\`)+1:]
+	switch strings.ToLower(base) {
+	case "pwsh", "pwsh.exe", "powershell", "powershell.exe":
+		return true
+	default:
+		return false
+	}
+}
+
+func shellScriptExtension(cfg shellStateConfig) string {
+	switch {
+	case isPowerShellHost(cfg.HostSpec):
+		return ".ps1"
+	case cfg.Extension != "":
+		return cfg.Extension
+	case shellHostExtensions[cfg.HostSpec] != "":
+		return shellHostExtensions[cfg.HostSpec]
+	default:
+		return ".txt"
+	}
 }
 
 func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
@@ -163,17 +190,7 @@ func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
 	runPath := cfg.Script
 	var tempFile string
 	if runPath == "" {
-		extension := ".txt"
-		switch {
-		case cfg.HostSpec == "pwsh":
-			extension = ".ps1"
-		case cfg.Extension != "":
-			extension = cfg.Extension
-		default:
-			if e, ok := shellHostExtensions[cfg.HostSpec]; ok {
-				extension = e
-			}
-		}
+		extension := shellScriptExtension(cfg)
 		f, err := os.CreateTemp("", "ironstate-*"+extension)
 		if err != nil {
 			engine.Warn("Shell item '%s': %v", label, err)

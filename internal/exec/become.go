@@ -28,10 +28,17 @@ type Become struct {
 // handler's runExternalCommand call automatically, without threading a
 // Become parameter through every handler's Install/Uninstall signature.
 var current Become
+var becomePassword string
+var remoteWindowsMode bool
+var remoteWindowsAdmin bool
 
 // SetBecome sets the ambient elevation directive for commands run via
 // WrapForBecome until the next SetBecome/ClearBecome call.
 func SetBecome(b Become) { current = b }
+
+// SetBecomePassword sets the in-memory password used by sudo -S for the
+// current remote-agent process. It is never added to argv or environment.
+func SetBecomePassword(password string) { becomePassword = password }
 
 // ClearBecome resets the ambient elevation directive to "no elevation".
 func ClearBecome() { current = Become{} }
@@ -44,6 +51,15 @@ func CurrentBecome() Become { return current }
 // test host's real PATH). On Windows this resolves Windows 11's built-in
 // sudo.exe (Settings > For developers > Enable sudo) the same way.
 var LookSudoPath = func() (string, error) { return exec.LookPath("sudo") }
+
+// SetRemoteWindowsMode selects the Windows SSH-agent elevation policy.
+func SetRemoteWindowsMode(enabled, admin bool) {
+	remoteWindowsMode = enabled
+	remoteWindowsAdmin = admin
+}
+
+// WindowsAdmin reports whether the current process has an elevated token.
+func WindowsAdmin() bool { return isWindowsAdmin() }
 
 // WrapForBecome prepends a 'sudo' invocation ahead of exe/args when b
 // requests elevation. Both Unix sudo and Windows' sudo.exe may prompt
@@ -58,6 +74,12 @@ func WrapForBecome(b Become, exe string, args []string) (string, []string, error
 	if !b.Enabled {
 		return exe, args, nil
 	}
+	if err := ValidateBecome(b); err != nil {
+		return "", nil, err
+	}
+	if remoteWindowsMode {
+		return exe, args, nil
+	}
 	sudoPath, err := LookSudoPath()
 	if err != nil {
 		return "", nil, errors.New("become requested but 'sudo' was not found on PATH")
@@ -66,7 +88,19 @@ func WrapForBecome(b Become, exe string, args []string) (string, []string, error
 	if b.User != "" && !strings.EqualFold(b.User, "root") {
 		wrapped = append(wrapped, "-u", b.User)
 	}
+	if becomePassword != "" {
+		wrapped = append(wrapped, "-S", "-k", "-p", "")
+	}
 	wrapped = append(wrapped, exe)
 	wrapped = append(wrapped, args...)
 	return sudoPath, wrapped, nil
+}
+
+// ValidateBecome checks platform-wide elevation requirements before a
+// handler's test phase, including handlers that do in-process I/O.
+func ValidateBecome(b Become) error {
+	if b.Enabled && remoteWindowsMode && !remoteWindowsAdmin {
+		return errors.New("become requested on Windows but the SSH session is not elevated; connect using an administrator account")
+	}
+	return nil
 }

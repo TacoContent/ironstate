@@ -22,6 +22,7 @@ import (
 	"github.com/TacoContent/ironstate/internal/pathutil"
 	"github.com/TacoContent/ironstate/internal/pluginhost"
 	"github.com/TacoContent/ironstate/internal/remote"
+	"github.com/TacoContent/ironstate/internal/remoteexec/protocol"
 	"github.com/TacoContent/ironstate/internal/tasks"
 	"github.com/TacoContent/ironstate/internal/template"
 	"github.com/TacoContent/ironstate/internal/ui"
@@ -51,11 +52,17 @@ func newRootCommand() (*cobra.Command, error) {
 	flags.StringArray("var", nil, "override a var by dotted key path: --var key=value (repeatable, highest precedence)")
 	flags.Bool("apply", false, "actually apply changes (default: dry-run)")
 	flags.StringSlice("tags", nil, "restrict processing to tasks/actions carrying any of these tags")
-	flags.String("output", "table", "result output format: table|json")
+	flags.String("output", "table", "result output format: table|json|ndjson (ndjson streams one JSON event per line)")
 	flags.BoolP("verbose", "v", false, "verbose output")
 	flags.Bool("no-color", false, "disable colored output")
 	flags.Bool("allow-plugin-install", false, "allow playbook-declared plugins to be installed automatically")
 	flags.Bool("allow-remote-uses", false, "pre-approve non-isolated remote 'uses:' sources instead of prompting (required for non-interactive runs)")
+	addRemoteFlags(flags)
+	flags.StringArray("forward-env", nil, "with --target: forward this controller environment variable to the targets (repeatable)")
+	flags.Bool("ask-become-pass", false, "prompt once for the remote sudo password and send it only over the agent stdin channel")
+	flags.Bool("remote-detach", false, "start remote agents in the background and collect their results later with remote logs")
+	flags.Bool("disable-become", false, "internal: run without playbook become directives")
+	_ = flags.MarkHidden("disable-become")
 
 	cmd.AddCommand(newVersionCommand())
 	cmd.AddCommand(newFiltersCommand())
@@ -63,6 +70,8 @@ func newRootCommand() (*cobra.Command, error) {
 	cmd.AddCommand(newInitCommand())
 	cmd.AddCommand(newPluginCommand())
 	cmd.AddCommand(newValidateCommand())
+	cmd.AddCommand(newAgentCommand())
+	cmd.AddCommand(newRemoteCommand())
 
 	return cmd, nil
 }
@@ -75,7 +84,7 @@ func loadConfig(cmd *cobra.Command) (*config.Config, error) {
 	return cfg, nil
 }
 
-func runApply(cmd *cobra.Command, _ []string) error {
+func runApply(cmd *cobra.Command, _ []string) (err error) {
 	cfg, err := loadConfig(cmd)
 	if err != nil {
 		return err
@@ -83,7 +92,19 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	if noColor, _ := cmd.Flags().GetBool("no-color"); noColor {
 		ui.Enabled = false
 	}
-	tableOutput := cfg.Output != "json"
+	if remoteRequested(cmd.Flags()) {
+		return runRemoteApply(cmd, cfg)
+	}
+	out, err := newRunOutput(cmd, cfg.Output)
+	if err != nil {
+		return NewLoadError(err)
+	}
+	if _, isEvents := out.(*ndjsonOutput); isEvents {
+		origEnabled := ui.Enabled
+		ui.Enabled = false
+		defer func() { ui.Enabled = origEnabled }()
+	}
+	defer func() { out.done(err) }()
 
 	// Loaded from the current working directory (not the playbook's own
 	// directory, and not relative to the binary) - matches how
@@ -99,27 +120,19 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		return NewLoadError(err)
 	}
 
-	progress := newProgressReporter()
-	progress.Start()
-	defer progress.Stop()
+	out.start()
+	defer out.stop()
 
-	// engine.Info/Warn/Danger print leaf-by-leaf lines straight to
-	// stdout/stderr, with no knowledge of the spinner above still
-	// animating its own line - left alone, the two interleave into
-	// garbled output (e.g. "◒ loading playbook hierarchy───...",
-	// a spinner frame immediately followed by unrelated table/log text
-	// with no newline between them). Route every such print through
-	// progress.Pause for as long as this run's spinner exists, restoring
-	// the real functions on return - mirrors wait_for's own spinner pause
-	// (internal/handlers/util.go's pauseSpinnerForPrint), just scoped to
-	// the whole run instead of one task.
+	// engine.Info/Warn/Danger (and the packages/tasks Warn vars) print
+	// straight to stderr; route them through the run's output so they
+	// neither garble the console spinner nor escape the ndjson stream.
 	origInfo, origWarn, origDanger := engine.Info, engine.Warn, engine.Danger
 	origPackagesWarn, origTasksWarn := packages.Warn, tasks.Warn
-	engine.Info = func(format string, args ...any) { progress.Pause(func() { origInfo(format, args...) }) }
-	engine.Warn = func(format string, args ...any) { progress.Pause(func() { origWarn(format, args...) }) }
-	engine.Danger = func(format string, args ...any) { progress.Pause(func() { origDanger(format, args...) }) }
-	packages.Warn = func(format string, args ...any) { progress.Pause(func() { origPackagesWarn(format, args...) }) }
-	tasks.Warn = func(format string, args ...any) { progress.Pause(func() { origTasksWarn(format, args...) }) }
+	engine.Info = out.wrapLog(protocol.LevelInfo, origInfo)
+	engine.Warn = out.wrapLog(protocol.LevelWarn, origWarn)
+	engine.Danger = out.wrapLog(protocol.LevelDanger, origDanger)
+	packages.Warn = out.wrapLog(protocol.LevelWarn, origPackagesWarn)
+	tasks.Warn = out.wrapLog(protocol.LevelWarn, origTasksWarn)
 	// The remote-source trust prompt both prints and reads a line - the
 	// spinner must be fully paused for the whole exchange or its frames
 	// overwrite the question the operator is answering.
@@ -127,7 +140,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	remote.Confirm = func(kind remote.Kind, source string) (bool, error) {
 		var ok bool
 		var err error
-		progress.Pause(func() { ok, err = origConfirm(kind, source) })
+		out.pause(func() { ok, err = origConfirm(kind, source) })
 		return ok, err
 	}
 	defer func() {
@@ -136,16 +149,16 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		remote.Confirm = origConfirm
 	}()
 
-	progress.Message("loading playbook inputs")
+	out.message("loading playbook inputs")
 
 	resolvedFile, err := packages.ResolvePlaybookPath(cfg.Playbook)
 	if err != nil {
 		return NewLoadError(err)
 	}
 
-	progress.Message("gathering host facts")
+	out.message("gathering host facts")
 	hostFacts := facts.Gather()
-	progress.Message("loading playbook hierarchy")
+	out.message("loading playbook hierarchy")
 	doc, err := packages.LoadHierarchy(resolvedFile, hostFacts)
 	if err != nil {
 		return NewLoadError(err)
@@ -160,7 +173,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	// earlier one - but all before --var (the most explicit override of
 	// all).
 	for _, raw := range cfg.VarsFiles {
-		progress.Message("merging vars files")
+		out.message("merging vars files")
 		varsFilePath := pathutil.ResolveUserPath(raw)
 		overlay, err := packages.LoadFile(varsFilePath, repoRoot)
 		if err != nil {
@@ -173,7 +186,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		docMap = packages.MergeDocuments(docMap, overlayMap)
 	}
 
-	progress.Message("preparing playbook variables")
+	out.message("preparing playbook variables")
 	vars := model.Vars(docMap)
 	for _, raw := range cfg.VarOverrides {
 		key, value, err := model.ParseVarOverride(raw)
@@ -244,7 +257,7 @@ func runApply(cmd *cobra.Command, _ []string) error {
 		}
 	}()
 
-	progress.Message("expanding playbook tasks")
+	out.message("expanding playbook tasks")
 	taskList, err := model.TaskList(docMap)
 	if err != nil {
 		return NewLoadError(err)
@@ -265,52 +278,46 @@ func runApply(cmd *cobra.Command, _ []string) error {
 	}
 
 	filtered := engine.FilterByTags(leaves, cfg.Tags)
-	progress.Message("running playbook tasks")
+	out.message("running playbook tasks")
 
 	// The facts table waits for every 'fact'/'mount_facts' leaf to have
 	// actually run (not just the fixed set gathered up front) before
 	// printing, so it shows the complete, final set of facts - see
 	// engine.Options.OnFactsGathered's doc comment.
-	var factsErr error
+	var factsErr, cancelErr error
 	start := time.Now()
+	disableBecome, _ := cmd.Flags().GetBool("disable-become")
 	results, stopped, err := engine.Run(filtered, engine.Options{
-		Handlers: registry.Handlers(),
-		Facts:    hostFacts,
-		Vars:     vars,
-		Filters:  fset,
-		Apply:    cfg.Apply,
-		Verbose:  cfg.Verbose,
-		Progress: func(stage, detail string, index, total int) {
-			progress.Step(stage, index, total, detail)
-		},
-		OnFactsGathered: func(allFacts map[string]any) {
-			if !tableOutput {
-				return
-			}
-			progress.Pause(func() { factsErr = ui.PrintFacts(cmd.OutOrStdout(), allFacts) })
+		Handlers:        registry.Handlers(),
+		Facts:           hostFacts,
+		Vars:            vars,
+		Filters:         fset,
+		Apply:           cfg.Apply,
+		Verbose:         cfg.Verbose,
+		DisableBecome:   disableBecome,
+		Progress:        out.step,
+		OnFactsGathered: func(allFacts map[string]any) { factsErr = out.facts(allFacts) },
+		OnResult:        out.result,
+		Cancelled: func() error {
+			cancelErr = out.cancelled()
+			return cancelErr
 		},
 	})
 	elapsed := time.Since(start)
-	if err != nil {
+	if err != nil && (cancelErr == nil || err != cancelErr) {
 		return NewRunError(err)
 	}
 	if factsErr != nil {
 		return NewRunError(factsErr)
 	}
 
-	progress.Stop()
+	out.stop()
 
-	if cfg.Output == "json" {
-		if err := engine.PrintJSON(cmd.OutOrStdout(), results); err != nil {
-			return NewRunError(err)
-		}
-	} else {
-		if err := engine.PrintTable(cmd.OutOrStdout(), results); err != nil {
-			return NewRunError(err)
-		}
-		if err := engine.PrintSummary(cmd.OutOrStdout(), engine.ComputeStats(results), elapsed); err != nil {
-			return NewRunError(err)
-		}
+	if err := out.finish(results, stopped, elapsed); err != nil && cancelErr == nil {
+		return NewRunError(err)
+	}
+	if cancelErr != nil {
+		return NewRunError(fmt.Errorf("run stopped: %w", cancelErr))
 	}
 
 	if stopped {

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -1232,6 +1233,36 @@ func TestShellHandlerRunsCommandViaPwshFromShellEnv(t *testing.T) {
 	}
 	if result.Stdout != "hi\n" {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestShellHostInvocationPreservesExecutablePathWithSpaces(t *testing.T) {
+	host := filepath.Join(t.TempDir(), "Program Files", "PowerShell", "7", "pwsh.exe")
+	if err := os.MkdirAll(filepath.Dir(host), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(host, []byte("test"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	got := shellHostInvocation(host)
+	if len(got) != 1 || got[0] != host {
+		t.Fatalf("shellHostInvocation(%q) = %#v, want the path as one executable", host, got)
+	}
+}
+
+func TestShellCustomPowerShellPathUsesPS1Extension(t *testing.T) {
+	for _, host := range []string{`C:\Program Files\PowerShell\7\pwsh.exe`, `"C:\Program Files\PowerShell\7\pwsh.exe"`, `/opt/PowerShell/pwsh`} {
+		if !isPowerShellHost(host) {
+			t.Errorf("isPowerShellHost(%q) = false", host)
+		}
+		if got := shellScriptExtension(shellStateConfig{HostSpec: host}); got != ".ps1" {
+			t.Errorf("shellScriptExtension(%q) = %q, want .ps1", host, got)
+		}
+	}
+	for _, host := range []string{"bash", `C:\Program Files\Git\bin\bash.exe`} {
+		if isPowerShellHost(host) {
+			t.Errorf("isPowerShellHost(%q) = true", host)
+		}
 	}
 }
 

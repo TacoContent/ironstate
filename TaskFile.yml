@@ -5,6 +5,9 @@ vars:
   MACOS_USER: ryan
   MACOS_IP: '192.168.2.25'
   WSL_USER: ryan
+  SNOKE_USER: ryan
+  SNOKE_IP: '192.168.2.103'
+  SNOKE_ARCH: amd64
 # includes:
 #   local: .local.taskfile.yml
     # taskfile: .local.taskfile.yml
@@ -68,6 +71,38 @@ tasks:
       - govulncheck ./...
       - cd sdk && govulncheck ./...
 
+  codeql:
+    desc: 'codeql.yml workflow: CodeQL Go analysis with the same code-scanning suite; fails on any alert'
+    cmds:
+      # Uses a codeql CLI on PATH, else the official gh extension; skips loudly
+      # like 'race' does without a C compiler.
+      - |
+        if command -v codeql >/dev/null 2>&1; then
+          cq="codeql"
+        elif gh codeql version >/dev/null 2>&1; then
+          cq="gh codeql"
+        else
+          echo "⚠ skipping CodeQL: no CLI found (install with: gh extension install github/gh-codeql) - CI still runs codeql.yml."
+          exit 0
+        fi
+        mkdir -p .codeql
+        if ! $cq database create .codeql/db --language=go --source-root=. --overwrite >.codeql/create.log 2>&1; then
+          cat .codeql/create.log
+          exit 1
+        fi
+        if ! $cq database analyze .codeql/db codeql/go-queries:codeql-suites/go-code-scanning.qls --download --format=sarif-latest --output=.codeql/results.sarif >.codeql/analyze.log 2>&1; then
+          cat .codeql/analyze.log
+          exit 1
+        fi
+        # -j: no trailing newline (Windows jq writes CRLF).
+        count="$(jq -j '[.runs[].results[]] | length' .codeql/results.sarif)"
+        if [ "$count" != "0" ]; then
+          jq -r '.runs[].results[] | "\(.ruleId) \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine): \(.message.text)"' .codeql/results.sarif
+          echo "CodeQL found $count alert(s); full report: .codeql/results.sarif"
+          exit 1
+        fi
+        echo "CodeQL: no alerts"
+
   fmt:check:
     desc: Fail if any file is not gofmt-clean
     cmds:
@@ -102,6 +137,11 @@ tasks:
         fi
         go test ./internal/filters/... -race
 
+  test:ssh:
+    desc: 'CI job "ssh-integration": remote apply against a throwaway sshd container (needs docker)'
+    cmds:
+      - bash ./scripts/ssh-integration.sh
+
   fuzz-smoke:
     desc: 'CI job "fuzz-smoke": short fuzz runs over internal/expr'
     vars:
@@ -109,6 +149,127 @@ tasks:
     cmds:
       - go test ./internal/expr/... -run xxx -fuzz FuzzParse -fuzztime {{.FUZZTIME}}
       - go test ./internal/expr/... -run xxx -fuzz FuzzScanSpans -fuzztime {{.FUZZTIME}}
+      - go test ./internal/remoteexec/bundle -run xxx -fuzz FuzzExtract -fuzztime {{.FUZZTIME}}
+      - go test ./internal/remoteexec/protocol -run xxx -fuzz FuzzReadJob -fuzztime {{.FUZZTIME}}
+      - go test ./internal/remoteexec/protocol -run xxx -fuzz FuzzParseEvent -fuzztime {{.FUZZTIME}}
+
+  # --- Remote apply against snoke -------------------------------------------
+
+  remote:agent:
+    desc: Build the linux agent binary shipped to snoke
+    internal: true
+    env:
+      CGO_ENABLED: "0"
+      GOOS: linux
+      GOARCH: '{{.SNOKE_ARCH}}'
+    cmds:
+      - go build -o bin/ironstate-linux-{{.SNOKE_ARCH}} ./cmd/ironstate
+
+  remote:snoke:ping:
+    desc: Connect to snoke, probe it, and make sure the agent runs (applies nothing)
+    deps: [remote:agent]
+    cmds:
+      - go run ./cmd/ironstate remote ping --inventory playbooks/sample/inventory/main.yml --limit snoke --agent-binary linux/{{.SNOKE_ARCH}}=bin/ironstate-linux-{{.SNOKE_ARCH}}
+
+  remote:snoke:dry-run:
+    desc: Dry-run playbooks/sample on snoke over SSH
+    deps: [remote:agent]
+    cmds:
+      - go run ./cmd/ironstate --playbook playbooks/sample --inventory playbooks/sample/inventory/main.yml --limit snoke --agent-binary linux/{{.SNOKE_ARCH}}=bin/ironstate-linux-{{.SNOKE_ARCH}} {{.CLI_ARGS}}
+
+  remote:snoke:apply:
+    desc: Apply playbooks/sample on snoke over SSH
+    deps: [remote:agent]
+    cmds:
+      - go run ./cmd/ironstate --playbook playbooks/sample --inventory playbooks/sample/inventory/main.yml --limit snoke --agent-binary linux/{{.SNOKE_ARCH}}=bin/ironstate-linux-{{.SNOKE_ARCH}} --apply {{.CLI_ARGS}}
+
+  remote:agent:linux-amd64:
+    desc: Build the linux/amd64 agent for all-host inventory runs
+    internal: true
+    env:
+      CGO_ENABLED: "0"
+      GOOS: linux
+      GOARCH: amd64
+    cmds:
+      - go build -o bin/ironstate-linux-amd64 ./cmd/ironstate
+
+  remote:agent:linux-arm64:
+    desc: Build the linux/arm64 agent for all-host inventory runs
+    internal: true
+    env:
+      CGO_ENABLED: "0"
+      GOOS: linux
+      GOARCH: arm64
+    cmds:
+      - go build -o bin/ironstate-linux-arm64 ./cmd/ironstate
+
+  remote:agent:windows-amd64:
+    desc: Build the windows/amd64 agent for all-host inventory runs
+    internal: true
+    env:
+      CGO_ENABLED: "0"
+      GOOS: windows
+      GOARCH: amd64
+    cmds:
+      - go build -o bin/ironstate-windows-amd64.exe ./cmd/ironstate
+
+  remote:agent:darwin-amd64:
+    desc: Build the darwin/amd64 agent for all-host inventory runs
+    internal: true
+    env:
+      CGO_ENABLED: "0"
+      GOOS: darwin
+      GOARCH: amd64
+    cmds:
+      - go build -o bin/ironstate-darwin-amd64 ./cmd/ironstate
+
+  remote:agent:windows-arm64:
+    desc: Build the windows/arm64 agent for all-host inventory runs
+    internal: true
+    env:
+      CGO_ENABLED: "0"
+      GOOS: windows
+      GOARCH: arm64
+    cmds:
+      - go build -o bin/ironstate-windows-arm64.exe ./cmd/ironstate
+
+  remote:agent:darwin-arm64:
+    desc: Build the darwin/arm64 agent for all-host inventory runs
+    internal: true
+    env:
+      CGO_ENABLED: "0"
+      GOOS: darwin
+      GOARCH: arm64
+    cmds:
+      - go build -o bin/ironstate-darwin-arm64 ./cmd/ironstate
+
+  remote:all:agents:
+    desc: Build agents for all supported OS/architectures in the inventory
+    deps:
+      - remote:agent:linux-amd64
+      - remote:agent:linux-arm64
+      - remote:agent:windows-amd64
+      # - remote:agent:windows-arm64
+      - remote:agent:darwin-amd64
+      # - remote:agent:darwin-arm64
+
+  remote:all:ping:
+    desc: Connect to and probe every host in the sample inventory
+    deps: [remote:all:agents]
+    cmds:
+      - go run ./cmd/ironstate remote ping --inventory playbooks/sample/inventory/main.yml --agent-binary linux/amd64=bin/ironstate-linux-amd64 --agent-binary linux/arm64=bin/ironstate-linux-arm64 --agent-binary windows/amd64=bin/ironstate-windows-amd64.exe --agent-binary windows/arm64=bin/ironstate-windows-arm64.exe --agent-binary darwin/amd64=bin/ironstate-darwin-amd64 {{.CLI_ARGS}}
+
+  remote:all:dry-run:
+    desc: Dry-run playbooks/sample against every host in the sample inventory
+    deps: [remote:all:agents]
+    cmds:
+      - go run ./cmd/ironstate --playbook playbooks/sample --inventory playbooks/sample/inventory/main.yml --agent-binary linux/amd64=bin/ironstate-linux-amd64 --agent-binary linux/arm64=bin/ironstate-linux-arm64 --agent-binary windows/amd64=bin/ironstate-windows-amd64.exe --agent-binary windows/arm64=bin/ironstate-windows-arm64.exe --agent-binary darwin/amd64=bin/ironstate-darwin-amd64 {{.CLI_ARGS}}
+
+  remote:all:apply:
+    desc: Apply playbooks/sample against every host in the sample inventory
+    deps: [remote:all:agents]
+    cmds:
+      - go run ./cmd/ironstate --playbook playbooks/sample --inventory playbooks/sample/inventory/main.yml --agent-binary linux/amd64=bin/ironstate-linux-amd64 --agent-binary linux/arm64=bin/ironstate-linux-arm64 --agent-binary windows/amd64=bin/ironstate-windows-amd64.exe --agent-binary windows/arm64=bin/ironstate-windows-arm64.exe --agent-binary darwin/amd64=bin/ironstate-darwin-amd64 --apply {{.CLI_ARGS}}
 
   build-snapshot:
     desc: 'CI job "build-snapshot": goreleaser snapshot of every target'
@@ -126,9 +287,11 @@ tasks:
       - task: lint
       - task: vet
       - task: vuln
+      - task: codeql
       - task: fmt:check
       - task: test
       - task: race
+      - task: test:ssh
       - task: fuzz-smoke
       - task: build-snapshot
 
@@ -144,6 +307,7 @@ tasks:
       - task: vet
       - task: fmt:check
       - task: vuln
+      - task: codeql
       - go test ./...
 
   manpage:

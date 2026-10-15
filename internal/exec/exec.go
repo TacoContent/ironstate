@@ -9,6 +9,7 @@ package exec
 import (
 	"bytes"
 	"os/exec"
+	"runtime"
 	"strings"
 )
 
@@ -39,6 +40,9 @@ func (realRunner) Run(exe string, args []string) (Result, error) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	if runtime.GOOS != "windows" && current.Enabled && becomePassword != "" {
+		cmd.Stdin = strings.NewReader(becomePassword + "\n")
+	}
 
 	runErr := cmd.Run()
 	rc := 0

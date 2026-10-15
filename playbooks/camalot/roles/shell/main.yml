@@ -65,10 +65,12 @@ tasks:
       insertbefore: BOF
       dest: "${{ shell.pwsh.profile | default(defaults.shell.pwsh.profile) }}"
       block: |
-        Write-Output "Loading Profile from $PROFILE";
+        if (-not [Console]::IsInputRedirected -and -not [Console]::IsOutputRedirected) {
+          Write-Output "Loading Profile from $PROFILE";
+        }
         $env:VIRTUAL_ENV_DISABLE_PROMPT = 1;
+        # "Microsoft.WinGet.CommandNotFound",
         $modules = @(
-          "Microsoft.WinGet.CommandNotFound",
           "posh-git",
           "Terminal-Icons"
         );
