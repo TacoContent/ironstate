@@ -34,3 +34,8 @@ tasks:
   - name: Include Mount Fact Role
     include:
       name: roles/mount-fact
+
+  - name: Buffalo Test
+    continue_on_error: true
+    log:
+      message: ${{ "Neque porro quisquam est qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit" | buffalo }}
