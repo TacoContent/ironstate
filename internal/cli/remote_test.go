@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/TacoContent/ironstate/internal/engine"
 	"github.com/TacoContent/ironstate/internal/remoteexec/protocol"
 )
 
@@ -195,5 +196,24 @@ func TestInterruptContextCancelsOnSignal(t *testing.T) {
 	case <-ctx.Done():
 	case <-time.After(time.Second):
 		t.Fatal("interrupt did not cancel context")
+	}
+}
+
+// TestResultsFromJSONPreservesEmoji guards the remote summary table: the
+// handler emoji must survive the leaf_result round trip instead of falling
+// back to ui.DefaultEmoji.
+func TestResultsFromJSONPreservesEmoji(t *testing.T) {
+	in := engine.ToJSONResult(engine.Result{Module: "shell", Emoji: "💻", Package: "pkg"})
+	raw, err := json.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded engine.JSONResult
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	out := resultsFromJSON([]engine.JSONResult{decoded})
+	if got, want := out[0].Emoji, "💻"; got != want {
+		t.Fatalf("emoji = %q, want %q", got, want)
 	}
 }

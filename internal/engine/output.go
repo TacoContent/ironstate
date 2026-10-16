@@ -147,6 +147,7 @@ func PrintSummary(w io.Writer, stats Stats, elapsed time.Duration) error {
 // the remote-apply event protocol.
 type JSONResult struct {
 	Module     string         `json:"module"`
+	Emoji      string         `json:"emoji,omitempty"`
 	Package    string         `json:"package"`
 	State      string         `json:"state"`
 	Action     Action         `json:"action"`
@@ -172,6 +173,7 @@ type JSONExecResult struct {
 func ToJSONResult(r Result) JSONResult {
 	return JSONResult{
 		Module:     secrets.Redact(r.Module),
+		Emoji:      r.Emoji,
 		Package:    secrets.Redact(r.Package),
 		State:      secrets.Redact(r.State),
 		Action:     r.Action,

@@ -510,6 +510,7 @@ func resultsFromJSON(in []engine.JSONResult) []engine.Result {
 	for i, r := range in {
 		out[i] = engine.Result{
 			Module:   sanitizeRemote(r.Module),
+			Emoji:    sanitizeRemote(r.Emoji),
 			Package:  sanitizeRemote(r.Package),
 			State:    sanitizeRemote(r.State),
 			Action:   r.Action,
