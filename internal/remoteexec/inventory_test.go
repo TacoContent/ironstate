@@ -55,6 +55,118 @@ func TestLoadInventoryAppliesDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadInventoryMergesDirectoryInPrimaryThenAlphabeticalOrder(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"main.yml": `
+defaults:
+  user: primary
+  agent_dir: /primary
+hosts:
+  shared: { address: primary.lan, user: primary }
+  primary: { address: primary.lan }
+groups:
+  core: [primary]
+`,
+		"00-extra.yaml": `
+defaults:
+  user: early
+  agent_dir: /early
+hosts:
+  early: { address: early.lan }
+`,
+		"a-extra.yml": `
+defaults:
+  port: 2200
+hosts:
+  shared: { platform: linux }
+  alpha: { address: alpha.lan }
+groups:
+  web: [shared]
+`,
+		"z-extra.yaml": `
+defaults:
+  user: late
+hosts:
+  shared: { address: final.lan }
+  zulu: { address: zulu.lan }
+groups:
+  web: [zulu]
+`,
+		"ignored.txt": "not: an inventory\n",
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	inv, err := LoadInventory(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := inv.hosts["shared"].Address(); got != "primary@final.lan:2200" {
+		t.Errorf("shared address = %q, want primary@final.lan:2200", got)
+	}
+	if got := inv.hosts["shared"].Platform; got != "linux" {
+		t.Errorf("shared platform = %q, want linux", got)
+	}
+	if got := inv.hosts["shared"].AgentDir; got != "/early" {
+		t.Errorf("shared agent directory = %q, want /early", got)
+	}
+	if got := inv.hosts["primary"].Address(); got != "late@primary.lan:2200" {
+		t.Errorf("primary host address = %q, want late@primary.lan:2200", got)
+	}
+	if got := inv.hosts["alpha"].Address(); got != "late@alpha.lan:2200" {
+		t.Errorf("alpha host address = %q, want late@alpha.lan:2200", got)
+	}
+	if got := inv.hosts["zulu"].Address(); got != "late@zulu.lan:2200" {
+		t.Errorf("zulu host address = %q, want late@zulu.lan:2200", got)
+	}
+	web, err := inv.Select([]string{"web"})
+	if err != nil || len(web) != 2 || web[0].Name != "shared" || web[1].Name != "zulu" {
+		t.Errorf("web group = %+v, %v; want shared,zulu", web, err)
+	}
+}
+
+func TestLoadInventoryDirectoryUsesMainYAMLWhenMainYMLIsAbsent(t *testing.T) {
+	dir := t.TempDir()
+	for name, content := range map[string]string{
+		"main.yaml": "defaults:\n  user: primary\nhosts:\n  main: { address: main.lan }\n",
+		"a.yml":     "defaults:\n  port: 2222\nhosts:\n  extra: { address: extra.lan }\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	inv, err := LoadInventory(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := inv.hosts["main"].Address(); got != "primary@main.lan:2222" {
+		t.Errorf("main host address = %q, want primary@main.lan:2222", got)
+	}
+	if got := inv.hosts["extra"].Address(); got != "primary@extra.lan:2222" {
+		t.Errorf("extra host address = %q, want primary@extra.lan:2222", got)
+	}
+}
+
+func TestLoadInventoryDirectoryRejectsInvalidFragment(t *testing.T) {
+	dir := t.TempDir()
+	for name, content := range map[string]string{
+		"main.yml":  "hosts:\n  host: { address: host.lan }\n",
+		"extra.yml": "hosts:\n  host: { adress: typo }\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := LoadInventory(dir); err == nil || !strings.Contains(err.Error(), "extra.yml") {
+		t.Fatalf("LoadInventory error = %v, want invalid fragment filename", err)
+	}
+}
+
 func TestInventoryBecomeFalseDisablesPlaybookBecome(t *testing.T) {
 	inventory := "defaults:\n  become: false\nhosts:\n  router: {address: router.lan}\n  server: {address: server.lan, become: true}\n  admin: {address: admin.lan, become: false}\n"
 	inv, err := LoadInventory(writeInventory(t, inventory))

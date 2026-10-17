@@ -135,7 +135,7 @@ ironstate remote logs kresh --inventory inventory.yml [run_id]
 ironstate remote clean --inventory inventory.yml
 ```
 
-An inventory names hosts and groups and holds connection/elevation settings (per-host configuration stays in the playbook's `hosts/`/`variables/` overlays, which each target picks from its own facts). Schema: [inventory.schema.json](inventory.schema.json).
+An inventory names hosts and groups and holds connection/elevation settings (per-host configuration stays in the playbook's `hosts/`/`variables/` overlays, which each target picks from its own facts). `--inventory` also accepts a directory of `.yml`/`.yaml` fragments: `main.yml` (or `main.yaml` when `main.yml` is absent) loads first, followed by other files alphabetically. Nested mappings merge, later scalar values override earlier ones, and group member lists are appended in file order. Schema: [inventory.schema.json](inventory.schema.json).
 
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/TacoContent/ironstate/develop/inventory.schema.json

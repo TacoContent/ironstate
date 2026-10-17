@@ -89,6 +89,7 @@ tasks:
       - xget install jgm/pandoc --to ~/.local/bin/ --non-interactive --ignore .msi
 
   sha256:
+    internal: true
     desc: Regenerate install/*.sha256 for the install scripts
     cmds:
       - chmod +x ./scripts/generate-install-sha256.sh
@@ -97,6 +98,7 @@ tasks:
       - bash ./scripts/generate-install-sha256.sh
 
   verify:sha256:
+    internal: true
     desc: 'CI job "verify": check install/*.sha256 matches the scripts'
     cmds:
       - bash ./scripts/verify-install-sha256.sh
@@ -115,11 +117,13 @@ tasks:
       - cd examples/ironstate-handler-hosts && go mod tidy
 
   tidy:check:
+    internal: true
     desc: 'CI job "lint": fail if go mod tidy would change any module''s go.mod/go.sum'
     cmds:
       - bash ./scripts/check-tidy.sh
 
   lint:
+    internal: true
     desc: 'CI job "lint": golangci-lint'
     deps:
       - tools
@@ -127,11 +131,13 @@ tasks:
       - golangci-lint run ./...
 
   vet:
+    internal: true
     desc: 'CI job "vet-and-vuln": go vet'
     cmds:
       - go vet ./...
 
   vuln:
+    internal: true
     desc: 'CI job "vet-and-vuln": govulncheck (every module, not just the root)'
     deps:
       - tools
@@ -140,6 +146,7 @@ tasks:
       - cd sdk && govulncheck ./...
 
   codeql:
+    internal: true
     silent: true
     desc: 'codeql.yml workflow: CodeQL Go analysis with the same code-scanning suite; fails on any alert'
     cmds:
@@ -173,6 +180,8 @@ tasks:
         echo "CodeQL: no alerts"
 
   fmt:check:
+    internal: true
+    silent: true
     desc: Fail if any file is not gofmt-clean
     cmds:
       # gofmt -l exits 0 even when it lists files, so turn any output into a failure.
@@ -191,7 +200,8 @@ tasks:
       - go test ./... -coverprofile=coverage.out
 
   race:
-    hidden: true
+    internal: true
+    silent: true
     desc: 'CI job "race": race detector over internal/filters (needs cgo + a C toolchain)'
     env:
       CGO_ENABLED: "1"
@@ -208,11 +218,13 @@ tasks:
         go test ./internal/filters/... -race
 
   test:ssh:
+    internal: true
     desc: 'CI job "ssh-integration": remote apply against a throwaway sshd container (needs docker)'
     cmds:
       - bash ./scripts/ssh-integration.sh
 
   fuzz-smoke:
+    internal: true
     desc: 'CI job "fuzz-smoke": short fuzz runs over internal/expr'
     vars:
       FUZZTIME: '{{.FUZZTIME | default "20s"}}'
@@ -342,6 +354,7 @@ tasks:
       - go run ./cmd/ironstate --playbook playbooks/sample --inventory playbooks/sample/inventory/main.yml --agent-binary linux/amd64=bin/ironstate-linux-amd64 --agent-binary linux/arm64=bin/ironstate-linux-arm64 --agent-binary windows/amd64=bin/ironstate-windows-amd64.exe --agent-binary windows/arm64=bin/ironstate-windows-arm64.exe --agent-binary darwin/amd64=bin/ironstate-darwin-amd64 --apply {{.CLI_ARGS}}
 
   build-snapshot:
+    internal: true
     desc: 'CI job "build-snapshot": goreleaser snapshot of every target'
     env:
       # cgo cross-compilation for android needs the NDK, which is only present in CI.

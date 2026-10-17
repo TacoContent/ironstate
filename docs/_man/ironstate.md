@@ -74,9 +74,9 @@ Giving **--target** or **--inventory** applies the playbook to other machines ov
 
 : Add a target. The host may be an ssh config alias. **local** runs the agent on this machine without SSH. May be repeated.
 
-**--inventory**=*FILE*
+**--inventory**=*FILE|DIR*
 
-: Inventory of hosts and groups (see **inventory.schema.json**). Without **--limit** every inventory host is selected.
+: Inventory file or directory of inventory files (see **inventory.schema.json**). For a directory, **main.yml** (or **main.yaml** when **main.yml** is absent) is loaded first, followed by the other **.yml**/**.yaml** files alphabetically. Nested mappings merge, later scalar values override earlier ones, and group member lists are appended in file order. Without **--limit** every inventory host is selected.
 
 **--limit**=*NAME[,NAME...]*
 

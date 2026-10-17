@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -70,23 +72,154 @@ const AllGroup = "all"
 
 var inventoryNamePattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*$`)
 
-// LoadInventory reads and validates an inventory file. Unknown keys are
-// errors so typos don't silently drop settings.
+// LoadInventory reads and validates an inventory file or directory. Unknown
+// keys are errors so typos don't silently drop settings.
 func LoadInventory(path string) (*Inventory, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.IsDir() {
+		return loadInventoryDirectory(path)
+	}
+	return loadInventoryFile(path)
+}
+
+func loadInventoryFile(path string) (*Inventory, error) {
 	data, err := os.ReadFile(path) //nolint:gosec // operator-chosen inventory file
 	if err != nil {
 		return nil, err
 	}
 	var inv Inventory
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
-	if err := dec.Decode(&inv); err != nil && !errors.Is(err, io.EOF) {
+	if err := decodeInventory(data, &inv); err != nil {
 		return nil, fmt.Errorf("inventory %s: %w", path, err)
 	}
 	if err := inv.build(); err != nil {
 		return nil, fmt.Errorf("inventory %s: %w", path, err)
 	}
 	return &inv, nil
+}
+
+func loadInventoryDirectory(path string) (*Inventory, error) {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(entry.Name()))
+		if ext == ".yml" || ext == ".yaml" {
+			files = append(files, filepath.Join(path, entry.Name()))
+		}
+	}
+	if len(files) == 0 {
+		return nil, fmt.Errorf("inventory directory %s contains no .yml or .yaml files", path)
+	}
+
+	primary := ""
+	for _, file := range files {
+		switch filepath.Base(file) {
+		case "main.yml":
+			primary = file
+		case "main.yaml":
+			if primary == "" {
+				primary = file
+			}
+		}
+	}
+	sort.Slice(files, func(i, j int) bool {
+		if primary != "" && files[i] == primary {
+			return true
+		}
+		if primary != "" && files[j] == primary {
+			return false
+		}
+		return filepath.Base(files[i]) < filepath.Base(files[j])
+	})
+
+	var merged yaml.Node
+	for i, file := range files {
+		data, err := os.ReadFile(file) //nolint:gosec // operator-chosen inventory directory
+		if err != nil {
+			return nil, fmt.Errorf("inventory %s: %w", file, err)
+		}
+
+		// Validate each fragment before merging, so an invalid key cannot be
+		// hidden by a later fragment that overrides it.
+		var fragment Inventory
+		if err := decodeInventory(data, &fragment); err != nil {
+			return nil, fmt.Errorf("inventory %s: %w", file, err)
+		}
+
+		var document yaml.Node
+		dec := yaml.NewDecoder(bytes.NewReader(data))
+		if err := dec.Decode(&document); err != nil && !errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("inventory %s: %w", file, err)
+		}
+		root := documentRoot(&document)
+		if i == 0 {
+			merged = *root
+		} else {
+			mergeYAMLNode(&merged, root)
+		}
+	}
+
+	var inv Inventory
+	if err := merged.Decode(&inv); err != nil {
+		return nil, fmt.Errorf("inventory directory %s: %w", path, err)
+	}
+	if err := inv.build(); err != nil {
+		return nil, fmt.Errorf("inventory directory %s: %w", path, err)
+	}
+	return &inv, nil
+}
+
+func decodeInventory(data []byte, inv *Inventory) error {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(inv); err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	return nil
+}
+
+func documentRoot(document *yaml.Node) *yaml.Node {
+	if document.Kind == yaml.DocumentNode && len(document.Content) > 0 {
+		return document.Content[0]
+	}
+	return &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+}
+
+func mergeYAMLNode(dst, src *yaml.Node) {
+	if src.Tag == "!!null" {
+		return
+	}
+	if dst.Kind == yaml.SequenceNode && src.Kind == yaml.SequenceNode {
+		dst.Content = append(dst.Content, src.Content...)
+		return
+	}
+	if dst.Kind != yaml.MappingNode || src.Kind != yaml.MappingNode {
+		*dst = *src
+		return
+	}
+	for i := 0; i+1 < len(src.Content); i += 2 {
+		key, value := src.Content[i], src.Content[i+1]
+		var existing *yaml.Node
+		for j := 0; j+1 < len(dst.Content); j += 2 {
+			if dst.Content[j].Value == key.Value {
+				existing = dst.Content[j+1]
+				break
+			}
+		}
+		if existing == nil {
+			dst.Content = append(dst.Content, key, value)
+			continue
+		}
+		mergeYAMLNode(existing, value)
+	}
 }
 
 func (inv *Inventory) build() error {

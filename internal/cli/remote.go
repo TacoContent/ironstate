@@ -28,7 +28,7 @@ import (
 // addRemoteFlags registers the flags shared by remote apply and 'remote ping'.
 func addRemoteFlags(flags *pflag.FlagSet) {
 	flags.StringArray("target", nil, "apply to a remote host over SSH ([user@]host[:port] or an ssh config alias; 'local' runs the agent locally); repeatable")
-	flags.String("inventory", "", "inventory file of remote hosts and groups (see inventory.schema.json)")
+	flags.String("inventory", "", "inventory file or directory of remote hosts and groups (see inventory.schema.json)")
 	flags.StringSlice("limit", nil, "with --inventory: only these hosts/groups ('all' = every host); comma-separated or repeatable")
 	flags.Int("forks", 5, "how many hosts to run at once")
 	flags.Duration("host-timeout", 0, "maximum duration for one remote host operation (e.g. 5m; 0 disables)")
