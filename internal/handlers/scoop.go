@@ -183,7 +183,7 @@ func (scoopHandler) Scan(ctx engine.Context) ([]engine.ScanItem, error) {
 	}
 	var export scoopExportFile
 	if err := json.Unmarshal([]byte(result.Stdout), &export); err != nil {
-		return nil, nil //nolint:nilerr // unparseable export just means nothing to report
+		return nil, nil //nolint:nilerr // unparsable export just means nothing to report
 	}
 	out := make([]engine.ScanItem, 0)
 	for _, app := range export.Apps {

@@ -160,7 +160,7 @@ func (xgetHandler) Scan(ctx engine.Context) ([]engine.ScanItem, error) {
 	}
 	var installed xgetInstalledFile
 	if err := yaml.Unmarshal(data, &installed); err != nil {
-		return nil, nil //nolint:nilerr // unparseable record file just means nothing to report
+		return nil, nil //nolint:nilerr // unparsable record file just means nothing to report
 	}
 
 	keys := make([]string, 0, len(installed.Packages))

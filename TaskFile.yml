@@ -16,6 +16,8 @@ vars:
 tasks:
   lint-linux:
     desc: Run golangci-lint with Linux build selection (matches Ubuntu CI from Windows)
+    deps:
+      - tools
     cmds:
       - pwsh -NoProfile -Command "[Environment]::SetEnvironmentVariable('GOOS','linux','Process'); golangci-lint run ./..."
 
@@ -24,11 +26,67 @@ tasks:
   # failure shows up locally instead of for the first time in Actions. Keep
   # the two in sync when either changes.
 
+  require-xget:
+    silent: true
+    internal: true
+    desc: Ensure xget is installed in the system PATH
+    cmds:
+      - command -v xget >/dev/null 2>&1 || { echo "xget is required but not installed"; exit 1; }
+  
   tools:
-    desc: Install the CI-only Go tools (golangci-lint, govulncheck) into GOBIN
+    internal: true
+    deps:
+      - require-xget
+    desc: Install the CI tools
+    cmds:
+      - task: tools:typos
+      - task: tools:golangci
+      - task: tools:govulncheck
+      - task: tools:pandoc
+
+  tools:golangci:
+    internal: true
+    deps:
+      - require-xget
+    desc: Install golangci-lint into GOBIN
+    if: '! command -v golangci-lint >/dev/null 2>&1'
+    status:
+      - '! command -v golangci-lint >/dev/null 2>&1'
     cmds:
       - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+
+  tools:govulncheck:
+    internal: true
+    deps:
+      - require-xget
+    desc: Install govulncheck into GOBIN
+    if: '! command -v govulncheck >/dev/null 2>&1'
+    status:
+      - '! command -v govulncheck >/dev/null 2>&1'
+    cmds:
       - go install golang.org/x/vuln/cmd/govulncheck@latest
+
+  tools:typos:
+    internal: true
+    deps:
+      - require-xget
+    desc: Install typos-action into GOBIN
+    if: '! command -v typos >/dev/null 2>&1'
+    status:
+      - '! command -v typos >/dev/null 2>&1'
+    cmds:
+      - xget install crate-ci/typos --to ~/.local/bin/ --non-interactive
+
+  tools:pandoc:
+    internal: true
+    deps:
+      - require-xget
+    desc: Install pandoc into GOBIN
+    if: '! command -v pandoc >/dev/null 2>&1'
+    status:
+      - '! command -v pandoc >/dev/null 2>&1'
+    cmds:
+      - xget install jgm/pandoc --to ~/.local/bin/ --non-interactive --ignore .msi
 
   sha256:
     desc: Regenerate install/*.sha256 for the install scripts
@@ -42,6 +100,12 @@ tasks:
     desc: 'CI job "verify": check install/*.sha256 matches the scripts'
     cmds:
       - bash ./scripts/verify-install-sha256.sh
+
+  typos:check:
+    internal: false
+    desc: 'CI job "typos": check for typos'
+    cmds:
+      - typos
 
   tidy:
     desc: go mod tidy across every module (root, sdk, examples)
@@ -57,6 +121,8 @@ tasks:
 
   lint:
     desc: 'CI job "lint": golangci-lint'
+    deps:
+      - tools
     cmds:
       - golangci-lint run ./...
 
@@ -67,11 +133,14 @@ tasks:
 
   vuln:
     desc: 'CI job "vet-and-vuln": govulncheck (every module, not just the root)'
+    deps:
+      - tools
     cmds:
       - govulncheck ./...
       - cd sdk && govulncheck ./...
 
   codeql:
+    silent: true
     desc: 'codeql.yml workflow: CodeQL Go analysis with the same code-scanning suite; fails on any alert'
     cmds:
       # Uses a codeql CLI on PATH, else the official gh extension; skips loudly
@@ -122,6 +191,7 @@ tasks:
       - go test ./... -coverprofile=coverage.out
 
   race:
+    hidden: true
     desc: 'CI job "race": race detector over internal/filters (needs cgo + a C toolchain)'
     env:
       CGO_ENABLED: "1"
@@ -283,6 +353,7 @@ tasks:
     desc: Run every check the ci.yml workflow runs, in the same order
     cmds:
       - task: verify:sha256
+      - task: typos:check
       - task: tidy:check
       - task: lint
       - task: vet
@@ -299,25 +370,31 @@ tasks:
     desc: Build the project (local dev loop - full CI parity is 'task ci')
     cmds:
       - task: sha256
-      - echo "Building the project..."
-      - mkdir -p bin
+      - task: verify:sha256
+      - task: manpage:clean
+      - task: typos:check
+      - task: tidy:check
       - task: tidy
       - task: lint
-      - goreleaser build --snapshot --clean --id ironstate-windows --id ironstate-unix
       - task: vet
       - task: fmt:check
       - task: vuln
       - task: codeql
-      - go test ./...
+      - task: test
+      - task: build-snapshot
+
+  manpage:clean:
+    desc: Clean the generated manpage
+    cmds:
+      - rm -f dist/ironstate.1
+      - task: manpage
 
   manpage:
-    desc: Generate ironstate.1 (falls back to a stub when pandoc is unavailable)
+    desc: Generate dist/ironstate.1
     status:
-      - test -f ironstate.1
+      - test -f dist/ironstate.1
     cmds:
-      - cmd: pandoc docs/_man/ironstate.md -s -t man -o ironstate.1
-        ignore_error: true
-      - cmd: test -f ironstate.1 || printf '.TH IRONSTATE 1\n.SH NAME\nironstate \\- placeholder man page\n' > ironstate.1
+      - cmd: pandoc docs/_man/ironstate.md -s -t man -o dist/ironstate.1
 
   release:dry-run:
     desc: Build the release and render the winget/scoop/homebrew manifests into dist/ without publishing anything

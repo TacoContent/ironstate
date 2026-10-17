@@ -12,7 +12,7 @@ tasks:
       name: $my_secret
       value: ${{ lookup('env', 'MY_SECRET') }}
 
-  - name: Fact with Constant Secert
+  - name: Fact with Constant Secret
     fact:
       name: $constant_secret
       value: "supersecretvalue"

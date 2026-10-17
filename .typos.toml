@@ -1,0 +1,38 @@
+[files]
+extend-exclude = [
+  "go.mod",
+  "go.sum",
+  "CHANGELOG.md",
+  "*_test.go"
+]
+ignore-hidden = true
+ignore-files = true
+ignore-dot = true
+ignore-vcs = true
+ignore-global = true
+ignore-parent = true
+
+[default]
+binary = false
+check-filename = true
+check-file = true
+unicode = true
+locale = "en"
+extend-ignore-re = [
+  '''/FO''',            # This is a flag used in command-line
+  '''remove(ing|ed)''', # From a test to ensure the action is word is correct.
+]
+extend-ignore-identifiers-re = []
+extend-ignore-words-re = [
+  '^kresh$', # This is a PC name and valid.
+  '^ba$'     # This is a variable name that is triggering false positives
+]
+
+[default.extend-words]
+# <typo> = "<correction>"
+
+[default.extend-identifiers]
+# <typo> = "<correction>"
+
+# [type.NAME]
+# extend-glob = []
