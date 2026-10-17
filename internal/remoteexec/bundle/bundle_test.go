@@ -95,6 +95,8 @@ func TestExtractRejectsUnsafeEntries(t *testing.T) {
 		"drive":            {Name: "C:/evil", Typeflag: tar.TypeReg, Mode: 0o600},
 		"symlink escape":   {Name: "link", Typeflag: tar.TypeSymlink, Linkname: "../outside"},
 		"symlink abs":      {Name: "link", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd"},
+		"symlink drive":    {Name: "link", Typeflag: tar.TypeSymlink, Linkname: "C:/outside"},
+		"symlink slash":    {Name: "link", Typeflag: tar.TypeSymlink, Linkname: `..\outside`},
 		"device":           {Name: "dev", Typeflag: tar.TypeChar},
 		"hardlink":         {Name: "hard", Typeflag: tar.TypeLink, Linkname: "x"},
 		"deep link escape": {Name: "a/b/link", Typeflag: tar.TypeSymlink, Linkname: "../../../x"},
@@ -157,6 +159,63 @@ func TestBuildRejectsEscapingSymlink(t *testing.T) {
 	}
 	if _, err := Build(&bytes.Buffer{}, Spec{Dirs: []Dir{{Source: src, Dest: "playbook"}}}); err == nil || !strings.Contains(err.Error(), "outside the bundle") {
 		t.Fatalf("err = %v, want escaping-symlink error", err)
+	}
+}
+
+func TestExtractPreservesSafeSymlinks(t *testing.T) {
+	if err := os.Symlink(".", filepath.Join(t.TempDir(), "probe")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	for name, target := range map[string]string{
+		"existing": "target",
+		"parent":   "../target",
+		"dangling": "missing/target",
+		"root":     "..",
+	} {
+		t.Run(name, func(t *testing.T) {
+			dest := t.TempDir()
+			writeTestFile(t, filepath.Join(dest, "target"), "root")
+			writeTestFile(t, filepath.Join(dest, "a", "target"), "nested")
+			data := tarGz(t, &tar.Header{Name: "a/link", Typeflag: tar.TypeSymlink, Linkname: target})
+			if err := Extract(bytes.NewReader(data), dest); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.Readlink(filepath.Join(dest, "a", "link"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != filepath.FromSlash(target) {
+				t.Fatalf("link target = %q, want %q", got, filepath.FromSlash(target))
+			}
+		})
+	}
+}
+
+func TestExtractRejectsPreexistingSymlinkEscape(t *testing.T) {
+	for _, missing := range []bool{false, true} {
+		t.Run(map[bool]string{false: "existing target", true: "missing target"}[missing], func(t *testing.T) {
+			dest := t.TempDir()
+			outside := t.TempDir()
+			writeTestFile(t, filepath.Join(outside, "target"), "outside")
+			if err := os.Symlink(outside, filepath.Join(dest, "escape")); err != nil {
+				t.Skipf("symlinks unavailable: %v", err)
+			}
+			target := "escape/target"
+			if missing {
+				target = "escape/missing/target"
+			}
+			data := tarGz(t, &tar.Header{Name: "link", Typeflag: tar.TypeSymlink, Linkname: target})
+			if err := Extract(bytes.NewReader(data), dest); err == nil || !strings.Contains(err.Error(), "escapes") {
+				t.Fatalf("err = %v, want an escape rejection", err)
+			}
+			if _, err := os.Lstat(filepath.Join(dest, "link")); !os.IsNotExist(err) {
+				t.Fatalf("unsafe link was created: %v", err)
+			}
+			got, err := os.ReadFile(filepath.Join(outside, "target"))
+			if err != nil || string(got) != "outside" {
+				t.Fatalf("outside target = %q, err = %v", got, err)
+			}
+		})
 	}
 }
 

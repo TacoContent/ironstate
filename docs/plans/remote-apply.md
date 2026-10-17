@@ -413,6 +413,8 @@ are per-platform, so a lockfile only verifies on targets of the platform that wr
 
 The agent verifies the bundle sha256 before unpacking; rejects `..`/absolute/symlink-escape
 entries (reusing the zip-slip guard pattern from `handlers/zip.go`).
+Symlink targets and their existing parent paths are resolved before creation;
+safe relative links, including dangling links inside the work dir, are preserved.
 
 ### 9.3 Events
 

@@ -389,16 +389,15 @@ func checkResolvedWithin(root, target string) error {
 	return nil
 }
 
-// isRel resolves candidate from base (a real directory) one segment at a
-// time, following existing symlinks, and reports whether every step stays
-// inside root. '..' is only allowed before the first name: a name that
+// isRel resolves candidate from base (a real directory), checking the full
+// path and each parent for symlink escapes, including when the target does
+// not exist yet. '..' is only allowed before the first name: a name that
 // doesn't exist yet could become a symlink later in the archive, and '..'
 // after it would then climb from wherever that link points.
 func isRel(candidate, base, root string) bool {
 	if candidate == "" || filepath.IsAbs(candidate) || strings.HasPrefix(candidate, "/") {
 		return false
 	}
-	current := base
 	leading := true
 	for _, segment := range strings.Split(filepath.ToSlash(candidate), "/") {
 		switch segment {
@@ -408,24 +407,33 @@ func isRel(candidate, base, root string) bool {
 			if !leading {
 				return false
 			}
-			current = filepath.Dir(current)
 		default:
 			leading = false
-			current = filepath.Join(current, segment)
-			resolved, err := filepath.EvalSymlinks(current)
-			switch {
-			case err == nil:
-				current = resolved
-			case !errors.Is(err, fs.ErrNotExist):
-				return false
-			}
-		}
-		rel, err := filepath.Rel(root, current)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-			return false
 		}
 	}
-	return true
+	current := filepath.Join(base, filepath.FromSlash(candidate))
+	if !withinRoot(root, current) {
+		return false
+	}
+	for {
+		resolved, err := filepath.EvalSymlinks(current)
+		switch {
+		case err == nil:
+			if !withinRoot(root, resolved) {
+				return false
+			}
+		case !errors.Is(err, fs.ErrNotExist):
+			return false
+		}
+		if current == root {
+			return true
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return false
+		}
+		current = parent
+	}
 }
 
 func withinRoot(root, p string) bool {
