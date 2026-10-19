@@ -25,6 +25,9 @@ playbooks/
 
 .*.taskfile.yml
 
+.codeql/
+.task/
+
 rsrc_*.syso
 ironstate.exe
 ironstate.1

@@ -8,10 +8,19 @@ vars:
   SNOKE_USER: ryan
   SNOKE_IP: '192.168.2.103'
   SNOKE_ARCH: amd64
-# includes:
-#   local: .local.taskfile.yml
-    # taskfile: .local.taskfile.yml
-    # optional: true
+  GITHUB_TOKEN_NAME: GITHUB_TOKEN
+  # CAMALOT_ACTIONS_VERSION: tags/v1
+  CAMALOT_ACTIONS_VERSION: heads/main
+
+dotenv:
+  - .secrets
+  - .env
+
+includes:
+  codeql:
+    taskfile: 'https://raw.githubusercontent.com/camalot/actions/refs/{{.CAMALOT_ACTIONS_VERSION}}/smells/codeql/Taskfile.yml'
+    flatten: true
+    internal: true
 
 tasks:
   lint-linux:
@@ -146,38 +155,12 @@ tasks:
       - cd sdk && govulncheck ./...
 
   codeql:
-    internal: true
-    silent: true
-    desc: 'codeql.yml workflow: CodeQL Go analysis with the same code-scanning suite; fails on any alert'
+    internal: false
+    silent: false
     cmds:
-      # Uses a codeql CLI on PATH, else the official gh extension; skips loudly
-      # like 'race' does without a C compiler.
-      - |
-        if command -v codeql >/dev/null 2>&1; then
-          cq="codeql"
-        elif gh codeql version >/dev/null 2>&1; then
-          cq="gh codeql"
-        else
-          echo "⚠ skipping CodeQL: no CLI found (install with: gh extension install github/gh-codeql) - CI still runs codeql.yml."
-          exit 0
-        fi
-        mkdir -p .codeql
-        if ! $cq database create .codeql/db --language=go --source-root=. --overwrite >.codeql/create.log 2>&1; then
-          cat .codeql/create.log
-          exit 1
-        fi
-        if ! $cq database analyze .codeql/db codeql/go-queries:codeql-suites/go-code-scanning.qls --download --format=sarif-latest --output=.codeql/results.sarif >.codeql/analyze.log 2>&1; then
-          cat .codeql/analyze.log
-          exit 1
-        fi
-        # -j: no trailing newline (Windows jq writes CRLF).
-        count="$(jq -j '[.runs[].results[]] | length' .codeql/results.sarif)"
-        if [ "$count" != "0" ]; then
-          jq -r '.runs[].results[] | "\(.ruleId) \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine): \(.message.text)"' .codeql/results.sarif
-          echo "CodeQL found $count alert(s); full report: .codeql/results.sarif"
-          exit 1
-        fi
-        echo "CodeQL: no alerts"
+      - task: codeql:actions:.
+      - task: codeql:go:.
+      - task: codeql:go:sdk
 
   fmt:check:
     internal: true
@@ -386,8 +369,8 @@ tasks:
       - task: verify:sha256
       - task: manpage:clean
       - task: typos:check
-      - task: tidy:check
       - task: tidy
+      - task: tidy:check
       - task: lint
       - task: vet
       - task: fmt:check
