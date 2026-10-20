@@ -92,6 +92,7 @@ ironstate init my-playbook
 ironstate --playbook path/to/your/playbook
 ironstate --playbook path/to/your/main.yml --apply
 ironstate --playbook path/to/your/main.yml --tags cli,security --apply
+ironstate --playbook path/to/your/main.yml --tag cli --tag security --apply
 
 # Verbose (also prints a line for every already-satisfied/skipped leaf)
 ironstate --playbook path/to/your/main.yml --verbose
@@ -1602,7 +1603,7 @@ Manage local users on Windows/Linux/macOS.
 
 ## Tags filtering
 
-`--tags` is a flat set of tags; a leaf runs if `--tags` is omitted, or if any of its effective tags (its own plus every ancestor task's) match:
+`--tags` (comma-separated) and repeatable `--tag` select the same flat set of tags. Both forms can be combined; either CLI form overrides tag defaults from the environment/config file. A leaf runs if no tags are selected, or if any of its effective tags (its own plus every ancestor task's) match:
 
 ```shell
 # Anything tagged "cli", anywhere in the tree
@@ -1610,6 +1611,12 @@ Manage local users on Windows/Linux/macOS.
 
 # Anything tagged "cli" OR "security"
 ./bin/ironstate --tags cli,security
+
+# Equivalent, using one option per tag
+./bin/ironstate --tag cli --tag security
+
+# Both forms can be combined
+./bin/ironstate --tags cli,security --tag editors
 ```
 
 There's no `<group>.<tag>` scheme - `--tags` doesn't know about module names at all, only tags.

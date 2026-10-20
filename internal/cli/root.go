@@ -52,6 +52,7 @@ func newRootCommand() (*cobra.Command, error) {
 	flags.StringArray("var", nil, "override a var by dotted key path: --var key=value (repeatable, highest precedence)")
 	flags.Bool("apply", false, "actually apply changes (default: dry-run)")
 	flags.StringSlice("tags", nil, "restrict processing to tasks/actions carrying any of these tags")
+	flags.StringArray("tag", nil, "restrict processing to tasks/actions carrying this tag (repeatable; combines with --tags)")
 	flags.String("output", "table", "result output format: table|json|ndjson (ndjson streams one JSON event per line)")
 	flags.BoolP("verbose", "v", false, "verbose output")
 	flags.Bool("no-color", false, "disable colored output")

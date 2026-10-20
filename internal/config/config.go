@@ -17,7 +17,7 @@ type Config struct {
 	VarsFiles    []string // --vars-file (repeatable): extra vars documents merged in, in order, on top of the auto-detected chain, before --var
 	VarOverrides []string // --var key=value (repeatable, dotted key paths, highest precedence)
 	Apply        bool     // --apply
-	Tags         []string // --tags
+	Tags         []string // --tags and repeatable --tag
 	Output       string   // --output table|json
 	Verbose      bool     // -v/--verbose
 
@@ -79,12 +79,26 @@ func Load(flags *pflag.FlagSet) (*Config, error) {
 		return nil, err
 	}
 
+	tags := v.GetStringSlice("tags")
+	if flags.Changed("tag") {
+		singleTags, err := flags.GetStringArray("tag")
+		if err != nil {
+			return nil, err
+		}
+		// Either CLI spelling overrides env/config defaults, while both
+		// spellings on the command line contribute to the same selection.
+		if !flags.Changed("tags") {
+			tags = nil
+		}
+		tags = append(tags, singleTags...)
+	}
+
 	return &Config{
 		Playbook:     v.GetString("playbook"),
 		VarsFiles:    varsFiles,
 		VarOverrides: varOverrides,
 		Apply:        v.GetBool("apply"),
-		Tags:         v.GetStringSlice("tags"),
+		Tags:         tags,
 		Output:       v.GetString("output"),
 		Verbose:      v.GetBool("verbose"),
 

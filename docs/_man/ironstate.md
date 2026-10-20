@@ -46,6 +46,10 @@ The program is distributed as a single binary for Windows, Linux, and macOS. A p
 
 : Restrict processing to tasks or actions carrying one of the specified tags.
 
+**--tag**=*TAG*
+
+: Select a single tag. Repeat for multiple tags, or combine with **--tags**. Either CLI form overrides tag defaults from the environment/config file.
+
 **--output**=*FORMAT*
 
 : Select result output format: **table** (the default), **json**, or **ndjson**. JSON results are written to standard output; operational messages are written to standard error. **ndjson** streams one JSON event per line (**leaf_start**, **log**, **leaf_result**, **facts**, **summary**, **error**, **done**) as the run progresses; with remote targets every event carries a **host** field and a final run-level **done** reports the overall exit code.
@@ -360,6 +364,10 @@ Apply changes:
 Apply only selected tags:
 
     ironstate --playbook playbooks/site --tags security,packages --apply
+
+Equivalently, repeat **--tag**:
+
+    ironstate --playbook playbooks/site --tag security --tag packages --apply
 
 Use variable overrides:
 

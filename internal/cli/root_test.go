@@ -4,9 +4,53 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
+
+func TestTagFlags(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if err := os.WriteFile("ironstate.yaml", []byte("tags: [config-tag]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		args []string
+		env  string
+		want []string
+	}{
+		{"config default", nil, "", []string{"config-tag"}},
+		{"environment default", nil, "env-tag", []string{"env-tag"}},
+		{"single", []string{"--tag", "tag1"}, "", []string{"tag1"}},
+		{"repeatable", []string{"--tag", "tag1", "--tag", "tag2"}, "", []string{"tag1", "tag2"}},
+		{"csv", []string{"--tags", "tag1,tag2"}, "", []string{"tag1", "tag2"}},
+		{"repeated csv", []string{"--tags", "tag1,tag2", "--tags", "tag3"}, "", []string{"tag1", "tag2", "tag3"}},
+		{"mixed", []string{"--tags", "tag1,tag2", "--tag", "tag3"}, "", []string{"tag1", "tag2", "tag3"}},
+		{"mixed reversed", []string{"--tag", "tag3", "--tags", "tag1,tag2"}, "", []string{"tag1", "tag2", "tag3"}},
+		{"overrides environment", []string{"--tag", "tag1"}, "env-tag", []string{"tag1"}},
+		{"csv overrides environment", []string{"--tags", "tag1,tag2"}, "env-tag", []string{"tag1", "tag2"}},
+		{"mixed overrides environment", []string{"--tag", "tag3", "--tags", "tag1,tag2"}, "env-tag", []string{"tag1", "tag2", "tag3"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("IRONSTATE_TAGS", tc.env)
+			cmd, err := newRootCommand()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := cmd.ParseFlags(tc.args); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := loadConfig(cmd)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(cfg.Tags, tc.want) {
+				t.Fatalf("Tags = %q, want %q", cfg.Tags, tc.want)
+			}
+		})
+	}
+}
 
 func TestRunApplyLoadsDotEnvAndDotSecretsFromCWD(t *testing.T) {
 	dir := t.TempDir()
