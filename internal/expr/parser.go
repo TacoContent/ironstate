@@ -208,6 +208,8 @@ func (p *parser) parsePrimary() (Node, error) {
 	case tokNull:
 		p.advance()
 		return &LiteralNode{Value: nil}, nil
+	case tokLBrace:
+		return p.parseMap()
 	case tokLBracket:
 		p.advance()
 		var items []Node
@@ -284,4 +286,34 @@ func (p *parser) parsePrimary() (Node, error) {
 	}
 
 	return nil, p.errf("unexpected token in expression")
+}
+
+func (p *parser) parseMap() (Node, error) {
+	p.advance()
+	var entries []MapEntry
+	for p.current().typ != tokRBrace {
+		key := p.current()
+		if key.typ != tokIdent && key.typ != tokString {
+			return nil, p.errf("expected a string or identifier map key")
+		}
+		p.advance()
+		if p.current().typ != tokColon {
+			return nil, p.errf("expected ':' after map key")
+		}
+		p.advance()
+		value, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, MapEntry{Key: key.str, Value: value})
+		if p.current().typ != tokComma {
+			break
+		}
+		p.advance()
+	}
+	if p.current().typ != tokRBrace {
+		return nil, p.errf("expected '}' after map entries")
+	}
+	p.advance()
+	return &MapNode{Entries: entries}, nil
 }

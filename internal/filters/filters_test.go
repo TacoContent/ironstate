@@ -434,7 +434,7 @@ func TestLookupFilterURLHeaders(t *testing.T) {
 func TestNamesIncludesEveryBuiltin(t *testing.T) {
 	names := New().Names()
 	want := []string{
-		"default", "toggle", "ternary", "enabled", "upper", "lower", "trim",
+		"default", "map", "merge", "toggle", "ternary", "enabled", "upper", "lower", "trim",
 		"quote", "length", "concat", "join", "split", "prefix", "dirname",
 		"basename", "resolve", "exists", "sha1", "extension", "from_json", "json_query", "lookup",
 	}

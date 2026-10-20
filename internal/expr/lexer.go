@@ -23,6 +23,18 @@ func tokenize(expression string) ([]token, error) {
 		}
 
 		switch c {
+		case '{':
+			tokens = append(tokens, token{typ: tokLBrace})
+			i++
+			continue
+		case '}':
+			tokens = append(tokens, token{typ: tokRBrace})
+			i++
+			continue
+		case ':':
+			tokens = append(tokens, token{typ: tokColon})
+			i++
+			continue
 		case '(':
 			tokens = append(tokens, token{typ: tokLParen})
 			i++

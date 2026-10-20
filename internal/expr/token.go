@@ -15,6 +15,7 @@
 //	pipeline    := primary ("|" IDENT ("(" (expr ("," expr)*)? ")")?)*
 //	primary     := STRING | NUMBER | "true" | "false" | "null"
 //	             | "[" (expr ("," expr)*)? "]"
+//	             | "{" ((IDENT | STRING) ":" expr ("," (IDENT | STRING) ":" expr)* ","?)? "}"
 //	             | IDENT "(" (expr ("," expr)*)? ")"          (bare filter call)
 //	             | IDENT (("." IDENT) | ("[" NUMBER "]"))*    (dotted/indexed path)
 //	             | "(" expr ")"
@@ -30,6 +31,9 @@ const (
 	tokRParen
 	tokLBracket
 	tokRBracket
+	tokLBrace
+	tokRBrace
+	tokColon
 	tokComma
 	tokDot
 	tokPipe

@@ -616,6 +616,7 @@ membership := pipeline (("in" | "not in") primary | ("is" | "is not") IDENT)?
 pipeline   := primary ("|" IDENT ("(" (expr ("," expr)*)? ")")?)*   # filter chain, e.g. value | default("x") | upper
 primary    := STRING | NUMBER | "true" | "false" | "null"
             | "[" (expr ("," expr)*)? "]"
+            | "{" ((IDENT | STRING) ":" expr ("," (IDENT | STRING) ":" expr)* ","?)? "}"
             | IDENT (("." IDENT) | ("[" NUMBER "]"))*   # dotted/indexed path, e.g. nested.value, results[0].rc
             | "(" expr ")"
 ```
@@ -626,11 +627,13 @@ This grammar lives in `internal/expr` and is shared with `${{ }}` template expre
 - `in`/`not in`: right-hand side a list → membership check; a string → substring containment.
 - A bare variable with no operator is truthy-checked directly (Ansible-style `when: some_var`).
 - `is`/`is not` type-tests: `mapping` (alias `map`), `boolean` (alias `bool`), `string`, `number`, `list`, `defined`, `none` (alias `null`). Use these instead of `==`/truthy checks when you need to know a value's actual type rather than whether it casts to `true` - notably, `some_map == true` is **also true for any non-empty mapping**, since both go through the same truthy cast, so `is mapping`/`is boolean` are the only reliable way to tell "a boolean `true`" apart from "a map" (see `packages/languages/main.yml`, where a var can be either a blanket `true` or a per-key map).
-- `value | filter(args)` pipes a value through a named filter, Jinja-style, and chains left-to-right (`value | trim | upper`). Filters bind tighter than comparisons, so `java_version | default("25") == "25"` filters first, then compares. Every built-in filter below lives in `internal/filters/builtins.go`; a playbook can also add its own without recompiling via a script filter (see [Custom filters](#custom-filters)). Unless noted otherwise, every filter is **null-in/null-out**: a `null` piped value passes straight through rather than erroring.
+- `value | filter(args)` pipes a value through a named filter, Jinja-style, and chains left-to-right (`value | trim | upper`). Filters bind tighter than comparisons, so `java_version | default("25") == "25"` filters first, then compares. Every built-in filter below lives in `internal/filters`; a playbook can also add its own without recompiling via a script filter (see [Custom filters](#custom-filters)). Unless noted otherwise, every filter is **null-in/null-out**: a `null` piped value passes straight through rather than erroring.
 
   | Filter | Arguments | Result |
   | --- | --- | --- |
   | `default` | `fallback` | The piped value if it's non-null, else `fallback`. |
+  | `map` | none | Returns a deep copy of a map, converts a JSON object string or a list of `[stringKey, value]` pairs to a map, or returns an empty map for null. `map()` creates an empty map. Invalid types/JSON/pairs raise an error. Duplicate pair keys use the last value. |
+  | `merge` | one or more maps (or null) | Recursively merges arguments into the piped map, left-to-right; later values win conflicts. Null inputs/arguments count as empty maps. Nested maps merge; lists/scalars (including explicit null fields) replace earlier values. Returns an independent deep copy without modifying inputs. Use `map` first to convert JSON or pairs. |
   | `toggle` | `fallback` | The piped value if it's a **string**, else `fallback` - for a var that's normally an on/off boolean flag but may instead be set to a string to name a specific override, e.g. `jdk: true` vs. `jdk: 'Eclipse.Temurin.21'` (a bare `true`/`false` both fall back, same as `null` - see the `packages/languages/java` example below). |
   | `ternary` | `whenTrue, whenFalse` | `whenTrue` if the piped value is truthy, else `whenFalse` (does **not** pass `null` through - always returns one of its two arguments). |
   | `enabled` | `...keys` (each a plain string, optional) | Collapses the repeated `(X is mapping and X.Y) or (X is boolean and X)` on/off-toggle pattern into one call, at any depth: `productivity \| enabled('browsers', 'chrome')` walks `productivity.browsers.chrome` key by key. At each step, a **boolean** stops the walk immediately and *is* the answer - `true` enables everything below it, `false` disables everything below it regardless of a deeper key's own value (an explicit disable always wins); a **mapping** keeps descending. Once every key is consumed (or none were given - a bare `productivity \| enabled` checks `productivity` itself), the value reached counts as "on" if it's `true` **or still a mapping** - present/configured in some structured way, even with no specific leaf checked yet. That last part matters for a wrapping/gating task deciding whether to even look at a section at all, e.g. `productivity \| enabled('browsers')` is `true` as soon as `productivity.browsers` exists as a mapping of individual toggles, without needing one specific browser's key. Anything else (a missing key, a non-mapping in the way, or a plain string/number at the end) is `false`. Can't be written as `productivity.browsers.chrome \| enabled()` with no arguments - a filter never sees the surrounding variable context, only the value piped into it, so by the time that whole path resolves to one value, a boolean ancestor has already collapsed everything below it to `null`, losing whether it was `true` or `false`. |
@@ -672,6 +675,23 @@ tasks:
       - (languages is mapping and languages.rust) or (languages is boolean and languages)
     include: { name: languages/rust, state: present }
 ```
+
+Map literals support bare or quoted string keys and expression values, including
+nested maps/lists: `${{ {foo: bar, nested: {'some-key': true}} }}`. Here `foo`
+is a literal key, but `bar` is a variable; quote it (`'bar'`) for a literal value.
+
+For defaults plus partial user overrides, start with defaults so the user wins:
+
+```yaml
+vars:
+  editorconfig: "${{ vars.defaults.development.editorconfig | merge(development.editorconfig) | merge({extra: 'value'}) }}"
+```
+
+For all-or-nothing fallback instead, keep
+`${{ development.editorconfig | default(vars.defaults.development.editorconfig) }}`:
+only a missing/null user option uses defaults, not an empty or partial map.
+These filters apply to `${{ }}` and `when`; inside a Jinja2 template body,
+Gonja's standard `map` filter retains its Jinja meaning (mapping over a sequence).
 
 ### Facts
 
@@ -1701,7 +1721,7 @@ tasks:
     when: languages.java.jdk != false
 ```
 
-A `vars:` block at the top of a package's own `main.yml` declares **package-local defaults**: bare top-level names (here `defaults`, but a package author can name it anything - it's not a reserved word) distinct from site-level `vars.*`, so a package can express "the user's override, else my own built-in default" as two separate paths rather than one merged value. Package-local vars are available inside that package's own expressions only (not to its caller, nor to a package it in turn includes); if a package-local name ever collides with a site-level var/fact/id-registered name, the site-level one wins.
+A `vars:` block at the top of a package's own `main.yml` declares **package-local defaults**: bare top-level names (here `defaults`, but a package author can name it anything - it's not a reserved word). They are also available under `vars`, e.g. `vars.defaults`, consistently during includes, `uses`, loops, and dispatch. Site variables override same-named package variables wholesale (not a deep merge); `vars` contains variables only, not gathered facts or registered task results. Package-local vars are available inside that package's own expressions only (not to its caller, nor to a package it in turn includes). Bare names may additionally be shadowed by later task results; use `vars.<name>` to explicitly access the variable.
 
 Here, a user's `main.yml` sets `languages.java.jdk` to a plain **boolean** (`true`/`false`, matching every other `languages.*` toggle) to enable/disable Java without specifying a package - `toggle(...)` (unlike `default`, which only replaces `null`) treats *any* boolean the same as unset, and falls back to the package's own built-in default; a **string** value instead names a specific override package ID (e.g. `jdk: Eclipse.Temurin.21`). The separate `when: languages.java.jdk != false` is what actually skips the task when the user explicitly disabled it - `toggle(...)`'s job is only to pick the right package ID once the task is known to be enabled. A filter's argument can just as well be a literal (`default('Oracle.JDK.25')`) or a site-level path (`default(vars.editor)`) instead - whichever suits the package. Filters also chain left-to-right (`${{ inputs.name | trim | upper }}`).
 

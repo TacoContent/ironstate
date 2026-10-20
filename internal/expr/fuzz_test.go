@@ -14,6 +14,8 @@ func FuzzParse(f *testing.F) {
 		`lookup("url", "${{ x }}")`,
 		`not (a or b) and c is defined`,
 		`[1, "two", true, null]`,
+		`{foo: bar, nested: {"key": [true, null]}}`,
+		`defaults | merge(overrides) | merge({foo: bar})`,
 		`"unterminated`,
 		`${{`,
 		`a is not mapping`,
@@ -39,6 +41,8 @@ func FuzzScanSpans(f *testing.F) {
 	seeds := []string{
 		`${{ a }}`,
 		`${{ lookup("x", "}}") }}`,
+		`${{{foo: {nested: "}}"}}}}`,
+		`${{ defaults | merge({foo: bar})}}`,
 		`${{ unterminated`,
 		`no spans here`,
 		`${{}}${{}}`,

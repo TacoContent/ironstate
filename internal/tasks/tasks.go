@@ -334,6 +334,7 @@ func expandLoop(item map[string]any, key string, opts Options, sc scope) ([]Leaf
 		for k, v := range sc.vars {
 			loopContext[k] = v
 		}
+		loopContext["vars"] = model.ScopedVars(sc.packageVars, sc.vars)
 		for k, v := range itemCtx {
 			loopContext[k] = v
 		}

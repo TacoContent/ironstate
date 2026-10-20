@@ -1,24 +1,13 @@
 package packages
 
+import "github.com/TacoContent/ironstate/internal/model"
+
 // MergeVars deep-merges overlay into base key-by-key: a nested mapping on
 // both sides merges recursively; anything else, overlay wins — ports
 // Packages.psm1's Merge-VarsData. This lets a host/user overlay add or
 // override individual vars without wiping out the base set.
 func MergeVars(base, overlay map[string]any) map[string]any {
-	result := make(map[string]any, len(base))
-	for k, v := range base {
-		result[k] = v
-	}
-	for k, v := range overlay {
-		if baseVal, ok := result[k].(map[string]any); ok {
-			if overlayVal, ok := v.(map[string]any); ok {
-				result[k] = MergeVars(baseVal, overlayVal)
-				continue
-			}
-		}
-		result[k] = v
-	}
-	return result
+	return model.MergeMaps(base, overlay)
 }
 
 // MergeDocuments merges overlay into base — ports Packages.psm1's

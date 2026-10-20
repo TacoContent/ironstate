@@ -143,7 +143,7 @@ func LoadUsedPackage(usesSpec map[string]any, opts UseOptions) (*Used, error) {
 		"package": pkg,
 		"inputs":  inputs,
 		"facts":   effFacts,
-		"vars":    effVars,
+		"vars":    model.ScopedVars(model.Vars(data), effVars),
 	}
 	for key, val := range model.Vars(data) {
 		if reservedNamespaces[key] {

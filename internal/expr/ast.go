@@ -41,6 +41,13 @@ type CallNode struct {
 
 type ListNode struct{ Items []Node }
 
+type MapEntry struct {
+	Key   string
+	Value Node
+}
+
+type MapNode struct{ Entries []MapEntry }
+
 // LiteralNode holds a string/number/bool/nil literal. A string value may
 // itself contain '${{ ... }}' spans, expanded against the same context at
 // eval time (see evalStringLiteral).
@@ -66,5 +73,6 @@ func (*IsNode) isNode()      {}
 func (*FilterNode) isNode()  {}
 func (*CallNode) isNode()    {}
 func (*ListNode) isNode()    {}
+func (*MapNode) isNode()     {}
 func (*LiteralNode) isNode() {}
 func (*PathNode) isNode()    {}

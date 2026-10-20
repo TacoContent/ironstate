@@ -37,6 +37,17 @@ func Eval(node Node, ctx map[string]any, filters Filters) (any, error) {
 		}
 		return v, nil
 
+	case *MapNode:
+		result := make(map[string]any, len(n.Entries))
+		for _, entry := range n.Entries {
+			value, err := Eval(entry.Value, ctx, filters)
+			if err != nil {
+				return nil, err
+			}
+			result[entry.Key] = value
+		}
+		return result, nil
+
 	case *ListNode:
 		items := make([]any, 0, len(n.Items))
 		for _, itemNode := range n.Items {
@@ -367,6 +378,10 @@ func VarPaths(node Node) []*PathNode {
 		case *ListNode:
 			for _, item := range v.Items {
 				walk(item)
+			}
+		case *MapNode:
+			for _, entry := range v.Entries {
+				walk(entry.Value)
 			}
 		case *FilterNode:
 			walk(v.Target)

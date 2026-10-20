@@ -56,6 +56,7 @@ func ScanSpans(text string) []Span {
 
 		j := start + 3
 		var quote rune
+		braces := 0
 		closeIdx := -1
 		for j < n {
 			c := runeAt(j)
@@ -72,6 +73,14 @@ func ScanSpans(text string) []Span {
 			}
 			if c == '\'' || c == '"' {
 				quote = c
+				j++
+				continue
+			}
+			if c == '{' {
+				braces++
+			}
+			if c == '}' && braces > 0 {
+				braces--
 				j++
 				continue
 			}

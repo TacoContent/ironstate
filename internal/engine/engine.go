@@ -920,6 +920,7 @@ func mergeFlatContext(facts, userFacts, packageVars, packageInputs, packagePacka
 	for k, v := range registry {
 		flat[k] = v
 	}
+	flat["vars"] = model.ScopedVars(packageVars, vars)
 	return flat
 }
 

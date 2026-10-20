@@ -80,7 +80,7 @@ func LoadIncludedPackage(includeSpec map[string]any, packagesRoot string, facts,
 		"package": pkg,
 		"inputs":  inputs,
 		"facts":   facts,
-		"vars":    vars,
+		"vars":    model.ScopedVars(model.Vars(pkgData), vars),
 	}
 	for key, val := range model.Vars(pkgData) {
 		if reservedNamespaces[key] {

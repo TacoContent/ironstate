@@ -15,6 +15,8 @@ import (
 
 func registerBuiltins(r *Registry) {
 	r.Register("default", filterDefault)
+	r.Register("map", filterMap)
+	r.Register("merge", filterMerge)
 	r.Register("toggle", filterToggle)
 	r.Register("ternary", filterTernary)
 	r.Register("enabled", filterEnabled)
