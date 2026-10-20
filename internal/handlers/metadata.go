@@ -89,10 +89,11 @@ func resolveGroupID(group string) (int, error) {
 
 func applyWindowsOwnerGroup(targetPath, owner, group string) error {
 	// Set owner/group directly on ACL metadata without altering DACL entries.
-	ps := "$p=$args[0];$o=$args[1];$g=$args[2];$acl=Get-Acl -LiteralPath $p;if($o){$acl.SetOwner([System.Security.Principal.NTAccount]$o)};if($g){$acl.SetGroup([System.Security.Principal.NTAccount]$g)};Set-Acl -LiteralPath $p -AclObject $acl"
-	res, err := runner.Run("pwsh", []string{"-NoProfile", "-NonInteractive", "-Command", ps, targetPath, owner, group})
+	ps := fmt.Sprintf("$ErrorActionPreference='Stop';$p=%s;$o=%s;$g=%s;$acl=Get-Acl -LiteralPath $p;if($o){$acl.SetOwner([System.Security.Principal.NTAccount]$o)};if($g){$acl.SetGroup([System.Security.Principal.NTAccount]$g)};Set-Acl -LiteralPath $p -AclObject $acl",
+		pwshSingleQuote(targetPath), pwshSingleQuote(owner), pwshSingleQuote(group))
+	res, err := runner.Run("pwsh", []string{"-NoProfile", "-NonInteractive", "-Command", ps})
 	if err != nil {
-		return err
+		return fmt.Errorf("set owner/group on %s: %w", targetPath, err)
 	}
 	if res.RC != 0 {
 		stderr := strings.TrimSpace(res.Stderr)

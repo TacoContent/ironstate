@@ -208,6 +208,15 @@ func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
 			engine.Warn("Shell item '%s': %v", label, err)
 			return engine.ExecResult{}
 		}
+		// -File otherwise returns zero for non-terminating cmdlet failures.
+		// Check inside the script: invoking a script block resets $? outside it.
+		if len(invocation) == 0 || isPowerShellHost(invocation[0]) {
+			if _, err := f.WriteString("\nif (-not $?) { if ($LASTEXITCODE) { exit $LASTEXITCODE }; exit 1 }\n"); err != nil {
+				_ = f.Close()
+				engine.Warn("Shell item '%s': %v", label, err)
+				return engine.ExecResult{}
+			}
+		}
 		if err := f.Close(); err != nil {
 			engine.Warn("Shell item '%s': %v", label, err)
 			return engine.ExecResult{}
@@ -226,6 +235,9 @@ func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
 		// on shellHandler), unlike the original's in-process execution.
 		args := append([]string{"-NoLogo", "-NoProfile", "-File", runPath}, cfg.ItemArgs...)
 		result = runExternalCommand("pwsh", args)
+	} else if isPowerShellHost(invocation[0]) {
+		args := append(append([]string{}, invocation[1:]...), "-NoLogo", "-NoProfile", "-File", runPath)
+		result = runExternalCommand(invocation[0], append(args, cfg.ItemArgs...))
 	} else if cfg.Script == "" && runtime.GOOS != "windows" && cfg.Type != "" {
 		if err := os.Chmod(runPath, 0o700); err != nil { //nolint:gosec // the private temp script must be executable by its owner
 			engine.Warn("Shell item '%s': %v", label, err)

@@ -1105,6 +1105,15 @@ The block for the item's own `state` (default `present`) is picked, and falls ba
 
 Output is captured, not streamed live: stdout (`Write-Host`/`Write-Output`/real native stdout, all merged together) and stderr are captured, then echoed after the command finishes (stdout via `Write-Host`, stderr via `Write-Warning`) - so it still ends up on the console, just after completion rather than in real time. This is what backs an `id`'d shell task's `rc`/`stdout`/`stdout_lines`/`stderr`/`stderr_lines` (see [Registering results](#registering-results-id)).
 
+For inline PowerShell `command` (including `fact.shell.command`), the final
+command's failure status is propagated: a failed cmdlet produces a nonzero
+`rc` even with `-ErrorAction SilentlyContinue`. Explicit `exit N` and native
+command exit codes are preserved. Existing `script` files retain PowerShell's
+`-File` exit behavior; use explicit `exit` when a script needs to signal failure.
+A negative probe is expected data, not necessarily a failed task: use
+`failed_when: false` on a fact that computes `value: ${{ rc == 0 }}` so a missing
+command records `false` and execution continues.
+
 Under the default `pwsh` host specifically, that capture preserves real object identity rather than flattening everything to text: if the command's only non-`Write-Host` output is a single object (e.g. `Get-ItemProperty`'s result), that object's own properties are merged directly into the registered result - see [Native `pwsh` results](#native-pwsh-results).
 
 ```yaml
