@@ -81,7 +81,64 @@ func TestTemplateHandlerUnknownEngineErrors(t *testing.T) {
 	}
 }
 
+func TestTemplateHandlerJinja2RenderAndTest(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "editorconfig.j2")
+	content := `{% for pattern, rules in editorconfig.rules.items() %}[{{ pattern }}]
+{% for key, value in rules.items() %}{{ key }} = {{ value }}
+{% endfor %}{% endfor %}`
+	if err := os.WriteFile(src, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(dir, ".editorconfig")
+	item := map[string]any{
+		"src": src, "dest": dest, "engine": "jinja2",
+		"vars": map[string]any{"editorconfig": "${{ settings }}"},
+	}
+	ctx := testCtxWithFilters(map[string]any{
+		"settings": map[string]any{
+			"rules": map[string]any{"*": map[string]any{"indent_size": 2}},
+		},
+	})
+	h := templateHandler{}
+	if _, err := h.Install(item, "", ctx); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(dest)
+	if err != nil || string(data) != "[*]\nindent_size = 2\n" {
+		t.Fatalf("data=%q err=%v", data, err)
+	}
+	if installed, err := h.Test(item, "", ctx); err != nil || !installed {
+		t.Fatalf("installed=%v err=%v, want true after rendering", installed, err)
+	}
+	if err := os.WriteFile(dest, []byte("drift"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if installed, err := h.Test(item, "", ctx); err != nil || installed {
+		t.Fatalf("installed=%v err=%v, want false after drift", installed, err)
+	}
+	if err := os.WriteFile(src, []byte("{% invalid %}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Install(item, "", ctx); err == nil {
+		t.Fatal("invalid template did not return an error")
+	}
+	data, err = os.ReadFile(dest)
+	if err != nil || string(data) != "drift" {
+		t.Fatalf("failed render modified destination: data=%q err=%v", data, err)
+	}
+}
+
 func TestBlockInFileTemplateFieldRendersViaJinja(t *testing.T) {
+	for _, engineName := range []string{"jinja", "jinja2"} {
+		t.Run(engineName, func(t *testing.T) {
+			testBlockInFileTemplateField(t, engineName)
+		})
+	}
+}
+
+func testBlockInFileTemplateField(t *testing.T, engineName string) {
+	t.Helper()
 	dir := t.TempDir()
 	src := filepath.Join(dir, "block.j2")
 	if err := os.WriteFile(src, []byte("managed: {{ value }}"), 0o600); err != nil {
@@ -95,7 +152,7 @@ func TestBlockInFileTemplateFieldRendersViaJinja(t *testing.T) {
 		"create": true,
 		"template": map[string]any{
 			"src":    src,
-			"engine": "jinja",
+			"engine": engineName,
 			"vars":   map[string]any{"value": "x"},
 		},
 	}

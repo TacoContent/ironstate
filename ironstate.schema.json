@@ -617,8 +617,8 @@
         },
         "engine": {
           "type": "string",
-          "enum": ["jinja", "gotemplate"],
-          "description": "Which template engine renders 'src': 'jinja' (sandboxed, block-capable - '{{ }}', '{% if/for/set %}') or 'gotemplate' (Go text/template syntax)."
+          "enum": ["jinja", "jinja2", "gotemplate"],
+          "description": "Which template engine renders 'src': 'jinja' (legacy expression-language subset), 'jinja2' (Gonja, Jinja2-compatible syntax including tuple loops, dict methods, macros and whitespace control), or 'gotemplate' (Go text/template syntax)."
         },
         "vars": {
           "type": "object",
@@ -642,8 +642,8 @@
         },
         "engine": {
           "type": "string",
-          "enum": ["jinja", "gotemplate"],
-          "description": "Which template engine renders 'src': 'jinja' (sandboxed, block-capable - '{{ }}', '{% if/for/set %}') or 'gotemplate' (Go text/template syntax)."
+          "enum": ["jinja", "jinja2", "gotemplate"],
+          "description": "Which template engine renders 'src': 'jinja' (legacy expression-language subset), 'jinja2' (Gonja, Jinja2-compatible syntax including tuple loops, dict methods, macros and whitespace control), or 'gotemplate' (Go text/template syntax)."
         },
         "vars": {
           "type": "object",

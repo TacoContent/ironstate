@@ -29,6 +29,7 @@ playbooks/
 .task/
 
 rsrc_*.syso
+ironstate
 ironstate.exe
 ironstate.1
 

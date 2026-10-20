@@ -3,8 +3,9 @@ package templateengines
 // Package templateengines implements the render engines the 'template'
 // module (and blockinfile's 'template' field) can select via 'engine':
 // 'jinja' (native port of modules/TemplateEngines/Jinja.psm1, reusing
-// internal/expr's tokenizer/parser/evaluator) and 'gotemplate' (Go stdlib
-// text/template, additive - see jinja.go/gotemplate.go and
+// internal/expr's tokenizer/parser/evaluator), 'jinja2' (Gonja's Jinja2-
+// compatible implementation), and 'gotemplate' (Go stdlib
+// text/template, additive - see jinja.go/jinja2.go/gotemplate.go and
 // docs/plans/go-rewrite.md §4.7 for the build-vs-buy rationale). 'eps'/
 // 'herestring' are dropped per §1/§11 (audited as unused in this repo).
 

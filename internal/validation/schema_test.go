@@ -64,3 +64,32 @@ func TestValidatePlaybookRecursesThroughYAMLTree(t *testing.T) {
 		t.Fatalf("valid files = %#v, want only %q", valid, rootFile)
 	}
 }
+
+func TestValidateJinja2TemplateEngines(t *testing.T) {
+	originalLoader := schemaLoader
+	schemaLoader = func(string) ([]byte, string, error) {
+		path := filepath.Join("..", "..", "ironstate.schema.json")
+		data, err := os.ReadFile(path)
+		return data, path, err
+	}
+	defer func() { schemaLoader = originalLoader }()
+
+	playbook := filepath.Join(t.TempDir(), "main.yml")
+	content := `tasks:
+  - template:
+      src: template.j2
+      dest: output
+      engine: jinja2
+  - blockinfile:
+      dest: output
+      template:
+        src: template.j2
+        engine: jinja2
+`
+	if err := os.WriteFile(playbook, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateFile(playbook); err != nil {
+		t.Fatal(err)
+	}
+}

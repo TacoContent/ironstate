@@ -375,7 +375,7 @@ internal/
 │                            conditions/ and template/
 ├── conditions/            ← 'when'/'failed_when' expression evaluation
 ├── template/               ← '${{ }}' resolution passes (soft/strict/self-referential)
-├── templateengines/        ← 'jinja' (native) and 'gotemplate' (Go stdlib) render engines
+├── templateengines/        ← 'jinja' (legacy subset), 'jinja2' (Gonja), and 'gotemplate' (Go stdlib)
 ├── filters/                ← built-in '|' filters, plus the external script-filter adapter
 │   └── embed/               ← the generic PowerShell shim script filters run through
 ├── engine/                 ← dispatch loop (fact-first two-phase run, registry/facts/
@@ -1020,20 +1020,27 @@ tasks:
 | --- | --- | --- |
 | `src` | yes | Template source file. Resolved the same way as `copy.src` |
 | `dest` | yes | Destination path for the rendered output (`~` expansion supported) |
-| `engine` | yes | Which template engine renders `src`: `jinja` or `gotemplate` (see below) |
+| `engine` | yes | Which template engine renders `src`: `jinja`, `jinja2`, or `gotemplate` (see below) |
 | `vars` | no | Extra key/value pairs layered on top of facts/vars/registry for this render only (last-write-wins, shallow merge) |
 | `owner` / `group` | no | Ownership metadata applied to `dest` after write |
 | `mode` | no | Mode bits applied to `dest` after write |
 
 `present`/`latest` render `src` and write it to `dest` whenever the freshly-rendered content differs from what's already there (a plain string compare - the template equivalent of `copy`'s SHA256 hash compare); `absent` removes `dest`. The render context is the same facts/vars/id-registry context `when`/`${{ }}` already resolve against, with this task's own `vars` layered on top.
 
-Two engines:
+Three engines (also available in `blockinfile.template`):
 
 - **`jinja`** - a sandboxed, block-capable engine built on the same expression grammar as `when`/`${{ }}` (see [Template expressions](#template-expressions)): `{{ expr }}` output, `{% if %}`/`{% elif %}`/`{% else %}`/`{% endif %}`, `{% for x in iterable %}`/`{% endfor %}` (nesting supported), and `{% set x = expr %}`. No cmdlet/command invocation exists in the grammar at all, so a template can only read/compare/filter context values - never cause a side effect.
+- **`jinja2`** - [Gonja](https://github.com/nikolalohinski/gonja), a native Go implementation of Jinja2 syntax; no Python installation is required. Supports tuple-unpacking loops (`{% for key, value in mapping.items() %}`), dictionary methods, whitespace control (`{%-`/`-%}`), macros, includes, and inheritance. Includes/imports resolve relative to the source template. Autoescaping is off for configuration files, and the source's trailing newline is preserved. Jinja2 built-in filters take precedence over same-named ironstate filters; other registered ironstate/script filters accept positional arguments. Use trusted templates: unlike the legacy subset, this engine supports filesystem includes and mutable dictionary/list methods. Gonja targets Jinja2 compatibility but is not Python Jinja2 itself; see its documented limitations for differences in Python methods and formatting.
 - **`gotemplate`** - Go's stdlib [`text/template`](https://pkg.go.dev/text/template) directly, unmodified: real Go template syntax (`{{ .facts.computer_name }}`-style leading-dot field/map-key access, `{{ if }}`/`{{ range }}`/`{{ with }}`, pipelines) against the same render context, rather than `${{ }}`'s own expression grammar. A missing key renders as a zero value (`missingkey=zero`) instead of erroring.
 
 ```yaml
 tasks:
+  - name: Render editorconfig with Jinja2
+    template:
+      src: templates/editorconfig.j2
+      dest: ~/.editorconfig
+      engine: jinja2
+
   - name: Render global gitconfig
     template:
       src: templates/gitconfig.j2

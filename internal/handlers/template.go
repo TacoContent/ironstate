@@ -17,8 +17,8 @@ import (
 //
 // Deviation from Handlers/Template.psm1: 'eps'/'herestring' engines are
 // dropped per docs/plans/go-rewrite.md §1/§11 (audited as unused in this
-// repo) - only 'jinja' (native port) and the additive 'gotemplate' (Go
-// stdlib text/template) are supported; either other name is a clear error.
+// repo). 'jinja' preserves the native subset port, 'jinja2' uses Gonja,
+// and 'gotemplate' uses Go stdlib text/template.
 type templateHandler struct{}
 
 func (templateHandler) Emoji() string {
@@ -61,12 +61,14 @@ func getTemplateRenderedContent(item map[string]any, ctx engine.Context) (string
 		engine.Warn("Source path for template does not exist: %s", src)
 		return "", errTemplateSourceMissing
 	}
-	raw, err := os.ReadFile(src) //nolint:gosec // src is authored YAML content, same trust boundary as the rest of this tool
+	renderCtx, err := getTemplateRenderContext(item, ctx)
 	if err != nil {
 		return "", err
 	}
-
-	renderCtx, err := getTemplateRenderContext(item, ctx)
+	if getString(item, "engine") == "jinja2" {
+		return templateengines.RenderJinja2(src, renderCtx, ctx.Filters)
+	}
+	raw, err := os.ReadFile(src) //nolint:gosec // src is authored YAML content, same trust boundary as the rest of this tool
 	if err != nil {
 		return "", err
 	}
@@ -77,7 +79,7 @@ func getTemplateRenderedContent(item map[string]any, ctx engine.Context) (string
 	case "gotemplate":
 		return templateengines.RenderGoTemplate(string(raw), renderCtx)
 	case "eps", "herestring":
-		return "", fmt.Errorf("template engine '%s' is not supported - migrate to 'jinja' or 'gotemplate' (docs/plans/go-rewrite.md §1/§11)", engineName)
+		return "", fmt.Errorf("template engine '%s' is not supported - migrate to 'jinja', 'jinja2' or 'gotemplate' (docs/plans/go-rewrite.md §1/§11)", engineName)
 	default:
 		return "", fmt.Errorf("unknown template engine '%s'", engineName)
 	}
