@@ -54,7 +54,7 @@ func TestCreateDetachedSpoolKeepsPrivateJobAndBundle(t *testing.T) {
 
 func TestDetachedWindowsLaunchUsesIndependentProcessAndStagedInput(t *testing.T) {
 	cmd := detachedPowerShellCommand(`C:\Program Files\ironstate.exe`, `C:\Data\run.job`)
-	if !cmd.Windows || !strings.Contains(cmd.Script, "Start-Process") || !strings.Contains(cmd.Script, "-RedirectStandardInput $job") || !strings.Contains(cmd.Script, "--detached-job-file") {
+	if !cmd.Windows || !cmd.LoadProfile || !strings.Contains(cmd.Script, "Start-Process") || !strings.Contains(cmd.Script, "-RedirectStandardInput $job") || !strings.Contains(cmd.Script, "--detached-job-file") {
 		t.Fatalf("unexpected detached launch command: %+v", cmd)
 	}
 }

@@ -187,7 +187,7 @@ func (t *SSHTransport) Exec(ctx context.Context, cmd RemoteCommand, stdin io.Rea
 	var err error
 	if cmd.Windows {
 		if cmd.Script != "" {
-			line, err = PowerShellCommandLine(cmd.Script)
+			line, err = powerShellCommandLine(cmd.Script, cmd.LoadProfile)
 		} else {
 			line, err = PowerShellProgramCommandLine(cmd.Program, cmd.Args)
 		}
@@ -294,13 +294,21 @@ func sftpQuote(value string) string {
 }
 
 // PowerShellCommandLine encodes a script as UTF-16LE, as required by
-// powershell.exe -EncodedCommand. The encoded text contains no shell syntax.
+// pwsh -EncodedCommand. The encoded text contains no shell syntax.
 func PowerShellCommandLine(script string) (string, error) {
+	return powerShellCommandLine(script, false)
+}
+
+func powerShellCommandLine(script string, loadProfile bool) (string, error) {
 	if strings.ContainsRune(script, '\x00') {
 		return "", errors.New("PowerShell script contains a NUL")
 	}
 	encoded := base64.StdEncoding.EncodeToString(utf16LE(script))
-	return "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand " + encoded, nil
+	options := "-NoLogo -NoProfile -NonInteractive -EncodedCommand "
+	if loadProfile {
+		options = "-NoLogo -NonInteractive -EncodedCommand "
+	}
+	return "pwsh " + options + encoded, nil
 }
 
 func utf16LE(script string) []byte {
@@ -313,7 +321,8 @@ func utf16LE(script string) []byte {
 }
 
 // PowerShellProgramCommandLine invokes a structured program/argv pair without
-// interpolating any of its values into PowerShell source.
+// interpolating any of its values into PowerShell source. Load the profile in
+// this launcher so the agent inherits its environment without reloading it per task.
 func PowerShellProgramCommandLine(program string, args []string) (string, error) {
 	payload, err := json.Marshal(struct {
 		Program string   `json:"program"`
@@ -324,7 +333,7 @@ func PowerShellProgramCommandLine(program string, args []string) (string, error)
 	}
 	data := base64.StdEncoding.EncodeToString(payload)
 	script := "$d=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + data + "'))|ConvertFrom-Json; $a=@($d.args); & $d.program @a; if ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }; exit 0"
-	return PowerShellCommandLine(script)
+	return powerShellCommandLine(script, true)
 }
 
 // Close tears down the multiplexed master connection, if any.

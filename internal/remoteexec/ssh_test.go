@@ -71,7 +71,11 @@ func TestPowerShellCommandLineEncodesStructuredInvocation(t *testing.T) {
 	if strings.Contains(line, program) || strings.Contains(line, "Start-Process") {
 		t.Fatalf("command data leaked into shell text: %s", line)
 	}
-	encoded := strings.TrimPrefix(line, "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand ")
+	prefix := "pwsh -NoLogo -NonInteractive -EncodedCommand "
+	if !strings.HasPrefix(line, prefix) {
+		t.Fatalf("agent launcher must use pwsh with profiles enabled: %s", line)
+	}
+	encoded := strings.TrimPrefix(line, prefix)
 	data, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		t.Fatal(err)
@@ -83,6 +87,21 @@ func TestPowerShellCommandLineEncodesStructuredInvocation(t *testing.T) {
 	script := string(utf16.Decode(units))
 	if !strings.Contains(script, "ConvertFrom-Json") || !strings.Contains(script, "@a") {
 		t.Fatalf("unexpected encoded PowerShell script: %s", script)
+	}
+}
+
+func TestPowerShellCommandLineKeepsBootstrapProfileFree(t *testing.T) {
+	script := "Write-Output 'bootstrap'"
+	line, err := PowerShellCommandLine(script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "pwsh -NoLogo -NoProfile -NonInteractive -EncodedCommand " + base64.StdEncoding.EncodeToString(utf16LE(script))
+	if line != want {
+		t.Fatalf("bootstrap command = %q, want %q", line, want)
+	}
+	if _, err := PowerShellCommandLine("bad\x00script"); err == nil {
+		t.Error("NUL accepted")
 	}
 }
 

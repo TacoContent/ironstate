@@ -20,6 +20,8 @@ type RemoteCommand struct {
 	Windows bool
 	// Script, when set, is a fixed PowerShell script instead of a program invocation.
 	Script string
+	// LoadProfile enables profile loading for a Windows script that launches an agent.
+	LoadProfile bool
 }
 
 // Transport runs commands on one target.

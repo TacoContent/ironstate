@@ -96,11 +96,13 @@ func createDetachedSpool(job *PreparedJob) (string, error) {
 
 func detachedPowerShellCommand(agentPath, jobPath string) RemoteCommand {
 	encode := func(value string) string { return base64String(value) }
-	return powerShellScript(`$ErrorActionPreference='Stop'; $agent=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('` + encode(agentPath) + `')); ` +
+	cmd := powerShellScript(`$ErrorActionPreference='Stop'; $agent=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('` + encode(agentPath) + `')); ` +
 		`$job=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('` + encode(jobPath) + `')); ` +
 		`$launchArgs='agent --protocol 1 --detached --detached-job-file "'+$job+'"'; ` +
 		`$p=Start-Process -FilePath $agent -ArgumentList $launchArgs -RedirectStandardInput $job -RedirectStandardOutput 'NUL' -RedirectStandardError 'NUL' -WindowStyle Hidden -PassThru; ` +
 		`[Console]::Out.Write([string]$p.Id)`)
+	cmd.LoadProfile = true
+	return cmd
 }
 
 func base64String(value string) string { return base64.StdEncoding.EncodeToString([]byte(value)) }
