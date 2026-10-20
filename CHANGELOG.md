@@ -1,4 +1,64 @@
 
+## [v0.9.0](https://github.com/tacocontent/ironstate/releases/tag/v0.9.0) - 2026-10-20
+
+### 🚀 FEATURES
+
+#### _GENERAL_
+
+- When --inventory is a path it will merge all inventory files -[@camalot](https://github.com/camalot)
+
+- Added better jinja2 support using gonja -[@camalot](https://github.com/camalot)
+
+- Add support for multiple --tag options -[@camalot](https://github.com/camalot)
+
+
+### 🐛 BUG FIXES
+
+#### _GENERAL_
+
+- Pass the action emoji in the remote stream -[@camalot](https://github.com/camalot)
+
+- Codeql unsafe-unzip-symlink fix -[@camalot](https://github.com/camalot)
+
+
+### ⚙️ MISCELLANEOUS TASKS
+
+
+#### _REPO_
+- Enhance taskfile with tool checks and typos check -[@camalot](https://github.com/camalot)
+
+- Codeql and tasks updates -[@camalot](https://github.com/camalot)
+
+#### _GENERAL_
+
+- Add sample for testing -[@camalot](https://github.com/camalot)
+
+
+## GitHub
+
+### 💛 Contributors
+
+
+- [@camalot](https://github.com/camalot)
+## 📈 Commit Statistics
+
+
+- `8` commits contributed to the release.
+- `4` days have passed between the first and last commit.
+- `8` commits parsed as conventional.
+- `0` linked issues detected in commits.
+- `5` days  have passed between releases.
+
+
+![Statistics](https://quickchart.io/chart?c={type:'bar',data:{labels:['Commits','Contributors','Days%20Between%20Commits','Conventional%20Commits','Referenced%20Links','Days%20Since%20Last%20Release'],datasets:[{label:'Release',data:[8,1,4,8,0,5]}]}})
+
+
+
+---
+
+
+**Full Changelog**: https://github.com/tacocontent/ironstate/compare/v0.8.0...v0.9.0
+
 ## [v0.8.0](https://github.com/tacocontent/ironstate/releases/tag/v0.8.0) - 2026-10-15
 
 ### 🚀 FEATURES
