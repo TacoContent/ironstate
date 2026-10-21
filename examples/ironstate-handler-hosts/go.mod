@@ -1,6 +1,6 @@
 module github.com/acme/ironstate-handler-hosts
 
-go 1.27.2
+go 1.27.3
 
 require github.com/TacoContent/ironstate/sdk v0.0.0
 
