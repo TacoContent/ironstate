@@ -69,8 +69,8 @@ tasks:
           Write-Output "Loading Profile from $PROFILE";
         }
         $env:VIRTUAL_ENV_DISABLE_PROMPT = 1;
-        # "Microsoft.WinGet.CommandNotFound",
         $modules = @(
+          "Microsoft.WinGet.CommandNotFound",
           "posh-git",
           "Terminal-Icons"
         );

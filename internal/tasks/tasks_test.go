@@ -175,6 +175,84 @@ func TestItemsLoopResolvesItemsAgainstVars(t *testing.T) {
 	}
 }
 
+func TestItemsExpressionIteratesResolvedList(t *testing.T) {
+	leaves := expandOK(t, `
+- name: bucket
+  log: { message: "Scoop: ${{ item.name }} - ${{ item.url }}" }
+  items: ${{ vars.buckets }}
+`, Options{Vars: map[string]any{
+		"buckets": []any{
+			map[string]any{"name": "camalot", "url": "https://github.com/camalot/scoop"},
+			map[string]any{"name": "extras", "url": "https://github.com/ScoopInstaller/Extras"},
+		},
+	}})
+	if len(leaves) != 2 {
+		t.Fatalf("leaves = %#v, want one per bucket", leaves)
+	}
+	for index, want := range []string{
+		"Scoop: camalot - https://github.com/camalot/scoop",
+		"Scoop: extras - https://github.com/ScoopInstaller/Extras",
+	} {
+		if leaves[index].Item["message"] != want {
+			t.Fatalf("leaf %d message = %#v, want %q", index, leaves[index].Item["message"], want)
+		}
+	}
+}
+
+func TestIncludedItemsMergesBucketLists(t *testing.T) {
+	root := t.TempDir()
+	packageDir := filepath.Join(root, "scoop")
+	if err := os.MkdirAll(packageDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "main.yml"), []byte(`
+vars:
+  defaults:
+    scoop:
+      buckets:
+        - name: camalot
+          url: https://github.com/camalot/scoop
+tasks:
+  - shell:
+      type: pwsh
+      command: scoop bucket add ${{ item.name }} ${{ item.url }}
+    items: ${{ vars.defaults.scoop.buckets | merge(scoop.buckets) }}
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, withOverlay := range []bool{false, true} {
+		vars := map[string]any{}
+		want := []string{"scoop bucket add camalot https://github.com/camalot/scoop"}
+		if withOverlay {
+			vars["scoop"] = map[string]any{"buckets": []any{
+				map[string]any{"name": "extras", "url": "https://github.com/ScoopInstaller/Extras"},
+			}}
+			want = append(want, "scoop bucket add extras https://github.com/ScoopInstaller/Extras")
+		}
+		leaves := expandOK(t, `
+- include: { name: scoop }
+`, Options{PackagesRoot: root, Vars: vars})
+		if len(leaves) != len(want) {
+			t.Fatalf("overlay=%v: got %d leaves, want %d", withOverlay, len(leaves), len(want))
+		}
+		for index, command := range want {
+			if leaves[index].Item["command"] != command {
+				t.Fatalf("overlay=%v: command %d = %#v, want %q", withOverlay, index, leaves[index].Item["command"], command)
+			}
+		}
+	}
+}
+
+func TestItemsExpressionOmitsMissingList(t *testing.T) {
+	leaves := expandOK(t, `
+- log: { message: "${{ item }}" }
+  items: ${{ vars.missing }}
+`, Options{})
+	if len(leaves) != 0 {
+		t.Fatalf("leaves = %#v, want no iterations for a missing list", leaves)
+	}
+}
+
 func TestItemsOmitsUnresolvedFieldRatherThanEmptyString(t *testing.T) {
 	leaves := expandOK(t, `
 - name: install ${{ item.package }}

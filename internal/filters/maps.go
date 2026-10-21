@@ -47,7 +47,33 @@ func filterMap(value any, args []any) (any, error) {
 
 func filterMerge(value any, args []any) (any, error) {
 	if len(args) == 0 {
-		return nil, fmt.Errorf("'merge' filter expects at least 1 map argument")
+		return nil, fmt.Errorf("'merge' filter expects at least 1 map or list argument")
+	}
+	kind := value
+	if kind == nil {
+		for _, arg := range args {
+			if arg != nil {
+				kind = arg
+				break
+			}
+		}
+	}
+	if _, list := kind.([]any); list {
+		result := []any{}
+		if value != nil {
+			result = append(result, value.([]any)...)
+		}
+		for index, arg := range args {
+			if arg == nil {
+				continue
+			}
+			entries, ok := arg.([]any)
+			if !ok {
+				return nil, fmt.Errorf("'merge' filter argument %d must be a list or null, got %T", index+1, arg)
+			}
+			result = append(result, entries...)
+		}
+		return model.DeepCopy(result), nil
 	}
 	var base map[string]any
 	if value != nil {

@@ -307,7 +307,35 @@ func expandLoop(item map[string]any, key string, opts Options, sc scope) ([]Leaf
 
 	var loopValues []any
 	if key == "items" {
-		loopValues = model.AsList(item["items"])
+		loopContext := map[string]any{}
+		for factKey, value := range sc.facts {
+			loopContext[factKey] = value
+		}
+		for varKey, value := range sc.packageVars {
+			loopContext[varKey] = value
+		}
+		for varKey, value := range sc.vars {
+			loopContext[varKey] = value
+		}
+		loopContext["facts"] = sc.facts
+		loopContext["vars"] = model.ScopedVars(sc.packageVars, sc.vars)
+		loopContext["inputs"] = sc.packageInputs
+		loopContext["package"] = sc.packagePackage
+		for contextKey, value := range sc.parentItemCtx {
+			loopContext[contextKey] = value
+		}
+		loopSource := item["items"]
+		if _, expression := loopSource.(string); expression {
+			resolved, err := template.ExpandNode(loopSource, loopContext, opts.Filters, label, false, nil)
+			if err != nil {
+				return nil, err
+			}
+			if template.IsOmit(resolved) {
+				return nil, nil
+			}
+			loopSource = resolved
+		}
+		loopValues = model.AsList(loopSource)
 	} else {
 		loopValues = []any{item["with"]}
 	}

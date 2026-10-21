@@ -45,6 +45,34 @@ func TestMapFilterRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+func TestMergeFilterLists(t *testing.T) {
+	base := []any{map[string]any{"name": "camalot"}}
+	overlay := []any{map[string]any{"name": "extras"}}
+	want := []any{map[string]any{"name": "camalot"}, map[string]any{"name": "extras"}}
+	got := apply(t, "merge", base, nil, overlay).([]any)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("merge lists = %#v, want %#v", got, want)
+	}
+	got[0].(map[string]any)["name"] = "changed"
+	got[1].(map[string]any)["name"] = "changed"
+	if base[0].(map[string]any)["name"] != "camalot" || overlay[0].(map[string]any)["name"] != "extras" {
+		t.Fatal("merge result shares mutable values with an input")
+	}
+	if got := apply(t, "merge", base, nil); !reflect.DeepEqual(got, base) {
+		t.Fatalf("list | merge(null) = %#v, want %#v", got, base)
+	}
+	if got := apply(t, "merge", nil, nil, base); !reflect.DeepEqual(got, base) {
+		t.Fatalf("null | merge(null, list) = %#v, want %#v", got, base)
+	}
+	for _, inputs := range [][]any{
+		{base, map[string]any{}}, {map[string]any{}, base}, {base, true},
+	} {
+		if _, err := New().Apply("merge", inputs[0], inputs[1:]); err == nil {
+			t.Errorf("merge(%#v) should reject mixed types", inputs)
+		}
+	}
+}
+
 func TestMergeFilter(t *testing.T) {
 	base := map[string]any{
 		"rules": map[string]any{"*": map[string]any{"indent_size": 2, "charset": "utf-8"}},
