@@ -369,6 +369,8 @@ func SetEnvironment(values map[string]any) (func(), error) {
 	return restore, nil
 }
 
+var refreshPath = ironexec.RefreshPath
+
 // RunLeaves dispatches leaves sequentially, in document order, mutating
 // state in place — ports Invoke-Tasks. Each leaf's 'when' and remaining
 // '${{ }}' references resolve against facts+vars+registry-so-far
@@ -402,6 +404,14 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 		if !ok {
 			Warn("No handler registered for module '%s'; skipping.", module)
 			continue
+		}
+
+		pathChanged, err := refreshPath()
+		if err != nil {
+			return results, true, fmt.Errorf("refresh PATH before %s: %w", label, err)
+		}
+		if pathChanged {
+			state.CommandAvailability = map[string]bool{}
 		}
 
 		flatContext := mergeFlatContext(opts.Facts, state.UserFacts, leaf.PackageVars, leaf.PackageInputs, leaf.PackagePackage, opts.Vars, state.Registry)

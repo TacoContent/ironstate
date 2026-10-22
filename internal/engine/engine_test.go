@@ -783,6 +783,9 @@ func TestRunLeavesMissingCommandOnPathProducesNoResultRow(t *testing.T) {
 }
 
 func TestRunLeavesTaskPATHRechecksRequiredTools(t *testing.T) {
+	originalRefresh := refreshPath
+	refreshPath = func() (bool, error) { return false, nil }
+	t.Cleanup(func() { refreshPath = originalRefresh })
 	t.Setenv("PATH", "original")
 	h := &fakeHandler{requiredTools: []string{"widget"}}
 	opts := baseOpts(map[string]Handler{"widget": h})
@@ -801,6 +804,75 @@ func TestRunLeavesTaskPATHRechecksRequiredTools(t *testing.T) {
 	}, opts, NewState())
 	if err != nil || stopped || len(results) != 1 || os.Getenv("PATH") != "original" {
 		t.Fatalf("results=%#v stopped=%v err=%v PATH=%q", results, stopped, err, os.Getenv("PATH"))
+	}
+}
+
+func TestRunLeavesRefreshesPathBeforeEachTask(t *testing.T) {
+	t.Setenv("PATH", "original")
+	originalRefresh, originalLookPath := refreshPath, LookPath
+	t.Cleanup(func() { refreshPath, LookPath = originalRefresh, originalLookPath })
+	calls := 0
+	refreshPath = func() (bool, error) {
+		calls++
+		if calls == 2 {
+			return true, os.Setenv("PATH", "installed-path")
+		}
+		return false, nil
+	}
+	LookPath = func(name string) (string, error) {
+		if os.Getenv("PATH") == "installed-path" {
+			return name, nil
+		}
+		return "", errNotFound
+	}
+	h := &fakeHandler{requiredTools: []string{"widget"}}
+	opts := baseOpts(map[string]Handler{"widget": h})
+	opts.Apply = true
+	results, stopped, err := RunLeaves([]tasks.Leaf{
+		leaf("widget", map[string]any{"state": "present"}),
+		leaf("widget", map[string]any{"state": "present", "path": "${{ envs.PATH }}"}, withWhen("envs.PATH == 'installed-path'")),
+	}, opts, NewState())
+	if err != nil || stopped || len(results) != 1 || h.installCall != 1 || h.seenItem["path"] != "installed-path" {
+		t.Fatalf("results=%#v stopped=%v err=%v handler=%#v", results, stopped, err, h)
+	}
+}
+
+func TestRunLeavesPathRefreshFailure(t *testing.T) {
+	original := refreshPath
+	refreshPath = func() (bool, error) { return false, fmt.Errorf("registry access denied") }
+	t.Cleanup(func() { refreshPath = original })
+	h := &fakeHandler{}
+	results, stopped, err := RunLeaves([]tasks.Leaf{
+		leaf("widget", map[string]any{"state": "present"}),
+	}, baseOpts(map[string]Handler{"widget": h}), NewState())
+	if err == nil || !strings.Contains(err.Error(), "registry access denied") || !stopped || len(results) != 0 || h.installCall != 0 {
+		t.Fatalf("results=%#v stopped=%v err=%v installs=%d", results, stopped, err, h.installCall)
+	}
+}
+
+func TestRunLeavesTaskPATHOverridesRefreshedPath(t *testing.T) {
+	t.Setenv("PATH", "original")
+	originalRefresh, originalLookPath := refreshPath, LookPath
+	t.Cleanup(func() { refreshPath, LookPath = originalRefresh, originalLookPath })
+	refreshPath = func() (bool, error) {
+		if os.Getenv("PATH") == "installed-path" {
+			return false, nil
+		}
+		return true, os.Setenv("PATH", "installed-path")
+	}
+	var paths []string
+	LookPath = func(name string) (string, error) {
+		paths = append(paths, os.Getenv("PATH"))
+		return name, nil
+	}
+	h := &fakeHandler{requiredTools: []string{"widget"}}
+	opts := baseOpts(map[string]Handler{"widget": h})
+	results, stopped, err := RunLeaves([]tasks.Leaf{
+		{Module: "widget", Envs: map[string]any{"PATH": "task-path"}, Item: map[string]any{"state": "present"}},
+		leaf("widget", map[string]any{"state": "present"}),
+	}, opts, NewState())
+	if err != nil || stopped || len(results) != 2 || strings.Join(paths, ",") != "task-path,installed-path" || os.Getenv("PATH") != "installed-path" {
+		t.Fatalf("results=%#v stopped=%v err=%v paths=%v PATH=%q", results, stopped, err, paths, os.Getenv("PATH"))
 	}
 }
 

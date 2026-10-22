@@ -541,6 +541,8 @@ tasks:
 
 Use `envs.NAME` in expressions and conditions to read the current environment, including inherited OS variables; the existing `env` filter reads the same values. A task's `when` sees the playbook environment before that task's own overrides are applied. `envs` on grouping tasks is not inherited by children; put it on each leaf that needs it.
 
+On Windows, before each leaf task, Ironstate appends any missing entries from the persistent machine and user `PATH` to its process `PATH`. This makes tools installed by earlier tasks (such as Scoop) available to subsequent shell commands and tool checks, even when Ironstate was launched from a terminal with a stale environment. Existing session entries and their precedence are preserved; persistent removals are not mirrored, and other environment variables are not refreshed. Task-level `envs.PATH` overrides still take precedence. This does not update the parent terminal's environment.
+
 ## Looping (`with`/`items`)
 
 A task carrying `with` or `items` is materialized multiple times *before* anything else about it is looked at - name, tags, when, id, its module fields, or a nested `actions`/`include` (looping a whole block, like Ansible). Each copy gets `${{ item }}`/`${{ item.<key> }}` resolved against one value:
