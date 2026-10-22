@@ -1,4 +1,65 @@
 
+## [v0.11.0](https://github.com/tacocontent/ironstate/releases/tag/v0.11.0) - 2026-10-22
+
+### 🚀 FEATURES
+
+#### _GENERAL_
+
+- Support for ARMv7 -[@camalot](https://github.com/camalot)
+
+- Support to add variables to inventory items -[@camalot](https://github.com/camalot)
+
+
+### 🐛 BUG FIXES
+
+#### _GENERAL_
+
+- Ensure that path is refreshed for commands -[@camalot](https://github.com/camalot)
+
+- fix: ensure that path is refreshed for commands -[@camalot](https://github.com/camalot)
+
+
+### 💼 OTHER
+
+#### _GENERAL_
+
+- Merge branch 'develop' of github.com:TacoContent/ironstate into develop -[@camalot](https://github.com/camalot)
+
+- Develop' of github.com:TacoContent/ironstate: -[@camalot](https://github.com/camalot)
+
+
+### 📚 DOCUMENTATION
+
+#### _GENERAL_
+
+- docs: update changelog for v0.10.3 -[@camalot](https://github.com/camalot)
+
+
+## GitHub
+
+### 💛 Contributors
+
+
+- [@camalot](https://github.com/camalot)
+## 📈 Commit Statistics
+
+
+- `7` commits contributed to the release.
+- `0` days have passed between the first and last commit.
+- `3` commits parsed as conventional.
+- `0` linked issues detected in commits.
+- `1` day  has passed between releases.
+
+
+![Statistics](https://quickchart.io/chart?c={type:'bar',data:{labels:['Commits','Contributors','Days%20Between%20Commits','Conventional%20Commits','Referenced%20Links','Days%20Since%20Last%20Release'],datasets:[{label:'Release',data:[7,1,0,3,0,1]}]}})
+
+
+
+---
+
+
+**Full Changelog**: https://github.com/tacocontent/ironstate/compare/v0.10.3...v0.11.0
+
 ## [v0.10.3](https://github.com/tacocontent/ironstate/releases/tag/v0.10.3) - 2026-10-21
 
 ### 🐛 BUG FIXES
