@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/TacoContent/ironstate/develop/inventory.schema.json",
   "title": "IronState Inventory",
-  "description": "Remote hosts for 'ironstate --inventory'. Connection/elevation settings only: per-host configuration belongs in the playbook's hosts/ and variables/ overlays, which the agent selects from each target's own facts.",
+  "description": "Remote hosts for 'ironstate --inventory', including connection/elevation settings and variables that supplement or override the playbook's hosts/ and variables/ overlays.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -37,6 +37,11 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "vars": {
+          "description": "Variables merged over the playbook hierarchy. Host vars override defaults.vars recursively; explicit --vars-file and --var overrides take precedence.",
+          "type": "object",
+          "additionalProperties": true
+        },
         "address": {
           "description": "Hostname, IP, ssh config alias, or 'local' to run on the controller without SSH.",
           "type": "string"

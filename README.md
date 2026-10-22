@@ -6,7 +6,7 @@
 
 ### Install script (recommended)
 
-Downloads the release archive matching your OS/architecture from [GitHub Releases](https://github.com/TacoContent/ironstate/releases), verifies its checksum, and installs the `ironstate` binary to `~/.local/bin` by default. Every OS/architecture combination this project ships is built (Windows/Linux/macOS, each on `amd64`/`x86_64` and `arm64`) - macOS covers both Intel (`amd64`) and Apple Silicon (`arm64`).
+Downloads the release archive matching your OS/architecture from [GitHub Releases](https://github.com/TacoContent/ironstate/releases), verifies its checksum, and installs the `ironstate` binary to `~/.local/bin` by default. Windows/Linux/macOS support `amd64`/`x86_64` and `arm64`; Linux also supports 32-bit ARMv7 (`uname -m`: `armv7l`, archive suffix: `armv7`). macOS covers both Intel (`amd64`) and Apple Silicon (`arm64`). ARMv6 devices are not supported by the ARMv7 build.
 
 **Linux/macOS:**
 
@@ -48,7 +48,7 @@ brew install --cask camalot/scoop/ironstate
 
 ### Manual download
 
-1. Download the archive for your OS/architecture from the [latest release](https://github.com/TacoContent/ironstate/releases/latest) - `ironstate_<version>_<os>_<arch>.zip` (Windows) or `ironstate_<version>_<os>_<arch>.tar.gz` (Linux/macOS). `<arch>` is Go's naming: `amd64` (x86_64/Intel) or `arm64` (Apple Silicon/ARM64) - e.g. an Intel Mac (`uname -m` prints `x86_64`) wants `ironstate_<version>_darwin_amd64.tar.gz`.
+1. Download the archive for your OS/architecture from the [latest release](https://github.com/TacoContent/ironstate/releases/latest) - `ironstate_<version>_<os>_<arch>.zip` (Windows) or `ironstate_<version>_<os>_<arch>.tar.gz` (Linux/macOS). `<arch>` is `amd64` (x86_64/Intel), `arm64` (Apple Silicon/ARM64), or `armv7` (Linux ARMv7) - e.g. an Intel Mac wants `ironstate_<version>_darwin_amd64.tar.gz`, while a Linux device reporting `armv7l` wants `ironstate_<version>_linux_armv7.tar.gz`.
 2. (optional) Verify it against that release's `checksums.txt` (e.g. `sha256sum -c checksums.txt` or `Get-FileHash -Algorithm SHA256`). `checksums.txt` is itself keyless-signed with [cosign](https://github.com/sigstore/cosign): `cosign verify-blob --bundle checksums.txt.sigstore.json checksums.txt --certificate-identity-regexp "https://github.com/TacoContent/ironstate/.github/workflows/release.yml@.*" --certificate-oidc-issuer https://token.actions.githubusercontent.com`.
 3. Extract the archive and put the `ironstate`/`ironstate.exe` binary somewhere on your `PATH`.
 
@@ -136,7 +136,7 @@ ironstate remote logs kresh --inventory inventory.yml [run_id]
 ironstate remote clean --inventory inventory.yml
 ```
 
-An inventory names hosts and groups and holds connection/elevation settings (per-host configuration stays in the playbook's `hosts/`/`variables/` overlays, which each target picks from its own facts). `--inventory` also accepts a directory of `.yml`/`.yaml` fragments: `main.yml` (or `main.yaml` when `main.yml` is absent) loads first, followed by other files alphabetically. Nested mappings merge, later scalar values override earlier ones, and group member lists are appended in file order. Schema: [inventory.schema.json](inventory.schema.json).
+An inventory names hosts and groups and holds connection/elevation settings and optional variables. Define `vars` on a host to configure it without creating a playbook `hosts/` file; `defaults.vars` supplies shared values. Variables merge recursively in this order (later wins): playbook hierarchy (`hosts/` and `variables/` overlays included), `defaults.vars`, host `vars`, `--vars-file` files in order, then `--var`. Each target evaluates inventory variable templates using its own facts. `--inventory` also accepts a directory of `.yml`/`.yaml` fragments: `main.yml` (or `main.yaml` when `main.yml` is absent) loads first, followed by other files alphabetically. Nested mappings merge, later scalar values override earlier ones, and group member lists are appended in file order. Schema: [inventory.schema.json](inventory.schema.json).
 
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/TacoContent/ironstate/develop/inventory.schema.json
@@ -146,7 +146,12 @@ hosts:
   snoke: { address: 192.168.2.103 }
   kresh: { address: kresh.lan, port: 2222 }
   laptop: {}                 # address defaults to the name, e.g. an ~/.ssh/config alias
-  router: { address: router.lan, become: false } # honor no playbook become directives
+  router:
+    address: router.lan
+    become: false
+    vars:
+      local:
+        bin_path: /home/admin
   self: { address: local }   # this machine, no SSH
 groups:
   linux: [snoke, kresh]
@@ -156,6 +161,7 @@ groups:
 
 - **Requirements**: an `ssh` client on the controller (`ironstate doctor` checks) and key-based access to a Linux, macOS, or Windows OpenSSH Server target (amd64/arm64). POSIX targets need `sh` and a SHA-256 utility (`sha256sum`, `shasum`, `openssl`, or BusyBox `sha256sum`); Windows targets require PowerShell 7 (`pwsh`) on the SSH session's `PATH` and use `Get-FileHash`. Windows SSH commands explicitly launch `pwsh`, not Windows PowerShell (`powershell.exe`), without changing the server's default shell. The agent launcher loads the user's PowerShell profile once so the agent inherits environment customizations such as `PATH`; bootstrap scripts and individual fact/shell subprocesses remain profile-free. Profiles used for remote automation must not prompt or write startup messages to stdout, which can interfere with the agent protocol. Auth is entirely your OpenSSH setup (`~/.ssh/config` aliases, ssh-agent, `ProxyJump`, `known_hosts`); ironstate always runs `ssh` with `BatchMode=yes` and never disables host-key checking. `--ssh-accept-new-host-keys` opts in to `StrictHostKeyChecking=accept-new`; `--ssh-config` passes a config file via `ssh -F`.
 - **Targets**: `[user@]host[:port]` or an ssh config alias; repeat `--target` for several hosts. `--target local` runs the agent on this machine without SSH.
+- **ARMv7 targets**: Linux devices reporting `armv7l` use platform key `linux/armv7` and the `linux_armv7` release archive. For a development build, compile with `GOOS=linux GOARCH=arm GOARM=7 go build -o ironstate-linux-armv7 ./cmd/ironstate` and pass `--agent-binary linux/armv7=./ironstate-linux-armv7`. ARMv6 devices are rejected rather than receiving an incompatible ARMv7 agent.
 - **Agent binary**: the controller ships its own binary when the target has the same OS/arch. Otherwise a release build downloads the matching release archive from GitHub once, verifies it against the release's `checksums.txt` (and that file's cosign signature when `cosign` is on `PATH`; `GITHUB_TOKEN` is used if set), and caches it under your user cache dir (`ironstate/agents/<version>/<os>_<arch>/`). Development builds never download: pass `--agent-binary linux/arm64=./ironstate-linux-arm64` (e.g. from `GOOS=linux GOARCH=arm64 go build ./cmd/ironstate`) or `--agent-binary windows/arm64=./ironstate-windows-arm64.exe`; `--no-agent-download` forces that for release builds too. POSIX targets cache the agent under `~/.cache/ironstate/agent/<version>-<sha>/`; Windows targets use `%LOCALAPPDATA%\ironstate\agent\<version>-<sha>\`. Both are SHA-256 verified before every run and re-uploaded only when the binary changes. `--remote-agent-dir` (or `agent_dir` in the inventory) selects another directory.
 - **Agent verification**: remote SHA-256 verification is enabled by default. For a trusted constrained host without a hash utility, set `verify_agent: false` for that inventory host or pass `--skip-agent-verification`. The controller then re-uploads the agent on every run over SSH and reports `agent-verification=skipped`; this weakens protection against a modified target-side binary.
 - **What's sent**: the playbook directory (minus `.git`, `.env`, `.secrets`, and anything matched by an `.ironstateignore` file of glob patterns), any `--vars-file`, an outside `filters.dir`, and the controller's `filters.*` config. `.env`/`.secrets` values and `--forward-env NAME` variables travel in memory, never written to the target's disk; `.secrets` values stay redacted in all output. Template expressions (`facts.*`, `lookup('env', ...)`, `lookup('url', ...)`) evaluate **on the target**.

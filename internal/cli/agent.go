@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -83,6 +84,8 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 	}
 	return nil
 }
+
+type inventoryVarsKey struct{}
 
 // agentRun returns the exit code to report, the failing phase, and the
 // error behind it.
@@ -205,7 +208,8 @@ func agentRun(cmd *cobra.Command, w *protocol.Writer) (int, string, error) {
 	root.SetIn(eofReader{})
 	root.SetOut(os.Stderr)
 	root.SetErr(os.Stderr)
-	runErr := root.ExecuteContext(withProtocolWriter(cmd.Context(), w))
+	ctx := context.WithValue(cmd.Context(), inventoryVarsKey{}, job.Options.InventoryVars)
+	runErr := root.ExecuteContext(withProtocolWriter(ctx, w))
 	return ExitCodeFor(runErr), phaseApply, runErr
 }
 

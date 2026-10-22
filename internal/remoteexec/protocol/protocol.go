@@ -72,13 +72,14 @@ type Job struct {
 // JobOptions mirrors the apply flags forwarded to the agent. Paths are
 // relative to the unpacked bundle root.
 type JobOptions struct {
-	Playbook      string   `json:"playbook"`
-	VarsFiles     []string `json:"vars_files,omitempty"`
-	VarOverrides  []string `json:"var_overrides,omitempty"`
-	Tags          []string `json:"tags,omitempty"`
-	Apply         bool     `json:"apply"`
-	Verbose       bool     `json:"verbose,omitempty"`
-	DisableBecome bool     `json:"disable_become,omitempty"`
+	InventoryVars map[string]any `json:"inventory_vars,omitempty"`
+	Playbook      string         `json:"playbook"`
+	VarsFiles     []string       `json:"vars_files,omitempty"`
+	VarOverrides  []string       `json:"var_overrides,omitempty"`
+	Tags          []string       `json:"tags,omitempty"`
+	Apply         bool           `json:"apply"`
+	Verbose       bool           `json:"verbose,omitempty"`
+	DisableBecome bool           `json:"disable_become,omitempty"`
 	// AllowPluginInstall lets the agent install missing plugins on the target.
 	AllowPluginInstall bool `json:"allow_plugin_install,omitempty"`
 }

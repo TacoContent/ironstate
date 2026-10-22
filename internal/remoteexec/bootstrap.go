@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 )
@@ -97,7 +98,7 @@ func powerShellFinalizeUploadScript(tempFile, file, expected string) string {
 // ProbeInfo is what bootstrap learned about a target.
 type ProbeInfo struct {
 	OS                    string // linux | darwin | windows
-	Arch                  string // amd64 | arm64
+	Arch                  string // amd64 | arm64 | armv7
 	UID                   string
 	AgentDir              string
 	StateDir              string
@@ -231,8 +232,13 @@ func parseProbe(out string) (ProbeInfo, error) {
 		info.Arch = "amd64"
 	case "aarch64", "arm64":
 		info.Arch = "arm64"
+	case "armv7l", "armv7":
+		if info.OS != "linux" {
+			return info, fmt.Errorf("unsupported target platform %s/%s (ARMv7 requires Linux)", info.OS, values["arch"])
+		}
+		info.Arch = "armv7"
 	default:
-		return info, fmt.Errorf("unsupported target architecture %q (supported: x86_64, arm64)", values["arch"])
+		return info, fmt.Errorf("unsupported target architecture %q (supported: x86_64, arm64, Linux armv7l)", values["arch"])
 	}
 	info.UID = values["uid"]
 	info.AgentDir = values["agent_dir"]
@@ -286,12 +292,26 @@ type LocalAgent struct {
 	SHA256 string
 }
 
+func currentAgentPlatform() string {
+	arch := runtime.GOARCH
+	if arch == "arm" {
+		if info, ok := debug.ReadBuildInfo(); ok {
+			for _, setting := range info.Settings {
+				if setting.Key == "GOARM" && strings.Split(setting.Value, ",")[0] == "7" {
+					arch = "armv7"
+				}
+			}
+		}
+	}
+	return runtime.GOOS + "/" + arch
+}
+
 // Resolve picks the binary for platform: explicit flag, then this
 // executable when platforms match, then the local agent cache, then a
 // verified download of the matching release.
 func (s *AgentSource) Resolve(ctx context.Context, platform string) (LocalAgent, error) {
 	candidate := s.Binaries[platform]
-	if candidate == "" && platform == runtime.GOOS+"/"+runtime.GOARCH {
+	if candidate == "" && platform == currentAgentPlatform() {
 		exe, err := os.Executable()
 		if err != nil {
 			return LocalAgent{}, err
@@ -313,8 +333,12 @@ func (s *AgentSource) Resolve(ctx context.Context, platform string) (LocalAgent,
 		candidate = downloaded
 	}
 	if candidate == "" {
-		return LocalAgent{}, fmt.Errorf("no ironstate %s binary for %s; pass --agent-binary %s=<path> (e.g. built with GOOS=%s GOARCH=%s go build ./cmd/ironstate)",
-			s.Version, platform, platform, path.Dir(platform), path.Base(platform))
+		arch, armSetting := path.Base(platform), ""
+		if arch == "armv7" {
+			arch, armSetting = "arm", " GOARM=7"
+		}
+		return LocalAgent{}, fmt.Errorf("no ironstate %s binary for %s; pass --agent-binary %s=<path> (e.g. built with GOOS=%s GOARCH=%s%s go build ./cmd/ironstate)",
+			s.Version, platform, platform, path.Dir(platform), arch, armSetting)
 	}
 	sum, err := s.hash(candidate)
 	if err != nil {

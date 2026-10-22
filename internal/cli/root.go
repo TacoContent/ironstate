@@ -166,6 +166,9 @@ func runApply(cmd *cobra.Command, _ []string) (err error) {
 	}
 	docMap := model.AsMap(doc)
 	repoRoot := filepath.Dir(resolvedFile)
+	if inventoryVars, ok := cmd.Context().Value(inventoryVarsKey{}).(map[string]any); ok {
+		docMap["vars"] = model.MergeMaps(model.Vars(docMap), inventoryVars)
+	}
 
 	// --vars-file is repeatable: each extra vars document merges in, in
 	// the order given, after the auto-detected hostname/architecture/

@@ -38,21 +38,27 @@ func fakeRelease(t *testing.T, corrupt bool) (*int32, []byte) {
 	t.Helper()
 	binary := []byte("#!/bin/sh\necho fake agent\n")
 	archive := releaseArchive(t, binary)
+	armv7Archive := releaseArchive(t, []byte("#!/bin/sh\necho fake ARMv7 agent\n"))
+	armv7Sum := sha256.Sum256(armv7Archive)
+	armv7Checksum := hex.EncodeToString(armv7Sum[:])
 	sum := sha256.Sum256(archive)
 	checksum := hex.EncodeToString(sum[:])
 	if corrupt {
 		checksum = strings.Repeat("0", 64)
+		armv7Checksum = checksum
 	}
 	var hits int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&hits, 1)
 		switch r.URL.Path {
 		case "/v1.2.3/checksums.txt":
-			_, _ = fmt.Fprintf(w, "%s  ironstate_1.2.3_linux_arm64.tar.gz\n%s  ironstate_1.2.3_windows_amd64.zip\n", checksum, strings.Repeat("1", 64))
+			_, _ = fmt.Fprintf(w, "%s  ironstate_1.2.3_linux_arm64.tar.gz\n%s  ironstate_1.2.3_linux_armv7.tar.gz\n%s  ironstate_1.2.3_windows_amd64.zip\n", checksum, armv7Checksum, strings.Repeat("1", 64))
 		case "/v1.2.3/checksums.txt.sigstore.json":
 			_, _ = w.Write([]byte("{}"))
 		case "/v1.2.3/ironstate_1.2.3_linux_arm64.tar.gz":
 			_, _ = w.Write(archive)
+		case "/v1.2.3/ironstate_1.2.3_linux_armv7.tar.gz":
+			_, _ = w.Write(armv7Archive)
 		default:
 			http.NotFound(w, r)
 		}
@@ -97,6 +103,29 @@ func TestResolveRejectsChecksumMismatch(t *testing.T) {
 	}
 }
 
+func TestResolveARMv7ReleaseAgent(t *testing.T) {
+	hits, _ := fakeRelease(t, false)
+	binary := []byte("#!/bin/sh\necho fake ARMv7 agent\n")
+	src := &AgentSource{Version: "1.2.3"}
+	agent, err := src.Resolve(context.Background(), "linux/armv7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(agent.Path)
+	if err != nil || !bytes.Equal(data, binary) || !strings.Contains(agent.Path, "linux_armv7") {
+		t.Fatalf("ARMv7 agent = %q, %q, %v", agent.Path, data, err)
+	}
+	before := atomic.LoadInt32(hits)
+	again, err := src.Resolve(context.Background(), "linux/armv7")
+	if err != nil || again.Path != agent.Path || atomic.LoadInt32(hits) != before {
+		t.Fatalf("cached ARMv7 resolve = %+v, %v", again, err)
+	}
+	arm64, err := src.Resolve(context.Background(), "linux/arm64")
+	if err != nil || arm64.Path == agent.Path {
+		t.Fatalf("ARM64 shares ARMv7 cache: %+v, %v", arm64, err)
+	}
+}
+
 func TestResolveRejectsBadSignature(t *testing.T) {
 	fakeRelease(t, false)
 	VerifyChecksumsSignature = func(context.Context, string, string) error { return errors.New("bad signature") }
@@ -115,6 +144,17 @@ func TestResolveNeverDownloadsForDevOrWhenDisabled(t *testing.T) {
 	}
 	if atomic.LoadInt32(hits) != 0 {
 		t.Errorf("made %d requests, want none", atomic.LoadInt32(hits))
+	}
+}
+
+func TestResolveARMv7BuildHint(t *testing.T) {
+	fakeRelease(t, false)
+	if currentAgentPlatform() == "linux/armv7" {
+		t.Skip("native ARMv7 controller reuses its own executable")
+	}
+	_, err := (&AgentSource{Version: "dev"}).Resolve(context.Background(), "linux/armv7")
+	if err == nil || !strings.Contains(err.Error(), "--agent-binary linux/armv7=") || !strings.Contains(err.Error(), "GOARCH=arm GOARM=7") {
+		t.Fatalf("ARMv7 build hint = %v", err)
 	}
 }
 

@@ -58,6 +58,24 @@ builds:
       - -X github.com/TacoContent/ironstate/internal/cli.version={{.Version}}
       - -X github.com/TacoContent/ironstate/internal/cli.commit={{.ShortCommit}}
       - -X github.com/TacoContent/ironstate/internal/cli.date={{.Date}}
+
+  - id: ironstate-linux-arm
+    main: ./cmd/ironstate
+    binary: ironstate
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - arm
+    goarm:
+      # - "6"
+      - "7"
+    ldflags:
+      - -s -w
+      - -X github.com/TacoContent/ironstate/internal/cli.version={{.Version}}
+      - -X github.com/TacoContent/ironstate/internal/cli.commit={{.ShortCommit}}
+      - -X github.com/TacoContent/ironstate/internal/cli.date={{.Date}}
   - id: ironstate-android
     main: ./cmd/ironstate
     binary: ironstate

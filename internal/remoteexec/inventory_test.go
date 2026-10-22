@@ -55,19 +55,46 @@ func TestLoadInventoryAppliesDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadInventoryMergesHostVars(t *testing.T) {
+	inv, err := LoadInventory(writeInventory(t, `
+defaults:
+  vars:
+    local:
+      bin_path: /default/bin
+      enabled: true
+hosts:
+  router:
+    address: local
+    vars:
+      local:
+        bin_path: /home/admin
+      retries: 3
+  other: {address: local}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := inv.hosts["router"].Vars
+	local := router["local"].(map[string]any)
+	if local["bin_path"] != "/home/admin" || local["enabled"] != true || router["retries"] != 3 {
+		t.Fatalf("router vars = %#v", router)
+	}
+	local["bin_path"] = "/changed"
+	if got := inv.hosts["other"].Vars["local"].(map[string]any)["bin_path"]; got != "/default/bin" {
+		t.Fatalf("other host vars changed: %v", got)
+	}
+	if got := inv.Defaults.Vars["local"].(map[string]any)["bin_path"]; got != "/default/bin" {
+		t.Fatalf("default vars changed: %v", got)
+	}
+}
+
 func TestLoadInventoryMergesDirectoryInPrimaryThenAlphabeticalOrder(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{
-		"main.yml": `
-defaults:
-  user: primary
-  agent_dir: /primary
-hosts:
-  shared: { address: primary.lan, user: primary }
-  primary: { address: primary.lan }
-groups:
-  core: [primary]
-`,
+		"main.yml": "defaults:\n  user: primary\n  agent_dir: /primary\n" +
+			"  vars: {local: {bin_path: /default/bin, enabled: true}}\n" +
+			"hosts:\n  shared: {address: primary.lan, user: primary, vars: {local: {bin_path: /primary/bin}}}\n" +
+			"  primary: {address: primary.lan}\ngroups:\n  core: [primary]\n",
 		"00-extra.yaml": `
 defaults:
   user: early
@@ -84,15 +111,9 @@ hosts:
 groups:
   web: [shared]
 `,
-		"z-extra.yaml": `
-defaults:
-  user: late
-hosts:
-  shared: { address: final.lan }
-  zulu: { address: zulu.lan }
-groups:
-  web: [zulu]
-`,
+		"z-extra.yaml": "defaults:\n  user: late\nhosts:\n" +
+			"  shared: {address: final.lan, vars: {local: {bin_path: /final/bin}}}\n" +
+			"  zulu: {address: zulu.lan}\ngroups:\n  web: [zulu]\n",
 		"ignored.txt": "not: an inventory\n",
 	}
 	for name, content := range files {
@@ -113,6 +134,10 @@ groups:
 	}
 	if got := inv.hosts["shared"].AgentDir; got != "/early" {
 		t.Errorf("shared agent directory = %q, want /early", got)
+	}
+	local := inv.hosts["shared"].Vars["local"].(map[string]any)
+	if local["bin_path"] != "/final/bin" || local["enabled"] != true {
+		t.Errorf("shared local vars = %#v", local)
 	}
 	if got := inv.hosts["primary"].Address(); got != "late@primary.lan:2200" {
 		t.Errorf("primary host address = %q, want late@primary.lan:2200", got)

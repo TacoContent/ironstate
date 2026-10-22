@@ -138,6 +138,93 @@ tasks:
 	}
 }
 
+func TestApplyHostInventoryVarsEndToEnd(t *testing.T) {
+	t.Setenv(agentHelperEnv, "1")
+	dir := t.TempDir()
+	playbook := filepath.Join(dir, "playbook")
+	writeFile(t, filepath.Join(playbook, "main.yml"), `
+vars:
+  local:
+    bin_path: /playbook/bin
+    enabled: true
+  file_wins: playbook
+  cli_wins: playbook
+tasks:
+  - name: check inventory variable precedence
+    assert:
+      that:
+        - "local.bin_path == expected"
+        - "local.enabled == true"
+        - "from_host_file == true"
+        - "file_wins == 'file'"
+        - "cli_wins == 'cli'"
+  - name: show inventory path
+    log:
+      message: "${{ vars.local.bin_path }}"
+`)
+	writeFile(t, filepath.Join(playbook, "hosts", "main.yml"), "vars:\n  local:\n    bin_path: /host/bin\n  from_host_file: true\n")
+	varsFile := filepath.Join(dir, "extra.yml")
+	writeFile(t, varsFile, "vars:\n  file_wins: file\n  cli_wins: file\n")
+	inventoryFile := filepath.Join(dir, "inventory.yml")
+	writeFile(t, inventoryFile, `
+defaults:
+  vars:
+    local:
+      bin_path: /default/bin
+    expected: /default/bin
+    file_wins: inventory
+    cli_wins: inventory
+hosts:
+  router:
+    address: local
+    vars:
+      local:
+        bin_path: /home/admin
+      expected: /home/admin
+  other: {address: local}
+`)
+	inv, err := remoteexec.LoadInventory(inventoryFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hosts, err := inv.Select(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := remoteexec.Prepare(remoteexec.JobSpec{
+		Playbook: playbook, VarsFiles: []string{varsFile},
+		VarOverrides: []string{"cli_wins=cli"}, Apply: true,
+		EnvFile: "-none-", SecretsFile: "-none-",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = job.Close() })
+	for _, host := range hosts {
+		t.Run(host.Name, func(t *testing.T) {
+			report := remoteexec.ApplyHost(context.Background(), host, job, remoteexec.HostOptions{
+				AgentArgs: []string{"--state-dir", t.TempDir()},
+			})
+			if report.Status != remoteexec.StatusOK || report.Result == nil {
+				t.Fatalf("ApplyHost: %+v, result: %+v", report, report.Result)
+			}
+			if report.Result.Summary == nil || report.Result.Summary.Stats.Total != 2 || report.Result.Summary.Stats.Failed != 0 {
+				t.Fatalf("unexpected summary: %+v", report.Result.Summary)
+			}
+			var messages []string
+			for _, event := range report.Result.Logs {
+				messages = append(messages, event.Message)
+			}
+			if !strings.Contains(strings.Join(messages, "\n"), host.Vars["expected"].(string)) {
+				t.Fatalf("inventory path missing from logs: %v", messages)
+			}
+		})
+	}
+	if job.Job.Options.InventoryVars != nil {
+		t.Fatal("host variables leaked into the shared prepared job")
+	}
+}
+
 func TestRunHostReportsFailedRun(t *testing.T) {
 	playbook := filepath.Join(t.TempDir(), "site.yml")
 	writeFile(t, playbook, `

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -117,7 +116,7 @@ func prepareAgent(ctx context.Context, host Host, job *PreparedJob, opts HostOpt
 	}
 	remotePath, uploaded, err := EnsureAgent(ctx, t, info, opts.Agents.Version, agent)
 	report.Uploaded = uploaded
-	if err == nil && job != nil && len(job.Plugins) > 0 && info.Platform() == runtime.GOOS+"/"+runtime.GOARCH {
+	if err == nil && job != nil && len(job.Plugins) > 0 && info.Platform() == currentAgentPlatform() {
 		report.PluginsShipped, err = EnsurePlugins(ctx, t, info, job)
 	}
 	return t, remotePath, info, err
@@ -185,6 +184,7 @@ func ApplyHost(ctx context.Context, host Host, job *PreparedJob, opts HostOption
 	hostJob.Job = job.Job
 	hostJob.Job.Options = job.Job.Options
 	hostJob.Job.Options.DisableBecome = host.DisableBecome
+	hostJob.Job.Options.InventoryVars = host.Vars
 	t, agentPath, info, err := prepareAgentWithRetry(ctx, host, &hostJob, opts, &report)
 	if t != nil {
 		defer func() { _ = t.Close() }()

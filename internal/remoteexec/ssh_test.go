@@ -166,13 +166,20 @@ func TestParseProbe(t *testing.T) {
 	}
 	cases := map[string]string{
 		"no sentinels": "hello\n",
-		"arm32":        strings.Replace(good, "arch=aarch64", "arch=armv7l", 1),
+		"armv6":        strings.Replace(good, "arch=aarch64", "arch=armv6l", 1),
+		"darwin armv7": strings.ReplaceAll(strings.Replace(good, "os=Linux", "os=Darwin", 1), "arch=aarch64", "arch=armv7l"),
 		"noexec":       strings.Replace(good, "exec=ok\n", "", 1),
 		"relative dir": strings.Replace(good, "agent_dir=/root", "agent_dir=root", 1),
 	}
 	for name, out := range cases {
 		if _, err := parseProbe(out); err == nil {
 			t.Errorf("%s: parseProbe accepted", name)
+		}
+	}
+	for _, arch := range []string{"armv7l", "armv7"} {
+		info, err := parseProbe(strings.Replace(good, "arch=aarch64", "arch="+arch, 1))
+		if err != nil || info.Platform() != "linux/armv7" {
+			t.Errorf("ARMv7 probe = %+v, %v", info, err)
 		}
 	}
 	noSHA := strings.Replace(good, "sha=sha256sum\n", "", 1)

@@ -30,6 +30,8 @@ jobs:
           persist-credentials: false # avoid exposing GITHUB_TOKEN to submodules
 
       - uses: ./.github/actions/verify-sha256
+      - name: Test installer architecture selection
+        run: bash ./scripts/test-install-architecture.sh
   lint:
     permissions:
       contents: read

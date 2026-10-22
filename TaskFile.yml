@@ -111,6 +111,7 @@ tasks:
     desc: 'CI job "verify": check install/*.sha256 matches the scripts'
     cmds:
       - bash ./scripts/verify-install-sha256.sh
+      - bash ./scripts/test-install-architecture.sh
 
   typos:check:
     internal: false
