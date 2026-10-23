@@ -59,7 +59,7 @@ func LoadIncludedPackage(includeSpec map[string]any, packagesRoot string, facts,
 	if err != nil {
 		return nil, err
 	}
-	// Chained hostname/architecture/os_family/platform overlays sitting
+	// Chained hostname/os_family/distribution/platform/architecture overlays sitting
 	// alongside this package's main.yml (e.g. 'roles/foo/krayt.yml' or
 	// 'roles/foo/amd64.windows.yml') — least-specific first, most
 	// specific wins — same mechanism as the top-level hosts:/variables:

@@ -6,7 +6,7 @@ import (
 )
 
 // LoadHierarchy loads baseFile, then layers (in order): hosts/'s default
-// (main.yml) plus chained hostname/architecture/os_family/platform
+// (main.yml) plus chained hostname/os_family/distribution/platform/architecture
 // overlays, variables/'s default (main.yml) plus the same chained
 // overlays, then the legacy username-keyed variables/<USERNAME>.yml
 // overlay — ports Packages.psm1's Import-PackagesHierarchy, extended per

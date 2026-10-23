@@ -48,7 +48,7 @@ func newRootCommand() (*cobra.Command, error) {
 
 	flags := cmd.Flags()
 	flags.String("playbook", "", "path to the site/main YAML document, or a directory/bare name to search for one (site.yml, main.yml, etc.); defaults to the current directory")
-	flags.StringArray("vars-file", nil, "additional vars document to merge in on top of the auto-detected hostname/architecture/os_family/platform chain, before --var (repeatable; later files win on overlapping keys)")
+	flags.StringArray("vars-file", nil, "additional vars document to merge in on top of the auto-detected hostname/architecture/os_family/distribution/platform chain, before --var (repeatable; later files win on overlapping keys)")
 	flags.StringArray("var", nil, "override a var by dotted key path: --var key=value (repeatable, highest precedence)")
 	flags.Bool("apply", false, "actually apply changes (default: dry-run)")
 	flags.StringSlice("tags", nil, "restrict processing to tasks/actions carrying any of these tags")
@@ -172,7 +172,7 @@ func runApply(cmd *cobra.Command, _ []string) (err error) {
 
 	// --vars-file is repeatable: each extra vars document merges in, in
 	// the order given, after the auto-detected hostname/architecture/
-	// os_family/platform chain (and the legacy per-username overlay) so
+	// os_family/distribution/platform chain (and the legacy per-username overlay) so
 	// they win on overlapping keys - a later --vars-file wins over an
 	// earlier one - but all before --var (the most explicit override of
 	// all).

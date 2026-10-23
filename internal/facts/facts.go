@@ -1,6 +1,6 @@
 // Package facts gathers host facts made available to 'when' conditions
 // and '${{ facts.* }}' templating — a port of modules/Facts.psm1's small,
-// deliberately fixed starter set, plus 'platform'/'arch'/'os_family'
+// deliberately fixed starter set, plus 'platform'/'arch'/'os_family'/'distribution'
 // (docs/plans/go-rewrite.md §1's cross-platform goal): ironstate.ps1 was
 // always Windows-only, but the Go binary itself is genuinely
 // cross-platform (windows/linux/darwin builds, see .goreleaser.yaml), so
@@ -45,6 +45,7 @@ func Gather() map[string]any {
 		"platform":       runtime.GOOS,
 		"arch":           runtime.GOARCH,
 		"os_family":      osFamily(runtime.GOOS),
+		"distribution":   distribution(runtime.GOOS),
 		"is_debian":      isDebian,
 		"debian_version": debianVersion,
 	}
@@ -90,13 +91,20 @@ func gatherShellVersions() shellVersionFacts {
 	return v
 }
 
-// osFamily identifies the host's OS for 'when' branching and chained
-// override filenames (e.g. '<username>.ubuntu.yml', '<hostname>.archlinux.yml'):
-// "windows"/"darwin" as-is, but on Linux it resolves to the specific
-// distribution ID from distro() (e.g. "ubuntu", "archlinux") when
-// detectable, falling back to the raw GOOS otherwise - distinct from
-// 'platform', which always stays the plain GOOS value.
+// osFamily identifies the Linux OS family from ID_LIKE, falling back to ID.
+// Non-Linux platforms use their GOOS value.
 func osFamily(goos string) string {
+	if goos == "linux" {
+		if family := distroFamily(); family != "" {
+			return family
+		}
+	}
+	return goos
+}
+
+// distribution returns the Linux distribution from ID, falling back to
+// ID_LIKE. Non-Linux platforms use their GOOS value.
+func distribution(goos string) string {
 	if goos == "linux" {
 		if d := distro(); d != "" {
 			return d

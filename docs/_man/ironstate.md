@@ -261,7 +261,7 @@ A playbook is a YAML document containing variables and tasks:
           name: git
           state: present
 
-Tasks may be placed directly in the main document or loaded through the playbook hierarchy. The hierarchy supports **hosts/**, **variables/**, **roles/**, **packages/**, and **tasks/** directories. Host and variable overlays may be selected using hostname, operating system family, platform, and architecture facts.
+Tasks may be placed directly in the main document or loaded through the playbook hierarchy. The hierarchy supports **hosts/**, **variables/**, **roles/**, **packages/**, and **tasks/** directories. Host and variable overlays may be selected using hostname, operating system family, distribution, platform, and architecture facts. On Linux, **facts.os_family** prefers the first **ID_LIKE** token (falling back to **ID**), while **facts.distribution** prefers **ID** (falling back to **ID_LIKE**). Arch-family overlays accept either **archlinux** or **arch** in their filenames.
 
 A playbook may declare external plugins:
 

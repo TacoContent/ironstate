@@ -12,18 +12,15 @@ import (
 // lookup order (/etc/os-release takes precedence over the vendor default).
 var osReleasePaths = []string{"/etc/os-release", "/usr/lib/os-release"}
 
-// distroAliases maps a handful of os-release(5) IDs to the names more
-// commonly used elsewhere (e.g. Ansible's ansible_distribution), since
-// 'facts.os_family == "archlinux"' reads more naturally in a main.yml
-// than the raw freedesktop ID "arch".
+// distroAliases maps a handful of os-release(5) IDs to their commonly
+// used names.
 var distroAliases = map[string]string{
 	"arch": "archlinux",
 	"rhel": "redhat",
 }
 
 // distro identifies the Linux distribution from /etc/os-release's ID
-// field (falling back to ID_LIKE's first token, e.g. Linux Mint's
-// ID_LIKE=ubuntu), or "" if neither file is readable/set.
+// field, falling back to the first ID_LIKE token or "" if neither is set.
 func distro() string {
 	for _, path := range osReleasePaths {
 		id, idLike, _, ok := readOSRelease(path)
@@ -31,6 +28,19 @@ func distro() string {
 			continue
 		}
 		return normalizeDistro(id, idLike)
+	}
+	return ""
+}
+
+// distroFamily identifies the os-release family, preferring the first
+// ID_LIKE token over ID so derivatives can share family-specific tasks.
+func distroFamily() string {
+	for _, path := range osReleasePaths {
+		id, idLike, _, ok := readOSRelease(path)
+		if !ok {
+			continue
+		}
+		return normalizeDistro(idLike, id)
 	}
 	return ""
 }
@@ -79,16 +89,19 @@ func readOSRelease(path string) (id, idLike, versionID string, ok bool) {
 	return id, idLike, versionID, true
 }
 
-func normalizeDistro(id, idLike string) string {
-	if v := aliasOrLower(id); v != "" {
+func normalizeDistro(preferred, fallback string) string {
+	if v := firstDistro(preferred); v != "" {
 		return v
 	}
-	for _, like := range strings.Fields(idLike) {
-		if v := aliasOrLower(like); v != "" {
-			return v
-		}
+	return firstDistro(fallback)
+}
+
+func firstDistro(value string) string {
+	fields := strings.Fields(value)
+	if len(fields) == 0 {
+		return ""
 	}
-	return ""
+	return aliasOrLower(fields[0])
 }
 
 func aliasOrLower(id string) string {

@@ -17,8 +17,8 @@ func TestChainCandidatesAnySubsetAnyOrder(t *testing.T) {
 	got := ChainCandidates(facts)
 	// Every permutation of every non-empty subset of {hostname, os_family,
 	// arch} (distinct values here, so no name collisions), ordered by
-	// priority weight ascending (hostname=8, os_family=4, arch=1 - so e.g.
-	// "krayt" alone (8) outranks "amd64.linux" (1+4=5)); same-weight
+	// priority weight ascending (hostname=16, os_family=8, arch=1 - so e.g.
+	// "krayt" alone (16) outranks "amd64.linux" (1+8=9)); same-weight
 	// permutations tie-break alphabetically.
 	want := []string{
 		"amd64", "linux", "amd64.linux", "linux.amd64",
@@ -52,10 +52,23 @@ func TestChainCandidatesTwoCharacteristics(t *testing.T) {
 	}
 }
 
+func TestChainCandidatesAcceptArchAliasForOSFamily(t *testing.T) {
+	got := ChainCandidates(map[string]any{"os_family": "archlinux"})
+	seen := map[string]bool{}
+	for _, name := range got {
+		seen[name] = true
+	}
+	for _, want := range []string{"archlinux", "arch"} {
+		if !seen[want] {
+			t.Errorf("ChainCandidates missing %q alias: %#v", want, got)
+		}
+	}
+}
+
 func TestChainCandidatesEmptyHostnameStillYieldsNonHostnameCandidates(t *testing.T) {
 	// Hostname is now an optional segment, not a mandatory leading one -
-	// an arch/os_family/platform-only overlay (e.g. 'windows.yml') should
-	// still apply even when there's no hostname to anchor a chain on.
+	// an architecture-only overlay should still apply even when there's no
+	// hostname to anchor a chain on.
 	got := ChainCandidates(map[string]any{"arch": "amd64"})
 	want := []string{"amd64"}
 	if len(got) != len(want) || got[0] != want[0] {
@@ -66,6 +79,53 @@ func TestChainCandidatesEmptyHostnameStillYieldsNonHostnameCandidates(t *testing
 func TestChainCandidatesEmptyFactsYieldsNone(t *testing.T) {
 	if got := ChainCandidates(map[string]any{}); len(got) != 0 {
 		t.Fatalf("ChainCandidates = %#v, want none (no characteristics at all)", got)
+	}
+}
+
+func TestLoadHierarchyAppliesDistributionOverlay(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "main.yml"), `
+tasks:
+  - name: base task
+    log: { message: base }
+`)
+	writeFile(t, filepath.Join(dir, "hosts", "archlinux.yml"), `
+tasks:
+  - name: distribution task
+    log: { message: archlinux }
+`)
+
+	doc, err := LoadHierarchy(filepath.Join(dir, "main.yml"), map[string]any{
+		"platform":     "linux",
+		"distribution": "archlinux",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tasks := doc.(map[string]any)["tasks"].([]any)
+	if len(tasks) != 2 {
+		t.Fatalf("tasks = %#v, want base + hosts/archlinux.yml appended", tasks)
+	}
+}
+
+func TestLoadHierarchyAcceptsArchAliasForOSFamilyOverlay(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "main.yml"), "tasks: []\n")
+	writeFile(t, filepath.Join(dir, "hosts", "arch.yml"), `
+tasks:
+  - name: arch family task
+    log: { message: arch }
+`)
+
+	doc, err := LoadHierarchy(filepath.Join(dir, "main.yml"), map[string]any{
+		"os_family": "archlinux",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tasks := doc.(map[string]any)["tasks"].([]any)
+	if len(tasks) != 1 {
+		t.Fatalf("tasks = %#v, want hosts/arch.yml applied for os_family archlinux", tasks)
 	}
 }
 

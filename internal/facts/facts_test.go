@@ -18,7 +18,7 @@ func TestGatherShape(t *testing.T) {
 		"shell_zsh", "zsh_version",
 		"shell_fish", "fish_version",
 		"shell_nu", "nu_version",
-		"platform", "arch", "os_family", "is_debian", "debian_version",
+		"platform", "arch", "os_family", "distribution", "is_debian", "debian_version",
 	} {
 		if _, ok := f[key]; !ok {
 			t.Errorf("missing fact %q", key)
@@ -53,6 +53,18 @@ func TestOSFamily(t *testing.T) {
 	for goos, want := range cases {
 		if got := osFamily(goos); got != want {
 			t.Errorf("osFamily(%q) = %q, want %q", goos, got, want)
+		}
+	}
+}
+
+func TestDistributionUsesOperatingSystemNameOutsideLinux(t *testing.T) {
+	for goos, want := range map[string]string{
+		"windows": "windows",
+		"darwin":  "darwin",
+		"plan9":   "plan9",
+	} {
+		if got := distribution(goos); got != want {
+			t.Errorf("distribution(%q) = %q, want %q", goos, got, want)
 		}
 	}
 }

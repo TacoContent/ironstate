@@ -10,28 +10,35 @@ import (
 
 // chainCharacteristic is one host characteristic usable in a "chained"
 // override filename, with its fixed priority weight (docs/plans/notes.md:
-// priority order is hostname, then os_family, then platform, then arch).
+// priority order is hostname, then os_family, distribution, platform, arch).
 // Weights are powers of two specifically so that any subset containing a
 // higher-priority characteristic always outranks every subset that
-// doesn't - e.g. hostname (8) alone already outranks os_family+platform+
-// arch combined (4+2+1=7) - matching the requested "hostname always
-// wins" priority tree.
+// doesn't - e.g. hostname (16) alone already outranks all other
+// characteristics combined (8+4+2+1=15) - matching the requested
+// "hostname always wins" priority tree.
 type chainCharacteristic struct {
-	value  string
-	weight int
+	value   string
+	aliases []string
+	weight  int
 }
 
 // chainFacts is the fixed set of host-characteristic values a "chained"
 // override filename can be built from, in priority order (highest weight
-// first): hostname, os_family, platform, arch. A characteristic with no
-// value (empty string) is omitted entirely - it can't take part in any
-// candidate name.
+// first): hostname, os_family, distribution, platform, arch. A
+// characteristic with no value (empty string) is omitted entirely - it
+// can't take part in any candidate name.
 func chainFacts(facts map[string]any) []chainCharacteristic {
+	osFamily := stringFact(facts, "os_family")
+	var osFamilyAliases []string
+	if osFamily == "archlinux" {
+		osFamilyAliases = []string{"arch"}
+	}
 	all := []chainCharacteristic{
-		{stringFact(facts, "computer_name"), 8},
-		{stringFact(facts, "os_family"), 4},
-		{stringFact(facts, "platform"), 2},
-		{stringFact(facts, "arch"), 1},
+		{value: stringFact(facts, "computer_name"), weight: 16},
+		{value: osFamily, aliases: osFamilyAliases, weight: 8},
+		{value: stringFact(facts, "distribution"), weight: 4},
+		{value: stringFact(facts, "platform"), weight: 2},
+		{value: stringFact(facts, "arch"), weight: 1},
 	}
 	present := make([]chainCharacteristic, 0, len(all))
 	for _, c := range all {
@@ -52,12 +59,12 @@ func stringFact(facts map[string]any, key string) string {
 
 // ChainCandidates returns override base names (no extension): every
 // permutation of every non-empty subset of the available host
-// characteristics (hostname, os_family, platform, arch), joined by '.' -
+// characteristics (hostname, os_family, distribution, platform, arch), joined by '.' -
 // e.g. "krayt" (hostname alone), "windows" (os_family or platform alone -
 // handy for a host-agnostic "any Windows machine" overlay like
 // hosts/windows.yml), "amd64.krayt" or "krayt.amd64" (hostname+arch, in
 // either order - callers can write the characteristics in whatever order
-// they want), all the way up to a full four-characteristic name. Any N of
+// they want), all the way up to a full five-characteristic name. Any N of
 // the characteristics may be used, in any order.
 //
 // Ordered least-specific to most-specific for merging, by priority
@@ -86,13 +93,23 @@ func ChainCandidates(facts map[string]any) []string {
 		}
 		permuteIndices(idx, func(order []int) {
 			parts := make([]string, len(order))
-			for j, k := range order {
-				parts[j] = present[k].value
+			var addNames func(int)
+			addNames = func(position int) {
+				if position == len(order) {
+					name := strings.Join(parts, ".")
+					if w, ok := best[name]; !ok || weight > w {
+						best[name] = weight
+					}
+					return
+				}
+				characteristic := present[order[position]]
+				values := append([]string{characteristic.value}, characteristic.aliases...)
+				for _, value := range values {
+					parts[position] = value
+					addNames(position + 1)
+				}
 			}
-			name := strings.Join(parts, ".")
-			if w, ok := best[name]; !ok || weight > w {
-				best[name] = weight
-			}
+			addNames(0)
 		})
 	}
 
@@ -111,8 +128,8 @@ func ChainCandidates(facts map[string]any) []string {
 }
 
 // permuteIndices calls cb once per ordering of idx's elements (in place,
-// via Heap's-algorithm-style backtracking) - up to 4! = 24 calls for this
-// package's maximum 4 characteristics, negligible cost.
+// via Heap's-algorithm-style backtracking) - up to 5! = 120 calls for this
+// package's maximum 5 characteristics, negligible cost.
 func permuteIndices(idx []int, cb func([]int)) {
 	n := len(idx)
 	used := make([]bool, n)
@@ -157,7 +174,7 @@ func fileExists(path string) bool {
 // MergeChainOverlays merges each of ChainCandidates(facts) that exists as
 // "<scanDir>/<candidate>.yml"/".yaml" onto data, least-specific first (so
 // the most specific one wins on conflicting keys) — ports
-// docs/plans/notes.md's "chained" hostname/os_family/platform/arch
+// docs/plans/notes.md's "chained" hostname/os_family/distribution/platform/arch
 // override filenames. Relative paths inside each overlay resolve against
 // baseDir, the same root every sibling overlay in a given hierarchy uses,
 // regardless of which subdirectory the overlay file itself lives in.
