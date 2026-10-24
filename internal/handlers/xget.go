@@ -65,7 +65,7 @@ func (xgetHandler) Describe(item map[string]any, action engine.Action, ctx engin
 
 func (xgetHandler) Install(item map[string]any, name string, ctx engine.Context) (engine.ExecResult, error) {
 	pkg := getString(item, "package")
-	args := append([]string{pkg}, xgetExpandedArgs(item)...)
+	args := append([]string{"install", pkg}, xgetExpandedArgs(item)...)
 	result := runExternalCommand("xget", args)
 	if result.RC != 0 {
 		engine.Warn("xget %s exited with code %d", pkg, result.RC)
@@ -74,11 +74,13 @@ func (xgetHandler) Install(item map[string]any, name string, ctx engine.Context)
 }
 
 func (xgetHandler) Uninstall(item map[string]any, name string, ctx engine.Context) (engine.ExecResult, error) {
-	target := xgetTargetPath(item)
-	if target != "" && fileExists(target) {
-		_ = os.Remove(target)
+	pkg := getString(item, "package")
+	args := append([]string{"uninstall", pkg}, xgetExpandedArgs(item)...)
+	result := runExternalCommand("xget", args)
+	if result.RC != 0 {
+		engine.Warn("xget %s exited with code %d", pkg, result.RC)
 	}
-	return engine.ExecResult{}, nil
+	return result, nil
 }
 
 // ScanRole implements engine.ScanCapable - discovered packages seed
