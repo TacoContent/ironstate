@@ -338,6 +338,23 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 		}
 		continueOnError, _ := item["continue_on_error"].(bool)
 
+		moduleItem := model.AsMap(item[moduleName])
+		if moduleName == "shell" || moduleName == "ironstate.builtin.shell" {
+			switch shell := item[moduleName].(type) {
+			case string:
+				moduleItem = map[string]any{"command": shell}
+			case map[string]any:
+				moduleItem = model.DeepCopy(shell).(map[string]any)
+			}
+			for _, key := range []string{"creates", "removes"} {
+				if value, present := item[key]; present {
+					if _, moduleValuePresent := moduleItem[key]; !moduleValuePresent {
+						moduleItem[key] = model.DeepCopy(value)
+					}
+				}
+			}
+		}
+
 		results = append(results, Leaf{
 			Name:               name,
 			Tags:               effectiveTags,
@@ -353,7 +370,7 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 			PackageInputs:      sc.packageInputs,
 			PackagePackage:     sc.packagePackage,
 			Module:             moduleName,
-			Item:               model.AsMap(item[moduleName]),
+			Item:               moduleItem,
 			ItemCtx:            sc.parentItemCtx,
 			Isolated:           sc.isolated,
 			IsolatedFacts:      sc.facts,

@@ -130,9 +130,32 @@
           "type": "string",
           "description": "Registers this leaf's result under this name once it runs: '{ changed, failed, rc, stdout, stdout_lines, stderr, stderr_lines }' (Ansible 'register'-shaped; every CLI-backed module and 'shell' populate a real rc/stdout/stderr, others default to 0/''/'' unless they throw). Later tasks reference it with bare dotted/indexed paths in 'when' (e.g. 'foo.rc != 0', 'foo.results[0].rc') and '${{ foo }}' in templates. If this task also has 'items' (a loop), every iteration shares the same 'id': the flat fields reflect the last iteration, and every iteration's result is additionally available as 'foo.results[N]'. Leaf actions only - not valid on a grouping task ('actions'/'include')."
         },
+        "creates": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Shell idempotency paths, equivalent to shell.creates. Accepted at task level for shell tasks."
+        },
+        "removes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Shell idempotency paths, equivalent to shell.removes. Accepted at task level for shell tasks."
+        },
         "failed_when": {
-          "description": "Condition(s) overriding whether this leaf counts as failed - same grammar as 'when' (a single expression, or a list, implicit AND), evaluated against this leaf's own 'rc'/'stdout'/'stdout_lines'/'stderr'/'stderr_lines'/'changed' as bare names (e.g. 'failed_when: rc != 0'). Without it, a leaf fails by default exactly when its handler reports a non-zero 'rc' (a thrown error also counts as 'rc: 1'). See 'continue_on_error' for what happens when a leaf fails.",
-          "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
+          "description": "Condition(s) overriding whether this leaf counts as failed - a single expression or a list (implicit AND), evaluated against this leaf's own execution result. Expressions may be bare ('rc != 0') or wrapped as '${{ rc != 0 }}'. A list entry may instead run a shell check and evaluate its 'value' against that check's own result. Without it, a leaf fails by default exactly when its handler reports a non-zero 'rc'.",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "boolean" },
+            {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  { "type": "string" },
+                  { "type": "boolean" },
+                  { "$ref": "#/$defs/failedWhenShellCheck" }
+                ]
+              }
+            }
+          ]
         },
         "continue_on_error": {
           "type": "boolean",
@@ -188,7 +211,7 @@
         "file": { "$ref": "#/$defs/fileItem" },
         "copy": { "$ref": "#/$defs/copyItem" },
         "template": { "$ref": "#/$defs/templateItem" },
-        "shell": { "$ref": "#/$defs/shellItem" },
+        "shell": { "oneOf": [{ "type": "string" }, { "$ref": "#/$defs/shellItem" }] },
         "blockinfile": { "$ref": "#/$defs/blockInFileItem" },
         "lineinfile": { "$ref": "#/$defs/lineInFileItem" },
         "ssh_host_block": { "$ref": "#/$defs/sshHostBlockItem" },
@@ -745,7 +768,22 @@
           "description": "Glob patterns whose presence signals 'already run'. If omitted, the command always runs for state 'present'/'latest'. For state 'absent', these paths are removed instead of re-running anything.",
           "items": { "type": "string" }
         },
+        "removes": {
+          "type": "array",
+          "description": "Glob patterns the command is expected to remove. For state 'present'/'latest', the command is considered already run when every pattern is absent; for state 'absent', it runs while any pattern remains. Unlike 'creates', these paths are never removed automatically.",
+          "items": { "type": "string" }
+        },
         "state": { "$ref": "#/$defs/state" }
+      }
+    },
+    "failedWhenShellCheck": {
+      "type": "object",
+      "description": "Runs a shell command while evaluating a failed_when list and evaluates 'value' against that command's rc/stdout/stderr (for example, value: '${{ rc == 0 }}').",
+      "additionalProperties": false,
+      "required": ["shell", "value"],
+      "properties": {
+        "shell": { "$ref": "#/$defs/shellItem" },
+        "value": {}
       }
     },
     "blockInFileItem": {

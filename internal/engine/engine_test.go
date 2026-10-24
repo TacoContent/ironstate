@@ -553,6 +553,35 @@ func TestRunLeavesFailedWhenStopsRunByDefault(t *testing.T) {
 	}
 }
 
+func TestRunLeavesFailedWhenRunsShellValueCheck(t *testing.T) {
+	task := &fakeHandler{installExec: ExecResult{RC: 1}}
+	probe := &fakeHandler{installExec: ExecResult{RC: 0}}
+	opts := baseOpts(map[string]Handler{"widget": task, "shell": probe})
+	opts.Apply = true
+
+	results, stopped, err := RunLeaves([]tasks.Leaf{
+		leaf("widget", map[string]any{"state": "present"},
+			withFailedWhen(
+				"${{ rc != 0 }}",
+				map[string]any{
+					"shell": map[string]any{"type": "bash", "command": "check-command"},
+					"value": "${{ rc == 0 }}",
+				},
+			),
+			withContinueOnError(),
+		),
+	}, opts, NewState())
+	if err != nil || stopped {
+		t.Fatalf("results=%#v stopped=%v err=%v", results, stopped, err)
+	}
+	if len(results) != 1 || !results[0].Failed {
+		t.Fatalf("results = %#v, want failed task after both failed_when checks passed", results)
+	}
+	if probe.installCall != 1 || probe.seenItem["command"] != "check-command" {
+		t.Fatalf("shell probe calls=%d item=%#v, want command to execute once", probe.installCall, probe.seenItem)
+	}
+}
+
 func TestRunLeavesContinueOnErrorKeepsGoing(t *testing.T) {
 	h := &fakeHandler{installed: false, installExec: ExecResult{RC: 0}}
 	opts := baseOpts(map[string]Handler{"widget": h})

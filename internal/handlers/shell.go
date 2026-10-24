@@ -10,8 +10,8 @@ import (
 )
 
 // shellHandler ports Handlers/Shell.psm1: runs an inline command or a
-// script file through a configurable interpreter ('host'). 'creates'
-// gates idempotency (shared primitive with 'zip', see creates.go).
+// script file through a configurable interpreter ('host'). 'creates' and
+// 'removes' gate idempotency (shared primitives with 'zip', see creates.go).
 //
 // Deviation from Handlers/Shell.psm1 (documented, not silent): the
 // original's default 'pwsh' host runs the script *in-process* (no
@@ -271,6 +271,13 @@ func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
 }
 
 func (shellHandler) Test(item map[string]any, name string, ctx engine.Context) (bool, error) {
+	_, hasRemoves := item["removes"]
+	if itemState(item) == "absent" && hasRemoves {
+		return !testRemovesAbsent(asList(item["removes"])), nil
+	}
+	if hasRemoves {
+		return testRemovesAbsent(asList(item["removes"])), nil
+	}
 	return testCreatesPresent(asList(item["creates"])), nil
 }
 

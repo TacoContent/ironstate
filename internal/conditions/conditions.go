@@ -1,8 +1,8 @@
-// Package conditions implements 'when'/'that' condition evaluation — a
+// Package conditions implements 'when'/'failed_when'/'that' condition evaluation — a
 // thin consumer of internal/expr's shared tokenizer/parser/evaluator, a
 // port of modules/Conditions.psm1. See that module's docstring (mirrored
-// in docs/plans/go-rewrite.md §4.3/§10) for why 'when' is deliberately not
-// '${{ }}'-wrapped (bare identifiers, e.g. 'computer_name == "KRAYT"').
+// in docs/plans/go-rewrite.md §4.3/§10) for condition syntax details
+// (bare identifiers, e.g. 'computer_name == "KRAYT"').
 package conditions
 
 import (
@@ -57,10 +57,14 @@ func stringifyWhenEntry(raw any) (string, bool) {
 	case nil:
 		return "", false
 	case string:
-		if strings.TrimSpace(v) == "" {
+		exprText := strings.TrimSpace(v)
+		if strings.HasPrefix(exprText, "${{") && strings.HasSuffix(exprText, "}}") {
+			exprText = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(exprText, "${{"), "}}"))
+		}
+		if exprText == "" {
 			return "", false
 		}
-		return v, true
+		return exprText, true
 	case bool:
 		if v {
 			return "true", true

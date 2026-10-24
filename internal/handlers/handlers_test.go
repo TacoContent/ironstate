@@ -1099,6 +1099,43 @@ func TestCreatesPresentGlob(t *testing.T) {
 	}
 }
 
+func TestRemovesAbsentAndShellState(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "remove-me")
+	if err := os.WriteFile(path, []byte("present"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := shellHandler{}
+	item := map[string]any{"removes": []any{path}}
+
+	installed, err := h.Test(item, "", testCtx())
+	if err != nil || installed {
+		t.Fatalf("present removes target: installed=%v err=%v, want not yet complete", installed, err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	installed, err = h.Test(item, "", testCtx())
+	if err != nil || !installed {
+		t.Fatalf("absent removes target: installed=%v err=%v, want complete", installed, err)
+	}
+
+	if err := os.WriteFile(path, []byte("present"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	item["state"] = "absent"
+	installed, err = h.Test(item, "", testCtx())
+	if err != nil || !installed {
+		t.Fatalf("state absent with target present: installed=%v err=%v, want uninstall required", installed, err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	installed, err = h.Test(item, "", testCtx())
+	if err != nil || installed {
+		t.Fatalf("state absent with target removed: installed=%v err=%v, want already absent", installed, err)
+	}
+}
+
 func TestFactHandlerPlainValue(t *testing.T) {
 	h := factHandler{}
 	item := map[string]any{"name": "greeting", "value": "hi"}

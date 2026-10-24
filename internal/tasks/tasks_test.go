@@ -62,6 +62,28 @@ func TestBasicLeafFlattening(t *testing.T) {
 	}
 }
 
+func TestShellStringAndTaskLevelCreatesRemoves(t *testing.T) {
+	leaves := expandOK(t, `
+- shell: |
+    echo cleanup
+  creates: [/tmp/created-marker]
+  removes: [/tmp/removed-path]
+`, Options{})
+	if len(leaves) != 1 {
+		t.Fatalf("leaves = %#v", leaves)
+	}
+	item := leaves[0].Item
+	if item["command"] != "echo cleanup\n" {
+		t.Errorf("shell command = %#v", item["command"])
+	}
+	if !reflect.DeepEqual(item["creates"], []any{"/tmp/created-marker"}) {
+		t.Errorf("shell creates = %#v", item["creates"])
+	}
+	if !reflect.DeepEqual(item["removes"], []any{"/tmp/removed-path"}) {
+		t.Errorf("shell removes = %#v", item["removes"])
+	}
+}
+
 func TestLeafEnvsSurviveLoopMaterialization(t *testing.T) {
 	leaves := expandOK(t, `
 - name: scoped

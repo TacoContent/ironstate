@@ -49,6 +49,13 @@ func TestTestWhenListIsAnd(t *testing.T) {
 	}
 }
 
+func TestTestWhenAcceptsTemplateWrappedExpression(t *testing.T) {
+	ok, err := TestWhen([]any{"${{ rc != 0 }}"}, map[string]any{"rc": float64(1)}, filters.New())
+	if err != nil || !ok {
+		t.Fatalf("wrapped failed_when expression should pass, got %v, err=%v", ok, err)
+	}
+}
+
 // TestTestWhenBooleanLiteralGotcha guards the Phase 3 'when'-boolean
 // gotcha documented in docs/plans/go-rewrite-progress.md: a raw YAML
 // 'when: true'/'when: false' literal must round-trip through

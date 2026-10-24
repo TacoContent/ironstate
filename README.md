@@ -882,14 +882,24 @@ tasks:
 
 ## Failing a task (`failed_when`, `continue_on_error`)
 
-By default, a leaf counts as failed exactly when its handler reports a non-zero `rc` (a thrown error also counts, as `rc: 1` with the exception's message in `stderr`). `failed_when` overrides that: same grammar as `when` (a single expression, or a list, implicit AND), evaluated against *this leaf's own* `rc`/`stdout`/`stdout_lines`/`stderr`/`stderr_lines`/`changed` as bare names - no `${{ }}` wrapper, no `id` needed:
+By default, a leaf counts as failed exactly when its handler reports a non-zero `rc` (a thrown error also counts, as `rc: 1` with the exception's message in `stderr`). `failed_when` overrides that: same grammar as `when` (a single expression, or a list, implicit AND), evaluated against *this leaf's own* `rc`/`stdout`/`stdout_lines`/`stderr`/`stderr_lines`/`changed` as bare names. Expressions may be bare or wrapped in `${{ }}`; no `id` is needed. A list entry may also run a read-only shell check, including during dry runs, and evaluate `value` against that check's result:
 
 ```yaml
 tasks:
   - name: run a health check
-    failed_when: rc != 0 or 'ERROR' in stdout
+    failed_when: "${{ rc != 0 or 'ERROR' in stdout }}"
     shell:
       command: C:\tools\healthcheck.exe
+
+  - name: install only when the tool is missing
+    failed_when:
+      - "${{ rc != 0 }}"
+      - shell:
+          command: '! command -v my_command >/dev/null'
+          type: bash
+        value: "${{ rc == 0 }}"
+    shell:
+      command: install-my-command
 ```
 
 What happens next depends on `continue_on_error`:
@@ -960,7 +970,7 @@ Every leaf shares these envelope fields, which sit *beside* its module key, not 
 | `when` | string or list of strings | Gate(s); AND'd with ancestor tasks' `when` |
 | `id` | string | Registers this leaf's result for later tasks to reference - leaf actions only. See [Registering results](#registering-results-id) |
 | `items` / `with` | list / any value | Materializes this task once per entry (`items`) or exactly once (`with`), templating `${{ item.* }}` first. See [Looping](#looping-withitems) |
-| `failed_when` | string or list of strings | Overrides whether this leaf counts as failed. See [Failing a task](#failing-a-task-failed_when-continue_on_error) |
+| `failed_when` | string, boolean, or list of expressions/shell checks | Overrides whether this leaf counts as failed. See [Failing a task](#failing-a-task-failed_when-continue_on_error) |
 | `continue_on_error` | boolean, default `false` | Keep running past a failed leaf instead of stopping the run. See [Failing a task](#failing-a-task-failed_when-continue_on_error) |
 | `become` | boolean or string, default `false` | Run this leaf's command elevated. See [`become`](#become) |
 
@@ -1149,6 +1159,9 @@ tasks:
 | `args` | no | List of arguments passed to the command/script |
 | `silent` | no | Boolean or expression, default `false`. Suppress logging of execution output and shell exit-code warnings unless the task fails. Task lifecycle messages, progress, results, and facts remain visible |
 | `creates` | no | Glob patterns whose presence means "already run". Without it, `present`/`latest` always re-run the command. For `absent`, these paths are removed instead of the command running again |
+| `removes` | no | Glob patterns the command is expected to remove. For `present`/`latest`, the command is considered already run when every pattern is absent. For `absent`, it runs while any pattern remains. Paths are never removed automatically |
+
+`creates` and `removes` are alternative idempotency checks; prefer one per shell task. They may be declared inside `shell` or beside it on the task; task-level values are used only when the corresponding shell field is omitted. `removes` is useful for cleanup commands: the shell runs while any listed path exists, and later runs skip once all paths are gone. A shell command may also be written directly as a YAML block scalar instead of a `shell.command` field.
 
 **Per-state command/script (scripted install/uninstall)**: `command`/`script`/`args`/`type`/`host`/`extension` can instead be nested one level deeper, under `present`/`absent`/`latest` keys, to run a different command per state:
 

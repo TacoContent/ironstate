@@ -25,6 +25,21 @@ func TestValidateEnvironmentAliasesAndSources(t *testing.T) {
 		{"task", `environment: {A: {valueFrom: {task: {shell: {command: echo value}, value: "${{ stdout }}"}}}}`, true},
 		{"silent-task-source", `environment: {A: {valueFrom: {task: {shell: {command: echo value, silent: true}, value: "${{ stdout }}"}}}}`, true},
 		{"silent-shell-and-fact", "tasks:\n  - shell: {command: echo value, silent: true}\n  - fact: {name: value, shell: {command: echo value, silent: '${{ vars.quiet }}'}}", true},
+		{"failed-when-shell-and-template", `tasks:
+  - failed_when:
+      - "${{ rc != 0 }}"
+      - shell: {command: "! command -v my_command >/dev/null", type: bash}
+        value: "${{ rc == 0 }}"
+    shell: |
+      echo task
+    creates: [/tmp/task-marker]
+    removes: [/tmp/my-command]
+`, true},
+		{"failed-when-shell-missing-value", `tasks:
+  - failed_when:
+      - shell: {command: echo check}
+    shell: {command: echo task}
+`, false},
 		{"invalid-silent", "tasks:\n  - shell: {command: echo value, silent: invalid}", false},
 		{"value-only", "envs: {A: {valueFrom: {task: {value: 42}}}}", true},
 		{"group-and-leaf", "tasks:\n  - environment: {A: abc}\n    actions:\n      - envs: {B: {valueFrom: {file: value.txt}}}\n        log: {message: ok}", true},

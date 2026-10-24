@@ -27,6 +27,19 @@ func testCreatesPresent(creates []any) bool {
 	return true
 }
 
+func testRemovesAbsent(removes []any) bool {
+	if len(removes) == 0 {
+		return false
+	}
+	for _, raw := range removes {
+		pattern, _ := raw.(string)
+		if pattern == "" || createsPatternMatches(pattern) {
+			return false
+		}
+	}
+	return true
+}
+
 func createsPatternMatches(pattern string) bool {
 	resolved := pathutil.ResolveUserPath(pattern)
 	if hasGlobMeta(resolved) {

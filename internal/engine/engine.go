@@ -608,7 +608,7 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 				failedWhenContext := cloneFlat(flatContext)
 				mergeExecInto(failedWhenContext, result.Exec)
 				failedWhenContext["changed"] = changed
-				failed, err = conditions.TestWhen(leaf.FailedWhen, failedWhenContext, opts.Filters)
+				failed, err = testFailedWhen(leaf.FailedWhen, failedWhenContext, opts.Filters, opts.Handlers, become, label)
 				if err != nil {
 					return false, err
 				}
@@ -668,6 +668,58 @@ func missingRequiredTool(tools []string, availability map[string]bool) string {
 		}
 	}
 	return ""
+}
+
+func testFailedWhen(entries []any, ctx map[string]any, filters expr.Filters, handlers map[string]Handler, become ironexec.Become, label string) (bool, error) {
+	resolved := make([]any, 0, len(entries))
+	for i, raw := range entries {
+		check, ok := raw.(map[string]any)
+		if !ok {
+			resolved = append(resolved, raw)
+			continue
+		}
+
+		shellSpec, ok := check["shell"].(map[string]any)
+		if !ok {
+			return false, fmt.Errorf("task %q failed_when[%d]: expected a shell mapping", label, i)
+		}
+		value, hasValue := check["value"]
+		if !hasValue {
+			return false, fmt.Errorf("task %q failed_when[%d]: shell check requires a value", label, i)
+		}
+		shellHandler := handlers["shell"]
+		if shellHandler == nil {
+			shellHandler = handlers["ironstate.builtin.shell"]
+		}
+		if shellHandler == nil {
+			return false, fmt.Errorf("task %q failed_when[%d]: no shell handler is registered", label, i)
+		}
+
+		probeSpec := model.DeepCopy(shellSpec).(map[string]any)
+		delete(probeSpec, "creates")
+		delete(probeSpec, "removes")
+		delete(probeSpec, "state")
+		if err := template.ResolveInPlace(probeSpec, ctx, filters, label+" failed_when", false); err != nil {
+			return false, fmt.Errorf("task %q failed_when[%d] shell: %w", label, i, err)
+		}
+		probeResult, err := invokePackageItem("shell", label+" failed_when", probeSpec, shellHandler, ctx, filters, true, false, false, become)
+		if err != nil {
+			return false, fmt.Errorf("task %q failed_when[%d] shell: %w", label, i, err)
+		}
+
+		valueContext := cloneFlat(ctx)
+		mergeExecInto(valueContext, probeResult.Exec)
+		valueWrapper := map[string]any{"value": value}
+		if err := template.ResolveInPlace(valueWrapper, valueContext, filters, label+" failed_when", false); err != nil {
+			return false, fmt.Errorf("task %q failed_when[%d] value: %w", label, i, err)
+		}
+		resolvedValue, present := valueWrapper["value"]
+		if !present || template.IsOmit(resolvedValue) {
+			return false, fmt.Errorf("task %q failed_when[%d]: shell check value did not resolve", label, i)
+		}
+		resolved = append(resolved, resolvedValue)
+	}
+	return conditions.TestWhen(resolved, ctx, filters)
 }
 
 func applyFactResult(item map[string]any, result Result, state *State, flatContext map[string]any, filters expr.Filters, label string, hasEmbeddedShell, hasDeferredFactValue bool, deferredFactValue any) {
