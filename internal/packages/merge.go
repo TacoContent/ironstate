@@ -11,16 +11,31 @@ func MergeVars(base, overlay map[string]any) map[string]any {
 }
 
 // MergeDocuments merges overlay into base — ports Packages.psm1's
-// Merge-PackagesData: 'vars' deep-merges (via MergeVars); any other key
-// whose value is a list on both sides is appended; everything else,
-// overlay wins wholesale.
+// Merge-PackagesData: 'vars' deep-merges and 'envs' merges by variable name;
+// environment source objects are replaced atomically. Any other
+// key whose value is a list on both sides is appended; everything else,
+// overlay wins wholesale. The overlay's file-level 'tags' apply only to
+// the overlay's own tasks (see scopeFileTags) - base's 'tags' are left
+// as the merged document's file-level tags, covering every task in it.
 func MergeDocuments(base, overlay map[string]any) map[string]any {
+	overlay = scopeFileTags(overlay)
 	result := make(map[string]any, len(base))
 	for k, v := range base {
 		result[k] = v
 	}
 	for k, v := range overlay {
-		if k == "vars" || k == "envs" {
+		if k == "envs" {
+			merged := make(map[string]any)
+			for name, value := range model.AsMap(result[k]) {
+				merged[name] = value
+			}
+			for name, value := range model.AsMap(v) {
+				merged[name] = value
+			}
+			result[k] = merged
+			continue
+		}
+		if k == "vars" {
 			if baseVars, ok := result[k].(map[string]any); ok {
 				if overlayVars, ok := v.(map[string]any); ok {
 					result[k] = MergeVars(baseVars, overlayVars)
@@ -40,6 +55,29 @@ func MergeDocuments(base, overlay map[string]any) map[string]any {
 			}
 		}
 		result[k] = v
+	}
+	return result
+}
+
+// scopeFileTags returns doc without its file-level 'tags', its tasks
+// wrapped in one grouping task carrying those tags so they cascade to
+// that file's tasks only.
+func scopeFileTags(doc map[string]any) map[string]any {
+	tags, ok := doc["tags"]
+	if !ok {
+		return doc
+	}
+	result := make(map[string]any, len(doc))
+	for k, v := range doc {
+		if k != "tags" {
+			result[k] = v
+		}
+	}
+	if tags == nil {
+		return result
+	}
+	if tasks := model.AsList(doc["tasks"]); len(tasks) > 0 {
+		result["tasks"] = []any{map[string]any{"tags": tags, "actions": tasks}}
 	}
 	return result
 }

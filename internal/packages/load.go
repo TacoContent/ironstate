@@ -24,6 +24,9 @@ func LoadFile(path string, baseDir string) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
+	if err := model.NormalizeDocumentEnvironment(doc); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
 	ResolveRelativePathsInPlace(doc, baseDir)
 	return doc, nil
 }

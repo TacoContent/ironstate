@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/TacoContent/ironstate/internal/filters"
+	"github.com/TacoContent/ironstate/internal/model"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -103,6 +104,61 @@ func TestMergeDocumentsAppendsTasksAndDeepMergesVars(t *testing.T) {
 	}
 }
 
+func TestHierarchyEnvironmentAliasesReplaceWholeSources(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "main.yml"), `
+environment:
+  SHARED:
+    valueFrom:
+      file: before.txt
+  KEPT: main
+tasks: []
+`)
+	writeFile(t, filepath.Join(root, "hosts", "windows.yml"), `
+envs:
+  SHARED:
+    valueFrom:
+      task:
+        value: after
+`)
+	doc, err := LoadHierarchy(filepath.Join(root, "main.yml"), map[string]any{"os_family": "windows"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	envs := model.Envs(doc)
+	source := model.AsMap(model.AsMap(envs["SHARED"])["valueFrom"])
+	if len(source) != 1 || model.AsMap(source["task"])["value"] != "after" || envs["KEPT"] != "main" {
+		t.Fatalf("envs = %#v, want atomic source replacement across aliases", envs)
+	}
+}
+
+func TestMergeDocumentsScopesOverlayTagsToOverlayTasks(t *testing.T) {
+	base := map[string]any{
+		"tags":  []any{"base"},
+		"tasks": []any{map[string]any{"name": "base-task"}},
+	}
+	overlay := map[string]any{
+		"tags":  []any{"overlay"},
+		"tasks": []any{map[string]any{"name": "overlay-task"}},
+	}
+	merged := MergeDocuments(base, overlay)
+	if tags := merged["tags"].([]any); len(tags) != 1 || tags[0] != "base" {
+		t.Fatalf("tags = %#v, want only the base file's tags", tags)
+	}
+	tasks := merged["tasks"].([]any)
+	if len(tasks) != 2 {
+		t.Fatalf("tasks = %#v", tasks)
+	}
+	group := tasks[1].(map[string]any)
+	actions := group["actions"].([]any)
+	if tags := group["tags"].([]any); len(tags) != 1 || tags[0] != "overlay" || len(actions) != 1 || actions[0].(map[string]any)["name"] != "overlay-task" {
+		t.Fatalf("overlay group = %#v, want overlay tasks wrapped with overlay tags", group)
+	}
+	if _, ok := overlay["tags"]; !ok {
+		t.Fatal("overlay was mutated")
+	}
+}
+
 func TestLoadHierarchyMergesHostAndUserOverlays(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "main.yml"), `
@@ -180,7 +236,7 @@ tasks:
 		"state": "present",
 		"with":  map[string]any{"id": "FiloSottile.age"},
 	}
-	included, err := LoadIncludedPackage(includeSpec, root, map[string]any{}, map[string]any{}, fset)
+	included, err := LoadIncludedPackage(includeSpec, root, map[string]any{}, map[string]any{}, fset, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +270,7 @@ tasks:
     log:
       message: "${{ 'IRONSTATE_INCLUDED_ENV_TEST' | env }}"
 `)
-	included, err := LoadIncludedPackage(map[string]any{"name": "scoped"}, root, nil, nil, filters.New())
+	included, err := LoadIncludedPackage(map[string]any{"name": "scoped"}, root, nil, nil, filters.New(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +306,7 @@ tasks:
 	fset := filters.New()
 	includeSpec := map[string]any{"name": "productivity", "state": "present"}
 	siteVars := map[string]any{"productivity": map[string]any{"btop": true}}
-	included, err := LoadIncludedPackage(includeSpec, root, map[string]any{}, siteVars, fset)
+	included, err := LoadIncludedPackage(includeSpec, root, map[string]any{}, siteVars, fset, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +320,7 @@ tasks:
 
 func TestLoadIncludedPackageMissingReturnsNilNotError(t *testing.T) {
 	root := t.TempDir()
-	included, err := LoadIncludedPackage(map[string]any{"name": "does-not-exist"}, root, nil, nil, filters.New())
+	included, err := LoadIncludedPackage(map[string]any{"name": "does-not-exist"}, root, nil, nil, filters.New(), false)
 	if err != nil {
 		t.Fatalf("expected no error for a missing package, got %v", err)
 	}

@@ -59,6 +59,8 @@ type Context struct {
 	Flat    map[string]any
 	Filters expr.Filters
 	Apply   bool
+	// BaseDir anchors relative paths in environment valueFrom sources.
+	BaseDir string
 	// Become is this leaf's resolved 'become' directive (see
 	// resolveBecome). Most CLI-backed handlers never need to read this
 	// directly - internal/handlers.runExternalCommand already honors it
@@ -196,6 +198,7 @@ type State struct {
 	UserFacts           map[string]any
 	SecretFacts         map[string]bool
 	CommandAvailability map[string]bool
+	EnvironmentSources  map[*tasks.EnvironmentScope]map[string]any
 }
 
 // NewState returns an empty, ready-to-use State.
@@ -205,6 +208,7 @@ func NewState() *State {
 		UserFacts:           map[string]any{},
 		SecretFacts:         map[string]bool{},
 		CommandAvailability: map[string]bool{},
+		EnvironmentSources:  map[*tasks.EnvironmentScope]map[string]any{},
 	}
 }
 
@@ -446,10 +450,44 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 			continue
 		}
 		stopped, err := func() (bool, error) {
+			envLayers := leaf.ScopeEnvs
 			if len(leaf.Envs) > 0 {
-				resolved := model.DeepCopy(leaf.Envs).(map[string]any)
-				if err := template.ResolveInPlace(resolved, flatContext, opts.Filters, label, false); err != nil {
-					return false, err
+				envLayers = append(append([]*tasks.EnvironmentScope{}, leaf.ScopeEnvs...), &tasks.EnvironmentScope{Values: leaf.Envs, BaseDir: leaf.EnvironmentBaseDir})
+			}
+			pathOverridden := false
+			for _, layer := range envLayers {
+				if layer == nil || len(layer.Values) == 0 {
+					continue
+				}
+				layerContext := cloneFlat(flatContext)
+				if layer.Context != nil {
+					userFacts, registry := state.UserFacts, state.Registry
+					if layer.Isolated {
+						userFacts, registry = nil, nil
+					}
+					layerContext = mergeFlatContext(
+						model.AsMap(layer.Context["facts"]), userFacts,
+						model.AsMap(layer.Context["vars"]), model.AsMap(layer.Context["inputs"]),
+						model.AsMap(layer.Context["package"]), nil, registry,
+					)
+					for _, key := range []string{"item", "parent"} {
+						if value, present := layer.Context[key]; present {
+							layerContext[key] = value
+						}
+					}
+					layerContext["envs"] = flatContext["envs"]
+				}
+				if state.EnvironmentSources == nil {
+					state.EnvironmentSources = map[*tasks.EnvironmentScope]map[string]any{}
+				}
+				cache := state.EnvironmentSources[layer]
+				if cache == nil {
+					cache = map[string]any{}
+					state.EnvironmentSources[layer] = cache
+				}
+				resolved, err := ResolveEnvironment(layer.Values, Context{Flat: layerContext, Filters: opts.Filters, Apply: opts.Apply, BaseDir: layer.BaseDir}, opts.Handlers["shell"], cache)
+				if err != nil {
+					return false, fmt.Errorf("task %q: %w", label, err)
 				}
 				restore, err := SetEnvironment(resolved)
 				if err != nil {
@@ -457,14 +495,16 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 				}
 				defer restore()
 				flatContext["envs"] = Environment()
+				for key := range layer.Values {
+					if strings.EqualFold(key, "PATH") {
+						pathOverridden = true
+					}
+				}
 			}
 			if provider, ok := handler.(RequiredToolsProvider); ok {
 				availability := state.CommandAvailability
-				for key := range leaf.Envs {
-					if strings.EqualFold(key, "PATH") {
-						availability = map[string]bool{}
-						break
-					}
+				if pathOverridden {
+					availability = map[string]bool{}
 				}
 				if missingRequiredTool(provider.RequiredTools(), availability) != "" {
 					return false, nil

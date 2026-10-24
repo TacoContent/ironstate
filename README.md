@@ -527,11 +527,15 @@ Every item in a task list is classified independently:
 
 **`tags` cascade down**: a leaf's effective tags are its own `tags` plus every ancestor task's `tags`, unioned. In the first example above, neither action declares its own tags, so both inherit `[security, cli]` from the enclosing task.
 
+**File-level `tags`**: a playbook or package file may declare `tags` at its root. A `main.yml`'s tags apply to every task in that playbook/package - including tasks merged in from its overlays - while an overlay file's tags apply only to its own tasks. For example, with `roles/my_role/main.yml` tagged `[tag1]` and `roles/my_role/windows.yml` tagged `[tag2]`, tasks from `main.yml` get `tag1` and tasks from `windows.yml` get both `tag1` and `tag2`.
+
 **`when` cascades via AND**: a leaf only runs if every ancestor task's `when` *and* its own `when` all evaluate true.
 
-### Environment variables (`envs`)
+### Environment variables (`envs` / `environment`)
 
-Declare `envs` at the playbook root to set environment variables for this invocation, or on a leaf task to override them only while that task resolves and executes. Values can be strings, numbers, booleans, or `${{ }}` expressions; they are converted to strings in the process environment. Task values are resolved after `when` passes, and the previous environment (including whether a variable was unset) is restored afterward. The root mapping merges by key across playbook overlays, like `vars`.
+`envs` and `environment` are interchangeable at the playbook/file root and on tasks, including grouping, `include`, and `uses` tasks. Both aliases may appear in the same scope with different keys (or identical duplicate values); conflicting values for the same key are an error. The expression namespace is always `envs.NAME`, regardless of which declaration alias you use.
+
+Declare either key at the playbook root to set environment variables for this invocation, or on a task to override them only while that task and its children resolve and execute. Primitive values (strings, numbers, booleans, or null) and `${{ }}` expressions are converted to strings in the process environment; null becomes an empty string. Task values are resolved after `when` passes, and the previous environment (including whether a variable was unset) is restored afterward. Overlays merge by environment variable name, even when they use different aliases: a later declaration replaces the entire value/source for that variable, rather than deep-merging two source objects.
 
 ```yaml
 vars:
@@ -546,7 +550,50 @@ tasks:
       message: ${{ concat(envs.MY_ENV_VAR, " / ", "" | env("MY_ENV_VAR")) }}
 ```
 
-Use `envs.NAME` in expressions and conditions to read the current environment, including inherited OS variables; the existing `env` filter reads the same values. A task's `when` sees the playbook environment before that task's own overrides are applied. `envs` on grouping tasks is not inherited by children; put it on each leaf that needs it.
+Use `envs.NAME` in expressions and conditions to read the current environment, including inherited OS variables; the existing `env` filter reads the same values. A task's `when` sees the playbook environment before its package/group/task overrides are applied. Grouping task overrides are inherited by children; a child's own declarations take precedence.
+
+An included or used package can also declare either alias at the top of its file. Declarations apply only while that package's tasks run, layered outermost first through enclosing packages and groups, then the leaf's own declarations - so each layer can build on the previous one (e.g. prepend to `PATH`). Values in the same mapping see the incoming environment, not other entries in that mapping. The package's `main.yml` loads first, then its chained overlays (`windows.yml`, `<hostname>.yml`, ...) override the same keys:
+
+```yaml
+# roles/my_role/main.yml
+envs:
+  PATH: ${{ facts.local_bin_path }}:${{ envs.PATH }}
+tasks:
+  - name: first task
+    shell: { command: my-tool --version }
+```
+
+#### Environment value sources (`valueFrom`)
+
+A mapping-valued environment entry must contain `valueFrom` with exactly one supported source:
+
+```yaml
+environment:
+  MY_VAR: abc
+  ANOTHER_VAR: "${{ facts.some_value }}"
+  FROM_FILE:
+    valueFrom:
+      file: ./config/env-value.txt
+  FROM_COMMAND:
+    valueFrom:
+      task:
+        shell:
+          command: some-command --get-value
+        value: "${{ stdout | trim }}"
+tasks:
+  - name: scoped override for all children
+    envs:
+      MY_VAR: temporary
+    actions:
+      - log:
+          message: "${{ envs.MY_VAR }}"
+```
+
+- **`file`** reads the entire file verbatim, including trailing newlines; it does not parse dotenv or YAML. Paths may use expressions and `~`. Relative paths resolve against the owning playbook/package directory.
+- **`task`** requires `value` and optionally accepts `shell`, using the usual shell `command`/`script`, `type`/`host`, and `args` settings. The shell runs first; then `value` is evaluated with its `rc`, `stdout`, `stdout_lines`, `stderr`, and `stderr_lines` alongside the scope's normal facts/vars/inputs. It computes an environment value only: it does not register a fact or task ID. A shell-free `task` simply evaluates `value`.
+- Root-playbook sources run once during setup. Included file/package/group sources are evaluated once per invocation, lazily when the first selected child passes `when`; results are reused across the facts and task phases. A repeated include or looped group gets a separate invocation/cache. A leaf's own sources run once per executed leaf/loop iteration. Primitive expressions in scoped declarations still resolve against the incoming environment for each leaf.
+- Source shells execute during **dry runs too**, like fact-gathering commands. Use read-only commands: no `creates`, `when`, `become`, or other task-control semantics are applied to a source shell.
+- Missing/unreadable files, malformed or unknown source definitions, non-primitive results, and shell failures stop the run with an explicit error. Already-applied outer environment layers are restored on failure.
 
 On Windows, before each leaf task, Ironstate appends any missing entries from the persistent machine and user `PATH` to its process `PATH`. This makes tools installed by earlier tasks (such as Scoop) available to subsequent shell commands and tool checks, even when Ironstate was launched from a terminal with a stale environment. Existing session entries and their precedence are preserved; persistent removals are not mirrored, and other environment variables are not refreshed. Task-level `envs.PATH` overrides still take precedence. This does not update the parent terminal's environment.
 

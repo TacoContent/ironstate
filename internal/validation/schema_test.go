@@ -7,6 +7,46 @@ import (
 	"testing"
 )
 
+func TestValidateEnvironmentAliasesAndSources(t *testing.T) {
+	originalLoader := schemaLoader
+	schemaLoader = func(string) ([]byte, string, error) {
+		path := filepath.Join("..", "..", "ironstate.schema.json")
+		data, err := os.ReadFile(path)
+		return data, path, err
+	}
+	t.Cleanup(func() { schemaLoader = originalLoader })
+	for _, tc := range []struct {
+		name    string
+		content string
+		valid   bool
+	}{
+		{"root-alias", "environment: {A: abc}\nenvs: {B: true}\ntasks: []", true},
+		{"file", "envs: {A: {valueFrom: {file: value.txt}}}", true},
+		{"task", `environment: {A: {valueFrom: {task: {shell: {command: echo value}, value: "${{ stdout }}"}}}}`, true},
+		{"value-only", "envs: {A: {valueFrom: {task: {value: 42}}}}", true},
+		{"group-and-leaf", "tasks:\n  - environment: {A: abc}\n    actions:\n      - envs: {B: {valueFrom: {file: value.txt}}}\n        log: {message: ok}", true},
+		{"unknown-source", "envs: {A: {valueFrom: {unknown: x}}}", false},
+		{"multiple-sources", "envs: {A: {valueFrom: {file: x, task: {value: x}}}}", false},
+		{"missing-value", "envs: {A: {valueFrom: {task: {shell: {command: echo x}}}}}", false},
+		{"invalid-shell", "envs: {A: {valueFrom: {task: {shell: {}, value: x}}}}", false},
+		{"shell-control", "envs: {A: {valueFrom: {task: {shell: {command: echo x, creates: [x]}, value: x}}}}", false},
+		{"unknown-task-field", "envs: {A: {valueFrom: {task: {value: x, extra: x}}}}", false},
+		{"unknown-entry-field", "envs: {A: {valueFrom: {file: x}, extra: x}}", false},
+		{"map-without-source", "envs: {A: {value: x}}", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "main.yml")
+			if err := os.WriteFile(path, []byte(tc.content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			err := ValidateFile(path)
+			if (err == nil) != tc.valid {
+				t.Fatalf("valid=%v err=%v", tc.valid, err)
+			}
+		})
+	}
+}
+
 func TestValidateFileReportsSourceLocation(t *testing.T) {
 	originalLoader := schemaLoader
 	schemaLoader = func(string) ([]byte, string, error) {

@@ -54,6 +54,21 @@ type Leaf struct {
 	Isolated      bool
 	IsolatedFacts map[string]any
 	IsolatedVars  map[string]any
+
+	// ScopeEnvs are the 'envs' of every enclosing document/group,
+	// outermost first. The engine applies each layer in
+	// order, then Envs, while this leaf runs.
+	ScopeEnvs          []*EnvironmentScope
+	EnvironmentBaseDir string
+}
+
+// EnvironmentScope is shared by all leaves belonging to one file or group
+// invocation, so valueFrom results can be cached without crossing invocations.
+type EnvironmentScope struct {
+	Values   map[string]any
+	Context  map[string]any
+	Isolated bool
+	BaseDir  string
 }
 
 // Options carries the inputs Expand-TaskTree needs beyond the task list
@@ -77,6 +92,9 @@ type Options struct {
 	// AllowRemoteUses pre-approves a non-isolated remote 'uses:'
 	// instead of prompting the operator (--allow-remote-uses).
 	AllowRemoteUses bool
+	// Tags are the root document's file-level 'tags', inherited by every
+	// leaf.
+	Tags []string
 }
 
 // Warn reports a non-fatal tree-shape problem (unrecognized module key,
@@ -106,6 +124,30 @@ type scope struct {
 	facts        map[string]any
 	vars         map[string]any
 	isolated     bool
+	envLayers    []*EnvironmentScope
+}
+
+func (sc scope) withEnvs(doc any) scope {
+	values := model.Envs(doc)
+	if len(values) == 0 {
+		return sc
+	}
+	sc.envLayers = append(append([]*EnvironmentScope{}, sc.envLayers...), &EnvironmentScope{
+		Values: values, Context: sc.templateContext(), Isolated: sc.isolated, BaseDir: sc.packagesRoot,
+	})
+	return sc
+}
+
+func (sc scope) templateContext() map[string]any {
+	ctx := model.ScopedVars(sc.facts, model.ScopedVars(sc.packageVars, sc.vars))
+	ctx["facts"] = sc.facts
+	ctx["vars"] = model.ScopedVars(sc.packageVars, sc.vars)
+	ctx["inputs"] = sc.packageInputs
+	ctx["package"] = sc.packagePackage
+	for key, value := range sc.parentItemCtx {
+		ctx[key] = value
+	}
+	return ctx
 }
 
 // Expand flattens tasksList into leaves, matching Expand-TaskTree's
@@ -115,6 +157,7 @@ func Expand(tasksList []any, opts Options) ([]Leaf, error) {
 		packageVars:    map[string]any{},
 		packageInputs:  map[string]any{},
 		packagePackage: map[string]any{},
+		parentTags:     uniqueStrings(opts.Tags),
 		packagesRoot:   opts.PackagesRoot,
 		facts:          opts.Facts,
 		vars:           opts.Vars,
@@ -133,6 +176,9 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 			Warn("task item is not a mapping (%T); skipping", raw)
 			continue
 		}
+		if err := model.NormalizeEnvironment(item); err != nil {
+			return nil, fmt.Errorf("task %q: %w", leafLabel(item), err)
+		}
 
 		_, hasWith := item["with"]
 		_, hasItems := item["items"]
@@ -150,6 +196,19 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 		}
 
 		label := leafLabel(item)
+		for _, key := range []string{"name", "tags", "include", "uses"} {
+			if value, exists := item[key]; exists {
+				resolved, err := template.ExpandNode(model.DeepCopy(value), sc.templateContext(), opts.Filters, label, true, nil)
+				if err != nil {
+					return nil, err
+				}
+				if template.IsOmit(resolved) {
+					delete(item, key)
+				} else {
+					item[key] = resolved
+				}
+			}
+		}
 		effectiveTags := uniqueStrings(append(append([]string{}, sc.parentTags...), model.AsStringSlice(item["tags"])...))
 		effectiveWhen := append(append([]any{}, sc.parentWhen...), model.AsList(item["when"])...)
 
@@ -169,7 +228,8 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 				facts:          sc.facts,
 				vars:           sc.vars,
 				isolated:       sc.isolated,
-			})
+				envLayers:      sc.envLayers,
+			}.withEnvs(item))
 			if err != nil {
 				return nil, err
 			}
@@ -185,7 +245,7 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 				Warn("task '%s' has an 'include' but no PackagesRoot was configured; skipping", label)
 				continue
 			}
-			included, err := packages.LoadIncludedPackage(model.AsMap(includeSpec), sc.packagesRoot, sc.facts, sc.vars, opts.Filters)
+			included, err := packages.LoadIncludedPackage(model.AsMap(includeSpec), sc.packagesRoot, sc.facts, sc.vars, opts.Filters, len(sc.envLayers) > 0 || len(model.Envs(item)) > 0)
 			if err != nil {
 				return nil, err
 			}
@@ -196,11 +256,12 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 			if err != nil {
 				return nil, err
 			}
+			includeScope := sc.withEnvs(item)
 			children, err := expand(includedTasks, opts, scope{
 				packageVars:    model.Vars(included.Data),
 				packageInputs:  included.Inputs,
 				packagePackage: included.Package,
-				parentTags:     effectiveTags,
+				parentTags:     uniqueStrings(append(append([]string{}, effectiveTags...), model.Tags(included.Data)...)),
 				parentWhen:     effectiveWhen,
 				parentLooped:   sc.parentLooped,
 				parentItemCtx:  nil,
@@ -208,7 +269,8 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 				facts:          sc.facts,
 				vars:           sc.vars,
 				isolated:       sc.isolated,
-			})
+				envLayers:      includeScope.envLayers,
+			}.withEnvs(included.Data))
 			if err != nil {
 				return nil, err
 			}
@@ -221,11 +283,12 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 				Warn("task '%s' has an 'id' but is a 'uses'; 'id' is only supported on leaf actions - ignoring", label)
 			}
 			used, err := packages.LoadUsedPackage(model.AsMap(usesSpec), packages.UseOptions{
-				BaseDir:     sc.packagesRoot,
-				Facts:       sc.facts,
-				Vars:        sc.vars,
-				Filters:     opts.Filters,
-				AllowRemote: opts.AllowRemoteUses,
+				BaseDir:              sc.packagesRoot,
+				Facts:                sc.facts,
+				Vars:                 sc.vars,
+				Filters:              opts.Filters,
+				AllowRemote:          opts.AllowRemoteUses,
+				InheritedEnvironment: len(sc.envLayers) > 0 || len(model.Envs(item)) > 0,
 			})
 			if err != nil {
 				return nil, err
@@ -237,11 +300,12 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 			if err != nil {
 				return nil, err
 			}
+			useScope := sc.withEnvs(item)
 			children, err := expand(usedTasks, opts, scope{
 				packageVars:    model.Vars(used.Data),
 				packageInputs:  used.Inputs,
 				packagePackage: used.Package,
-				parentTags:     effectiveTags,
+				parentTags:     uniqueStrings(append(append([]string{}, effectiveTags...), model.Tags(used.Data)...)),
 				parentWhen:     effectiveWhen,
 				parentLooped:   sc.parentLooped,
 				parentItemCtx:  nil,
@@ -250,8 +314,9 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 				vars:           used.Vars,
 				// Isolation is one-way: a non-isolated 'uses' nested
 				// inside an isolated one stays isolated.
-				isolated: sc.isolated || used.Isolated,
-			})
+				isolated:  sc.isolated || used.Isolated,
+				envLayers: useScope.envLayers,
+			}.withEnvs(used.Data))
 			if err != nil {
 				return nil, err
 			}
@@ -274,25 +339,27 @@ func expand(tasksList []any, opts Options, sc scope) ([]Leaf, error) {
 		continueOnError, _ := item["continue_on_error"].(bool)
 
 		results = append(results, Leaf{
-			Name:            name,
-			Tags:            effectiveTags,
-			When:            effectiveWhen,
-			ID:              id,
-			SecretID:        secretID,
-			FailedWhen:      model.AsList(item["failed_when"]),
-			ContinueOnError: continueOnError,
-			Become:          item["become"],
-			Envs:            model.AsMap(item["envs"]),
-			Looped:          sc.parentLooped,
-			PackageVars:     sc.packageVars,
-			PackageInputs:   sc.packageInputs,
-			PackagePackage:  sc.packagePackage,
-			Module:          moduleName,
-			Item:            model.AsMap(item[moduleName]),
-			ItemCtx:         sc.parentItemCtx,
-			Isolated:        sc.isolated,
-			IsolatedFacts:   sc.facts,
-			IsolatedVars:    sc.vars,
+			Name:               name,
+			Tags:               effectiveTags,
+			When:               effectiveWhen,
+			ID:                 id,
+			SecretID:           secretID,
+			FailedWhen:         model.AsList(item["failed_when"]),
+			ContinueOnError:    continueOnError,
+			Become:             item["become"],
+			Envs:               model.AsMap(item["envs"]),
+			Looped:             sc.parentLooped,
+			PackageVars:        sc.packageVars,
+			PackageInputs:      sc.packageInputs,
+			PackagePackage:     sc.packagePackage,
+			Module:             moduleName,
+			Item:               model.AsMap(item[moduleName]),
+			ItemCtx:            sc.parentItemCtx,
+			Isolated:           sc.isolated,
+			IsolatedFacts:      sc.facts,
+			IsolatedVars:       sc.vars,
+			ScopeEnvs:          sc.envLayers,
+			EnvironmentBaseDir: sc.packagesRoot,
 		})
 	}
 
@@ -374,22 +441,32 @@ func expandLoop(item map[string]any, key string, opts Options, sc scope) ([]Leaf
 		loopContext["item"] = resolvedLoopValue
 		// A scoped leaf's module fields need the task's environment, which
 		// is not active during loop materialization.
-		var deferredModule any
-		moduleName := ""
+		var restoreTask func()
 		if task, ok := materialized.(map[string]any); ok {
-			if _, scoped := task["envs"]; scoped {
-				moduleName = firstModuleKey(task, opts.ModuleNames)
-				if moduleName != "" {
-					deferredModule = task[moduleName]
-					delete(task, moduleName)
+			_, scoped := task["envs"]
+			if scoped || len(sc.envLayers) > 0 {
+				deferred := map[string]any{}
+				for _, key := range append(append([]string{}, opts.ModuleNames...), "actions", "envs") {
+					if value, exists := task[key]; exists {
+						deferred[key] = value
+						delete(task, key)
+					}
+				}
+				restoreTask = func() {
+					for key, value := range deferred {
+						task[key] = value
+					}
 				}
 			}
 		}
-		if err := template.ResolveInPlace(wrapper, loopContext, opts.Filters, label, true, "items", "with"); err != nil {
-			return nil, err
+		restoreChildren := template.DeferTaskEnvs(model.AsList(model.AsMap(materialized)["actions"]), false)
+		resolveErr := template.ResolveInPlace(wrapper, loopContext, opts.Filters, label, true, "items", "with")
+		restoreChildren()
+		if restoreTask != nil {
+			restoreTask()
 		}
-		if moduleName != "" {
-			model.AsMap(wrapper["task"])[moduleName] = deferredModule
+		if resolveErr != nil {
+			return nil, resolveErr
 		}
 
 		children, err := expand([]any{wrapper["task"]}, opts, scope{
@@ -404,6 +481,7 @@ func expandLoop(item map[string]any, key string, opts Options, sc scope) ([]Leaf
 			facts:          sc.facts,
 			vars:           sc.vars,
 			isolated:       sc.isolated,
+			envLayers:      sc.envLayers,
 		})
 		if err != nil {
 			return nil, err

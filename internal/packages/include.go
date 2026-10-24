@@ -39,7 +39,7 @@ var reservedNamespaces = map[string]bool{"package": true, "inputs": true, "facts
 // missing 'name' or a package that doesn't exist (warned, not errored,
 // matching the original); a real load/parse failure once the file is
 // known to exist is a real error.
-func LoadIncludedPackage(includeSpec map[string]any, packagesRoot string, facts, vars map[string]any, filters expr.Filters) (*Included, error) {
+func LoadIncludedPackage(includeSpec map[string]any, packagesRoot string, facts, vars map[string]any, filters expr.Filters, inheritedEnvironment bool) (*Included, error) {
 	name, _ := model.Prop(includeSpec, "name")
 	nameStr, _ := name.(string)
 	if nameStr == "" {
@@ -106,7 +106,7 @@ func LoadIncludedPackage(includeSpec map[string]any, packagesRoot string, facts,
 	// {package, inputs, facts, vars, <package's own vars keys>} and can't
 	// be resolved yet — left untouched for the per-leaf dispatch-time pass
 	// once that registry actually exists (internal/engine, Phase 3).
-	resolved, err := resolveTemplatesInPlace(pkgData, ctx, filters, nameStr)
+	resolved, err := resolveTemplatesInPlace(pkgData, ctx, filters, nameStr, inheritedEnvironment)
 	if err != nil {
 		return nil, err
 	}
@@ -119,12 +119,8 @@ func LoadIncludedPackage(includeSpec map[string]any, packagesRoot string, facts,
 // PowerShell original only reliably supports the mapping form here (a
 // bare list has no '.Keys' to iterate); this is a strictly more permissive
 // superset, not a behavior change for any mapping-form package.
-func resolveTemplatesInPlace(doc any, ctx map[string]any, filters expr.Filters, label string) (any, error) {
-	taskList, err := model.TaskList(doc)
-	if err != nil {
-		return nil, err
-	}
-	restoreTasks := template.DeferTaskEnvs(taskList)
+func resolveTemplatesInPlace(doc any, ctx map[string]any, filters expr.Filters, label string, inheritedEnvironment bool) (any, error) {
+	restoreTasks := template.DeferDocumentEnvs(doc, inheritedEnvironment)
 	defer restoreTasks()
 	switch v := doc.(type) {
 	case map[string]any:

@@ -251,7 +251,7 @@ vars:
 `)
 
 	facts := map[string]any{"computer_name": "krayt"}
-	included, err := LoadIncludedPackage(map[string]any{"name": "cli"}, root, facts, map[string]any{}, filters.New())
+	included, err := LoadIncludedPackage(map[string]any{"name": "cli"}, root, facts, map[string]any{}, filters.New(), false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -192,6 +192,33 @@ func TestRunLeavesTaskEnvsAreScoped(t *testing.T) {
 	}
 }
 
+func TestRunLeavesScopeEnvsLayerBeforeTaskEnvs(t *testing.T) {
+	const key = "IRONSTATE_LAYERED_ENV_TEST"
+	t.Setenv(key, "os")
+	h := &fakeHandler{}
+	opts := baseOpts(map[string]Handler{"widget": h})
+	opts.Apply = true
+	leaves := []tasks.Leaf{{
+		Module: "widget",
+		ScopeEnvs: []*tasks.EnvironmentScope{
+			{Values: map[string]any{key: "outer:${{ envs.IRONSTATE_LAYERED_ENV_TEST }}"}},
+			{Values: map[string]any{key: "inner:${{ envs.IRONSTATE_LAYERED_ENV_TEST }}"}},
+		},
+		Envs: map[string]any{key: "task:${{ envs.IRONSTATE_LAYERED_ENV_TEST }}"},
+		Item: map[string]any{"state": "present", "value": "${{ envs.IRONSTATE_LAYERED_ENV_TEST }}"},
+	}}
+	results, stopped, err := RunLeaves(leaves, opts, NewState())
+	if err != nil || stopped || len(results) != 1 {
+		t.Fatalf("results=%#v stopped=%v err=%v", results, stopped, err)
+	}
+	if h.seenItem["value"] != "task:inner:outer:os" {
+		t.Errorf("value = %#v, want layers applied outermost first", h.seenItem["value"])
+	}
+	if got := os.Getenv(key); got != "os" {
+		t.Errorf("environment leaked after task: %q", got)
+	}
+}
+
 func TestRunLeavesTaskEnvsRestoreOnFailure(t *testing.T) {
 	const key = "IRONSTATE_FAILED_ENV_TEST"
 	t.Setenv(key, "before")

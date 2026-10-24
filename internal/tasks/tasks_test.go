@@ -70,10 +70,13 @@ func TestLeafEnvsSurviveLoopMaterialization(t *testing.T) {
     TASK_VALUE: ${{ item }}
   log: { message: "${{ 'TASK_VALUE' | env }}" }
 `, Options{})
-	if len(leaves) != 2 || leaves[0].Envs["TASK_VALUE"] != "one" || leaves[1].Envs["TASK_VALUE"] != "two" {
+	if len(leaves) != 2 || leaves[0].ItemCtx["item"] != "one" || leaves[1].ItemCtx["item"] != "two" {
 		t.Fatalf("loop envs = %#v", leaves)
 	}
 	for _, leaf := range leaves {
+		if leaf.Envs["TASK_VALUE"] != "${{ item }}" {
+			t.Fatalf("environment template resolved before execution: %#v", leaf.Envs)
+		}
 		if leaf.Item["message"] != "${{ 'TASK_VALUE' | env }}" {
 			t.Fatalf("module template resolved before task environment: %#v", leaf.Item)
 		}
@@ -440,4 +443,60 @@ tasks:
 		t.Fatalf("leaves = %#v", leaves)
 	}
 	_ = packages.Included{} // sanity: package compiles/links against tasks' usage
+}
+
+func TestIncludeFileTagsAndEnvsMergeAcrossOverlays(t *testing.T) {
+	root := t.TempDir()
+	roleDir := filepath.Join(root, "roles", "my_role")
+	if err := os.MkdirAll(roleDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(roleDir, "main.yml"), []byte(`
+tags: [tag1]
+envs:
+  SHARED: main
+  MAIN_ONLY: "${{ envs.PATH }}"
+tasks:
+  - name: from main
+    log: { message: main }
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(roleDir, "windows.yml"), []byte(`
+tags: [tag2]
+envs:
+  SHARED: windows
+tasks:
+  - name: from windows
+    tags: [own]
+    log: { message: windows }
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := expandOK(t, `
+tags: [root]
+tasks:
+  - name: include role
+    tags: [include]
+    include: { name: roles/my_role }
+`, Options{PackagesRoot: root, Facts: map[string]any{"os_family": "windows"}, Tags: []string{"root"}})
+	if len(leaves) != 2 {
+		t.Fatalf("leaves = %#v", leaves)
+	}
+	if want := []string{"root", "include", "tag1"}; !reflect.DeepEqual(leaves[0].Tags, want) {
+		t.Errorf("main leaf tags = %#v, want %#v", leaves[0].Tags, want)
+	}
+	if want := []string{"root", "include", "tag1", "tag2", "own"}; !reflect.DeepEqual(leaves[1].Tags, want) {
+		t.Errorf("overlay leaf tags = %#v, want %#v", leaves[1].Tags, want)
+	}
+	for _, leaf := range leaves {
+		if len(leaf.ScopeEnvs) != 1 {
+			t.Fatalf("%s ScopeEnvs = %#v, want one package layer", leaf.Name, leaf.ScopeEnvs)
+		}
+		envs := leaf.ScopeEnvs[0].Values
+		if envs["SHARED"] != "windows" || envs["MAIN_ONLY"] != "${{ envs.PATH }}" {
+			t.Errorf("%s envs = %#v, want overlay override and deferred envs expression", leaf.Name, envs)
+		}
+	}
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/TacoContent/ironstate/internal/expr"
+	"github.com/TacoContent/ironstate/internal/model"
 )
 
 type omitMarker struct{}
@@ -226,7 +227,7 @@ func ResolveInPlace(data map[string]any, ctx map[string]any, filters expr.Filter
 
 // DeferTaskEnvs keeps task bodies with scoped envs out of speculative soft
 // passes; the engine resolves them once their environment is active.
-func DeferTaskEnvs(tasks []any) func() {
+func DeferTaskEnvs(tasks []any, inherited bool) func() {
 	var restore []func()
 	var walk func([]any)
 	walk = func(list []any) {
@@ -235,7 +236,9 @@ func DeferTaskEnvs(tasks []any) func() {
 			if !ok {
 				continue
 			}
-			if _, scoped := item["envs"]; scoped {
+			_, envs := item["envs"]
+			_, environment := item["environment"]
+			if inherited || envs || environment {
 				position, original, target := index, raw, list
 				target[position] = nil
 				restore = append(restore, func() { target[position] = original })
@@ -243,11 +246,39 @@ func DeferTaskEnvs(tasks []any) func() {
 				walk(children)
 			}
 		}
+
 	}
 	walk(tasks)
 	return func() {
 		for _, undo := range restore {
 			undo()
+		}
+	}
+}
+
+// DeferDocumentEnvs protects source definitions and task bodies from
+// speculative evaluation before the document's environment is active.
+func DeferDocumentEnvs(doc any, inherited bool) func() {
+	root, ok := doc.(map[string]any)
+	if !ok {
+		list, _ := model.TaskList(doc)
+		return DeferTaskEnvs(list, inherited)
+	}
+	envs, scoped := root["envs"]
+	if !scoped && !inherited {
+		return DeferTaskEnvs(model.AsList(root["tasks"]), false)
+	}
+	tasks, hasTasks := root["tasks"]
+	delete(root, "envs")
+	if hasTasks {
+		root["tasks"] = nil
+	}
+	return func() {
+		if scoped {
+			root["envs"] = envs
+		}
+		if hasTasks {
+			root["tasks"] = tasks
 		}
 	}
 }

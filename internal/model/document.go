@@ -34,6 +34,26 @@ func Vars(doc any) map[string]any {
 	return AsMap(m["vars"])
 }
 
+// Tags returns doc's top-level file 'tags', or nil if doc isn't a mapping
+// or has none.
+func Tags(doc any) []string {
+	m, ok := doc.(map[string]any)
+	if !ok {
+		return nil
+	}
+	return AsStringSlice(m["tags"])
+}
+
+// Envs returns doc's top-level 'envs' mapping, or an empty map if doc
+// isn't a mapping or has none.
+func Envs(doc any) map[string]any {
+	m, ok := doc.(map[string]any)
+	if !ok {
+		return map[string]any{}
+	}
+	return AsMap(m["envs"])
+}
+
 // ScopedVars exposes package and site variables under the same namespace as
 // their bare names. Site values replace same-named package values wholesale.
 func ScopedVars(packageVars, siteVars map[string]any) map[string]any {

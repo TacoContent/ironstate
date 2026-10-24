@@ -24,7 +24,16 @@
         },
         "envs": {
           "$ref": "#/$defs/envs",
-          "description": "Environment overrides for the entire playbook execution. Overlays merge by key; original process values are restored when the run ends."
+          "description": "Environment overrides. At the playbook root they apply to the entire execution; in an included/used package's file they apply only while that package's tasks run (outer package first, then the task's own 'envs'). Overlays (e.g. hosts/<name>.yml, or a package's windows.yml) merge by key over main.yml; original process values are restored afterward."
+        },
+        "environment": {
+          "$ref": "#/$defs/envs",
+          "description": "Alias of envs. Non-conflicting keys may be split between both aliases; conflicting duplicate keys are an error."
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "File-level tags. A main.yml's tags apply to every task in that playbook/package, including tasks merged in from its overlays; an overlay file's (e.g. windows.yml) tags apply only to that overlay's own tasks."
         }
       }
     },
@@ -38,8 +47,52 @@
     "envs": {
       "type": "object",
       "additionalProperties": {
-        "anyOf": [{ "type": "string" }, { "type": "number" }, { "type": "boolean" }, { "$ref": "#/$defs/templateString" }]
+        "$ref": "#/$defs/environmentValue"
       }
+    },
+    "environmentValue": {
+      "oneOf": [
+        { "type": ["string", "number", "boolean", "null"] },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["valueFrom"],
+          "properties": {
+            "valueFrom": {
+              "type": "object",
+              "additionalProperties": false,
+              "oneOf": [{ "required": ["file"] }, { "required": ["task"] }],
+              "properties": {
+                "file": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Read the entire file verbatim, including trailing newlines. Paths may use expressions and '~'; relative paths resolve against the owning package/playbook directory."
+                },
+                "task": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["value"],
+                  "properties": {
+                    "shell": {
+                      "allOf": [
+                        { "$ref": "#/$defs/shellItem" },
+                        {
+                          "oneOf": [{ "required": ["command"] }, { "required": ["script"] }],
+                          "propertyNames": { "enum": ["command", "script", "type", "host", "extension", "args"] }
+                        }
+                      ]
+                    },
+                    "value": {
+                      "type": ["string", "number", "boolean", "null"],
+                      "description": "Value to export. Evaluated after shell completes, with rc/stdout/stdout_lines/stderr/stderr_lines available. Shell executes even during dry runs; a nonzero exit code is an error."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "templateString": {
       "type": "string",
@@ -71,7 +124,8 @@
         },
         "tags": { "$ref": "#/$defs/tags" },
         "when": { "$ref": "#/$defs/when" },
-        "envs": { "$ref": "#/$defs/envs", "description": "Overrides environment variables only while this leaf runs. Values may use '${{ }}' expressions and are exposed as envs.NAME and to the env filter." },
+        "envs": { "$ref": "#/$defs/envs", "description": "Scoped environment overrides. Grouping/include/uses tasks pass these to their children; leaves override inherited values only during execution. Values may be primitives, expressions, or valueFrom sources." },
+        "environment": { "$ref": "#/$defs/envs", "description": "Alias of envs, with the same inheritance and valueFrom support. Conflicting duplicate keys between aliases are errors." },
         "id": {
           "type": "string",
           "description": "Registers this leaf's result under this name once it runs: '{ changed, failed, rc, stdout, stdout_lines, stderr, stderr_lines }' (Ansible 'register'-shaped; every CLI-backed module and 'shell' populate a real rc/stdout/stderr, others default to 0/''/'' unless they throw). Later tasks reference it with bare dotted/indexed paths in 'when' (e.g. 'foo.rc != 0', 'foo.results[0].rc') and '${{ foo }}' in templates. If this task also has 'items' (a loop), every iteration shares the same 'id': the flat fields reflect the last iteration, and every iteration's result is additionally available as 'foo.results[N]'. Leaf actions only - not valid on a grouping task ('actions'/'include')."
@@ -666,7 +720,7 @@
         },
         "type": {
           "type": "string",
-          "description": "Interpreter type, such as 'bash', 'python', or 'python3.11'. Takes precedence over the legacy 'host' field. If omitted, the SHELL environment variable is used, falling back to 'pwsh' on Windows and 'bash' elsewhere. Inline commands receive a '#! /usr/bin/env <type>' shebang."
+          "description": "Interpreter type, such as 'bash', 'python', or 'python3.11'. Takes precedence over the legacy 'host' field. If omitted, the SHELL environment variable is used, falling back to 'pwsh' on Windows and 'bash' elsewhere. Inline commands receive a '#! /usr/bin/env <type>' shebang, except cmd scripts, which use '@echo off'."
         },
         "host": {
           "type": "string",

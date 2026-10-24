@@ -41,6 +41,8 @@ type UseOptions struct {
 	// AllowRemote pre-approves a non-isolated remote source instead of
 	// prompting (--allow-remote-uses).
 	AllowRemote bool
+	// InheritedEnvironment defers task templates until enclosing scopes run.
+	InheritedEnvironment bool
 }
 
 // LoadUsedPackage resolves a 'uses:' spec's source (git over ssh or
@@ -158,7 +160,7 @@ func LoadUsedPackage(usesSpec map[string]any, opts UseOptions) (*Used, error) {
 		ctx[key] = val
 	}
 
-	resolved, err := resolveTemplatesInPlace(data, ctx, opts.Filters, res.Source)
+	resolved, err := resolveTemplatesInPlace(data, ctx, opts.Filters, res.Source, opts.InheritedEnvironment)
 	if err != nil {
 		return nil, err
 	}

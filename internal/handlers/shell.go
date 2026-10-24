@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -182,7 +183,7 @@ func shellScriptExtension(cfg shellStateConfig) string {
 func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
 	if cfg.Script == "" && cfg.Command == "" {
 		engine.Warn("Shell item '%s' has neither 'command' nor 'script'", label)
-		return engine.ExecResult{}
+		return engine.ExecResult{RC: 1, Stderr: "shell requires command or script"}
 	}
 
 	invocation := shellHostInvocation(cfg.HostSpec)
@@ -194,19 +195,27 @@ func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
 		f, err := os.CreateTemp("", "ironstate-*"+extension)
 		if err != nil {
 			engine.Warn("Shell item '%s': %v", label, err)
-			return engine.ExecResult{}
+			return engine.ExecResult{RC: 1, Stderr: err.Error()}
 		}
-		if cfg.Type != "" {
-			if _, err := f.WriteString("#! /usr/bin/env " + cfg.Type + "\n"); err != nil {
+		tempFile = f.Name()
+		defer func() { _ = os.Remove(tempFile) }()
+		header := ""
+		if len(invocation) > 0 && strings.EqualFold(filepath.Base(invocation[0]), "cmd.exe") {
+			header = "@echo off\r\n"
+		} else if cfg.Type != "" {
+			header = "#! /usr/bin/env " + cfg.Type + "\n"
+		}
+		if header != "" {
+			if _, err := f.WriteString(header); err != nil {
 				_ = f.Close()
 				engine.Warn("Shell item '%s': %v", label, err)
-				return engine.ExecResult{}
+				return engine.ExecResult{RC: 1, Stderr: err.Error()}
 			}
 		}
 		if _, err := f.WriteString(cfg.Command); err != nil {
 			_ = f.Close()
 			engine.Warn("Shell item '%s': %v", label, err)
-			return engine.ExecResult{}
+			return engine.ExecResult{RC: 1, Stderr: err.Error()}
 		}
 		// -File otherwise returns zero for non-terminating cmdlet failures.
 		// Check inside the script: invoking a script block resets $? outside it.
@@ -214,19 +223,17 @@ func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
 			if _, err := f.WriteString("\nif (-not $?) { if ($LASTEXITCODE) { exit $LASTEXITCODE }; exit 1 }\n"); err != nil {
 				_ = f.Close()
 				engine.Warn("Shell item '%s': %v", label, err)
-				return engine.ExecResult{}
+				return engine.ExecResult{RC: 1, Stderr: err.Error()}
 			}
 		}
 		if err := f.Close(); err != nil {
 			engine.Warn("Shell item '%s': %v", label, err)
-			return engine.ExecResult{}
+			return engine.ExecResult{RC: 1, Stderr: err.Error()}
 		}
-		tempFile = f.Name()
 		runPath = tempFile
-		defer func() { _ = os.Remove(tempFile) }()
 	} else if !fileExists(runPath) {
 		engine.Warn("Shell script not found: %s", runPath)
-		return engine.ExecResult{}
+		return engine.ExecResult{RC: 1, Stderr: "shell script not found: " + runPath}
 	}
 
 	var result engine.ExecResult
@@ -241,7 +248,7 @@ func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
 	} else if cfg.Script == "" && runtime.GOOS != "windows" && cfg.Type != "" {
 		if err := os.Chmod(runPath, 0o700); err != nil { //nolint:gosec // the private temp script must be executable by its owner
 			engine.Warn("Shell item '%s': %v", label, err)
-			return engine.ExecResult{}
+			return engine.ExecResult{RC: 1, Stderr: err.Error()}
 		}
 		result = runExternalCommand(runPath, cfg.ItemArgs)
 	} else {

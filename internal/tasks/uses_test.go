@@ -46,6 +46,48 @@ tasks:
 	}
 }
 
+func TestUsesEnvironmentScopesAreDistinctPerLoopInvocation(t *testing.T) {
+	base := writeSharedPlaybook(t, `
+environment:
+  VALUE:
+    valueFrom:
+      task:
+        value: "${{ inputs.desired }}"
+tasks:
+  - log: {message: "${{ envs.VALUE }}"}
+  - log: {message: "${{ '' | env('VALUE') }}"}
+`)
+	leaves := expandOK(t, `
+- items: [one, two]
+  environment: {OUTER: "${{ item }}"}
+  uses:
+    remote: shared
+    path: roles/greet
+    with: {desired: "${{ item }}"}
+`, Options{PackagesRoot: base})
+	if len(leaves) != 4 {
+		t.Fatalf("leaves = %#v", leaves)
+	}
+	for _, leaf := range leaves {
+		if len(leaf.ScopeEnvs) != 2 {
+			t.Fatalf("expected consuming-task and document scopes: %#v", leaf.ScopeEnvs)
+		}
+	}
+	if leaves[0].ScopeEnvs[1] != leaves[1].ScopeEnvs[1] || leaves[2].ScopeEnvs[1] != leaves[3].ScopeEnvs[1] {
+		t.Fatal("siblings do not share a file source scope")
+	}
+	if leaves[0].ScopeEnvs[1] == leaves[2].ScopeEnvs[1] {
+		t.Fatal("separate invocations share a source cache identity")
+	}
+	if leaves[0].ScopeEnvs[1].Context["inputs"].(map[string]any)["desired"] != "one" ||
+		leaves[2].ScopeEnvs[1].Context["inputs"].(map[string]any)["desired"] != "two" {
+		t.Fatal("source contexts lost per-invocation inputs")
+	}
+	if leaves[1].Item["message"] != "${{ '' | env('VALUE') }}" {
+		t.Fatal("environment filter resolved before scope activation")
+	}
+}
+
 func TestUsesIsolateRestrictsContextToWith(t *testing.T) {
 	base := writeSharedPlaybook(t, `
 tasks:
