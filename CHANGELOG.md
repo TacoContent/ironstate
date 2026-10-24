@@ -1,4 +1,40 @@
 
+## [v0.13.0](https://github.com/tacocontent/ironstate/releases/tag/v0.13.0) - 2026-10-24
+
+### 🚀 FEATURES
+
+#### _GENERAL_
+
+- Support for file level envs and tags -[@camalot](https://github.com/camalot)
+
+- Support advanced ways to set envs value -[@camalot](https://github.com/camalot)
+
+
+## GitHub
+
+### 💛 Contributors
+
+
+- [@camalot](https://github.com/camalot)
+## 📈 Commit Statistics
+
+
+- `2` commits contributed to the release.
+- `0` days have passed between the first and last commit.
+- `2` commits parsed as conventional.
+- `0` linked issues detected in commits.
+- `1` day  has passed between releases.
+
+
+![Statistics](https://quickchart.io/chart?c={type:'bar',data:{labels:['Commits','Contributors','Days%20Between%20Commits','Conventional%20Commits','Referenced%20Links','Days%20Since%20Last%20Release'],datasets:[{label:'Release',data:[2,1,0,2,0,1]}]}})
+
+
+
+---
+
+
+**Full Changelog**: https://github.com/tacocontent/ironstate/compare/v0.12.0...v0.13.0
+
 ## [v0.12.0](https://github.com/tacocontent/ironstate/releases/tag/v0.12.0) - 2026-10-23
 
 ### 🚀 FEATURES
