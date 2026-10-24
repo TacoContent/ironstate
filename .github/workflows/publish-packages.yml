@@ -54,7 +54,6 @@ jobs:
         id: ironstate-bot-token
         with:
           client-id: ${{ vars.XGET_APP_CLIENT_ID }}
-          installation-id: ${{ vars.XGET_APP_INSTALL_ID }}
           private-key: ${{ secrets.XGET_APP_PRIVATE_KEY }}
           owner: camalot
           # only needs push access to the tap repo (winget/scoop/homebrew manifests) -
