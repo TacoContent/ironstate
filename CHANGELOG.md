@@ -1,4 +1,53 @@
 
+## [v0.16.0](https://github.com/tacocontent/ironstate/releases/tag/v0.16.0) - 2026-10-24
+
+### 🚀 FEATURES
+
+#### _GENERAL_
+
+- Enable proper args for install/uninstall of package -[@camalot](https://github.com/camalot)
+
+
+### 💼 OTHER
+
+#### _GENERAL_
+
+- Merge branch 'develop' of github.com:TacoContent/ironstate into develop -[@camalot](https://github.com/camalot)
+
+- Develop' of github.com:TacoContent/ironstate: -[@camalot](https://github.com/camalot)
+
+
+### 📚 DOCUMENTATION
+
+#### _GENERAL_
+
+- docs: update changelog for v0.15.0 -[@camalot](https://github.com/camalot)
+
+
+## GitHub
+
+### 💛 Contributors
+
+
+- [@camalot](https://github.com/camalot)
+## 📈 Commit Statistics
+
+
+- `4` commits contributed to the release.
+- `0` days have passed between the first and last commit.
+- `1` commits parsed as conventional.
+- `0` linked issues detected in commits.
+
+
+![Statistics](https://quickchart.io/chart?c={type:'bar',data:{labels:['Commits','Contributors','Days%20Between%20Commits','Conventional%20Commits','Referenced%20Links','Days%20Since%20Last%20Release'],datasets:[{label:'Release',data:[4,1,0,1,0,0]}]}})
+
+
+
+---
+
+
+**Full Changelog**: https://github.com/tacocontent/ironstate/compare/v0.15.0...v0.16.0
+
 ## [v0.15.0](https://github.com/tacocontent/ironstate/releases/tag/v0.15.0) - 2026-10-24
 
 ### 🚀 FEATURES
