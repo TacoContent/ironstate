@@ -78,7 +78,7 @@
                         { "$ref": "#/$defs/shellItem" },
                         {
                           "oneOf": [{ "required": ["command"] }, { "required": ["script"] }],
-                          "propertyNames": { "enum": ["command", "script", "type", "host", "extension", "args"] }
+                          "propertyNames": { "enum": ["command", "script", "type", "host", "extension", "args", "silent"] }
                         }
                       ]
                     },
@@ -710,6 +710,11 @@
       "description": "Runs an inline PowerShell command or a script file. Exactly one of 'command' or 'script' should be given.",
       "additionalProperties": false,
       "properties": {
+        "silent": {
+          "oneOf": [{ "type": "boolean" }, { "$ref": "#/$defs/templateString" }],
+          "default": false,
+          "description": "Suppress logging of captured stdout/stderr and shell exit-code warnings unless the task fails, including failed_when failures. Task lifecycle messages, progress, results and facts remain visible; output is still captured for IDs/facts and structured results. Also supported inside fact.shell and environment valueFrom.task.shell."
+        },
         "command": {
           "type": "string",
           "description": "Inline PowerShell command(s) to execute. Use a YAML block scalar ('|') for multiline scripts."

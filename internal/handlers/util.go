@@ -156,25 +156,35 @@ var runner ironexec.Runner = ironexec.Default
 // 'become' sees an empty ironexec.Become, which WrapForBecome passes
 // straight through unchanged.
 func runExternalCommand(exe string, args []string) engine.ExecResult {
+	return runExternalCommandWithOutput(exe, args, false)
+}
+
+func runExternalCommandWithOutput(exe string, args []string, silent bool) engine.ExecResult {
 	become := ironexec.CurrentBecome()
-	if become.Enabled && runtime.GOOS == "windows" && become.User != "" && !strings.EqualFold(become.User, "root") {
+	if !silent && become.Enabled && runtime.GOOS == "windows" && become.User != "" && !strings.EqualFold(become.User, "root") {
 		engine.Warn("become: Windows elevation only supports the default Administrator identity via sudo.exe/UAC; ignoring become user %q", become.User)
 	}
 	exe, args, err := ironexec.WrapForBecome(become, exe, args)
 	if err != nil {
-		engine.Warn("%s", err)
+		if !silent {
+			engine.Warn("%s", err)
+		}
 		return engine.ExecResult{RC: 1, Stderr: err.Error(), StderrLines: []string{err.Error()}}
 	}
 	result, err := runner.Run(exe, args)
 	if err != nil {
-		engine.Warn("%s: %v", exe, err)
+		if !silent {
+			engine.Warn("%s: %v", exe, err)
+		}
 		return engine.ExecResult{RC: 1, Stderr: err.Error(), StderrLines: []string{err.Error()}}
 	}
-	for _, line := range result.StdoutLines {
-		engine.Info("%s", line)
-	}
-	for _, line := range result.StderrLines {
-		engine.Warn("%s", line)
+	if !silent {
+		for _, line := range result.StdoutLines {
+			engine.Info("%s", line)
+		}
+		for _, line := range result.StderrLines {
+			engine.Warn("%s", line)
+		}
 	}
 	return engine.ExecResult{
 		RC:          result.RC,

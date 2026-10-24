@@ -14,6 +14,34 @@ func envSource(source map[string]any) map[string]any {
 	return map[string]any{"valueFrom": source}
 }
 
+func TestSetEnvironmentExpandsHomeInPathOnly(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("PATH", "original")
+	t.Setenv("IRONSTATE_LITERAL_ENV_TEST", "original")
+	separator := string(os.PathListSeparator)
+	path := strings.Join([]string{"first", "~/.local/bin", "", "~", "last"}, separator)
+	restore, err := SetEnvironment(map[string]any{
+		"PATH": path, "IRONSTATE_LITERAL_ENV_TEST": "~/.local/bin",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restore()
+	want := strings.Join([]string{"first", filepath.Join(home, ".local", "bin"), "", home, "last"}, separator)
+	if os.Getenv("PATH") != want {
+		t.Fatalf("PATH=%q want %q", os.Getenv("PATH"), want)
+	}
+	if os.Getenv("IRONSTATE_LITERAL_ENV_TEST") != "~/.local/bin" {
+		t.Fatal("non-PATH values must remain literal")
+	}
+	restore()
+	if os.Getenv("PATH") != "original" {
+		t.Fatal("original PATH was not restored")
+	}
+}
+
 func TestResolveEnvironmentPrimitivesAndFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "value.txt")
 	if err := os.WriteFile(path, []byte("content\r\n"), 0o600); err != nil {

@@ -151,6 +151,10 @@ func resolveEnvironmentTask(task map[string]any, ctx Context, shell Handler) (an
 						return nil, fmt.Errorf("valueFrom.task.shell.args must resolve to a list of strings")
 					}
 				}
+			case "silent":
+				if _, ok := value.(bool); !ok {
+					return nil, fmt.Errorf("valueFrom.task.shell.silent must resolve to a boolean")
+				}
 			default:
 				return nil, fmt.Errorf("unsupported valueFrom.task.shell field %q", key)
 			}
@@ -176,6 +180,9 @@ func resolveEnvironmentTask(task map[string]any, ctx Context, shell Handler) (an
 			return nil, fmt.Errorf("valueFrom.task.shell: %w", err)
 		}
 		if result.RC != 0 {
+			if silent, _ := shellSpec["silent"].(bool); silent {
+				LogExecOutput(result)
+			}
 			return nil, fmt.Errorf("valueFrom.task.shell exited with code %d: %s", result.RC, strings.TrimSpace(result.Stderr))
 		}
 		mergeExecInto(valueContext.Flat, result)
@@ -189,4 +196,13 @@ func environmentPath(path, baseDir string) string {
 		return filepath.Join(baseDir, path)
 	}
 	return path
+}
+
+func expandEnvironmentPath(value string) string {
+	separator := string(os.PathListSeparator)
+	entries := strings.Split(value, separator)
+	for index, entry := range entries {
+		entries[index] = pathutil.ResolveUserPath(entry)
+	}
+	return strings.Join(entries, separator)
 }

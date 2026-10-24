@@ -552,6 +552,8 @@ tasks:
 
 Use `envs.NAME` in expressions and conditions to read the current environment, including inherited OS variables; the existing `env` filter reads the same values. A task's `when` sees the playbook environment before its package/group/task overrides are applied. Grouping task overrides are inherited by children; a child's own declarations take precedence.
 
+When applying a declared `PATH`, Ironstate expands a leading `~` in each path-list entry to the current user's home directory. For example, a fact containing `~/.local/bin` works when prepended to `PATH` even in shells such as Zsh that do not expand home-relative entries during executable lookup. Use the host's path-list separator (`:` on Unix, `;` on Windows). Entry order and empty entries are preserved; other environment variable values remain literal. The original `PATH` is restored when the scope ends.
+
 An included or used package can also declare either alias at the top of its file. Declarations apply only while that package's tasks run, layered outermost first through enclosing packages and groups, then the leaf's own declarations - so each layer can build on the previous one (e.g. prepend to `PATH`). Values in the same mapping see the incoming environment, not other entries in that mapping. The package's `main.yml` loads first, then its chained overlays (`windows.yml`, `<hostname>.yml`, ...) override the same keys:
 
 ```yaml
@@ -1145,6 +1147,7 @@ tasks:
 | `host` | no | Legacy interpreter/command selector, retained for compatibility. `type` takes precedence when both are set. Presets `powershell`, `cmd`, `bash`, `sh`, `node`, `python` expand to their executable. Anything else is split on whitespace and used as exe + leading args - e.g. `npx tsx`. |
 | `extension` | no | Overrides the temp file's extension for inline `command` under a non-`pwsh` host (defaults to a sensible one per preset, `.txt` otherwise) - e.g. `.ts` so `npx tsx` sees real TypeScript |
 | `args` | no | List of arguments passed to the command/script |
+| `silent` | no | Boolean or expression, default `false`. Suppress logging of execution output and shell exit-code warnings unless the task fails. Task lifecycle messages, progress, results, and facts remain visible |
 | `creates` | no | Glob patterns whose presence means "already run". Without it, `present`/`latest` always re-run the command. For `absent`, these paths are removed instead of the command running again |
 
 **Per-state command/script (scripted install/uninstall)**: `command`/`script`/`args`/`type`/`host`/`extension` can instead be nested one level deeper, under `present`/`absent`/`latest` keys, to run a different command per state:
@@ -1160,7 +1163,22 @@ tasks:
 
 The block for the item's own `state` (default `present`) is picked, and falls back field-by-field to the flat top-level fields for anything that block doesn't set - so plain top-level `command`/`script` (no per-state blocks at all) keeps working exactly as before. `absent` is the one exception with **no** top-level fallback: the legacy behavior for `state: absent` has always been "remove `creates` entries, run nothing", so reusing the top-level (present-oriented) command by default would be a surprising, silent behavior change. Write a dedicated `absent` block to run something on uninstall; without one, `absent` still only removes `creates` entries, same as today. `creates` itself is always read from the top level regardless of any per-state block, since it's the one signal that decides which state to reconcile *to* in the first place.
 
-Output is captured, not streamed live: stdout (`Write-Host`/`Write-Output`/real native stdout, all merged together) and stderr are captured, then echoed after the command finishes (stdout via `Write-Host`, stderr via `Write-Warning`) - so it still ends up on the console, just after completion rather than in real time. This is what backs an `id`'d shell task's `rc`/`stdout`/`stdout_lines`/`stderr`/`stderr_lines` (see [Registering results](#registering-results-id)).
+Output is captured, not streamed live: stdout (`Write-Host`/`Write-Output`/real native stdout, all merged together) and stderr are captured, then normally echoed after the command finishes (stdout via `Write-Host`, stderr via `Write-Warning`) - so it still ends up on the console, just after completion rather than in real time. This is what backs an `id`'d shell task's `rc`/`stdout`/`stdout_lines`/`stderr`/`stderr_lines` (see [Registering results](#registering-results-id)).
+
+Set **`silent: true` inside `shell`** to suppress echoing captured stdout/stderr and shell exit-code warnings into the execution log. Task start/completion messages, progress, verbose skip and dry-run messages remain unchanged, as do table, JSON, and remote NDJSON results and summary statistics. Output is still captured for `id` references, facts, and structured results. If the task fails (including a `failed_when` failure with `rc: 0`), its captured output and failure are reported normally; an expected nonzero exit overridden by `failed_when: false` does not log execution output or an exit-code warning.
+
+The same setting works inside `fact.shell` and `valueFrom.task.shell`. Silent shell facts remain visible in the facts table/event and available as `facts.<name>` to later tasks.
+
+```yaml
+tasks:
+  - name: get xget version quietly
+    fact:
+      name: xget_version
+      shell:
+        command: xget --version
+        silent: true
+      value: "${{ stdout | trim }}"
+```
 
 For inline PowerShell `command` (including `fact.shell.command`), the final
 command's failure status is propagated: a failed cmdlet produces a nonzero

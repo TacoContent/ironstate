@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/TacoContent/ironstate/internal/secrets"
@@ -202,6 +203,25 @@ func PrintJSON(w io.Writer, results []Result) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(out)
+}
+
+// LogExecOutput reveals captured diagnostics after a silent command fails.
+func LogExecOutput(result ExecResult) {
+	lines := func(text string, captured []string) []string {
+		if len(captured) > 0 {
+			return captured
+		}
+		if text == "" {
+			return nil
+		}
+		return strings.Split(strings.TrimRight(strings.ReplaceAll(text, "\r\n", "\n"), "\n"), "\n")
+	}
+	for _, line := range lines(result.Stdout, result.StdoutLines) {
+		Info("%s", line)
+	}
+	for _, line := range lines(result.Stderr, result.StderrLines) {
+		Warn("%s", line)
+	}
 }
 
 func redactStrings(values []string) []string {

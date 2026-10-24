@@ -60,6 +60,7 @@ type shellStateConfig struct {
 	Type      string
 	HostSpec  string
 	Extension string
+	Silent    bool
 }
 
 func resolveShellStateConfig(item map[string]any, state string) shellStateConfig {
@@ -95,6 +96,7 @@ func resolveShellStateConfig(item map[string]any, state string) shellStateConfig
 		hostSpec = typeSpec
 	}
 	extension, _ := pick("extension").(string)
+	silent, _ := item["silent"].(bool)
 
 	var itemArgs []string
 	for _, raw := range asList(pick("args")) {
@@ -110,6 +112,7 @@ func resolveShellStateConfig(item map[string]any, state string) shellStateConfig
 		Type:      typeSpec,
 		HostSpec:  hostSpec,
 		Extension: extension,
+		Silent:    silent,
 	}
 }
 
@@ -181,8 +184,12 @@ func shellScriptExtension(cfg shellStateConfig) string {
 }
 
 func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
+	warn := engine.Warn
+	if cfg.Silent {
+		warn = func(string, ...any) {}
+	}
 	if cfg.Script == "" && cfg.Command == "" {
-		engine.Warn("Shell item '%s' has neither 'command' nor 'script'", label)
+		warn("Shell item '%s' has neither 'command' nor 'script'", label)
 		return engine.ExecResult{RC: 1, Stderr: "shell requires command or script"}
 	}
 
@@ -194,7 +201,7 @@ func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
 		extension := shellScriptExtension(cfg)
 		f, err := os.CreateTemp("", "ironstate-*"+extension)
 		if err != nil {
-			engine.Warn("Shell item '%s': %v", label, err)
+			warn("Shell item '%s': %v", label, err)
 			return engine.ExecResult{RC: 1, Stderr: err.Error()}
 		}
 		tempFile = f.Name()
@@ -208,13 +215,13 @@ func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
 		if header != "" {
 			if _, err := f.WriteString(header); err != nil {
 				_ = f.Close()
-				engine.Warn("Shell item '%s': %v", label, err)
+				warn("Shell item '%s': %v", label, err)
 				return engine.ExecResult{RC: 1, Stderr: err.Error()}
 			}
 		}
 		if _, err := f.WriteString(cfg.Command); err != nil {
 			_ = f.Close()
-			engine.Warn("Shell item '%s': %v", label, err)
+			warn("Shell item '%s': %v", label, err)
 			return engine.ExecResult{RC: 1, Stderr: err.Error()}
 		}
 		// -File otherwise returns zero for non-terminating cmdlet failures.
@@ -222,17 +229,17 @@ func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
 		if len(invocation) == 0 || isPowerShellHost(invocation[0]) {
 			if _, err := f.WriteString("\nif (-not $?) { if ($LASTEXITCODE) { exit $LASTEXITCODE }; exit 1 }\n"); err != nil {
 				_ = f.Close()
-				engine.Warn("Shell item '%s': %v", label, err)
+				warn("Shell item '%s': %v", label, err)
 				return engine.ExecResult{RC: 1, Stderr: err.Error()}
 			}
 		}
 		if err := f.Close(); err != nil {
-			engine.Warn("Shell item '%s': %v", label, err)
+			warn("Shell item '%s': %v", label, err)
 			return engine.ExecResult{RC: 1, Stderr: err.Error()}
 		}
 		runPath = tempFile
 	} else if !fileExists(runPath) {
-		engine.Warn("Shell script not found: %s", runPath)
+		warn("Shell script not found: %s", runPath)
 		return engine.ExecResult{RC: 1, Stderr: "shell script not found: " + runPath}
 	}
 
@@ -241,24 +248,24 @@ func invokeShellItem(cfg shellStateConfig, label string) engine.ExecResult {
 		// 'pwsh' host: always a subprocess here (see the deviation note
 		// on shellHandler), unlike the original's in-process execution.
 		args := append([]string{"-NoLogo", "-NoProfile", "-File", runPath}, cfg.ItemArgs...)
-		result = runExternalCommand("pwsh", args)
+		result = runExternalCommandWithOutput("pwsh", args, cfg.Silent)
 	} else if isPowerShellHost(invocation[0]) {
 		args := append(append([]string{}, invocation[1:]...), "-NoLogo", "-NoProfile", "-File", runPath)
-		result = runExternalCommand(invocation[0], append(args, cfg.ItemArgs...))
+		result = runExternalCommandWithOutput(invocation[0], append(args, cfg.ItemArgs...), cfg.Silent)
 	} else if cfg.Script == "" && runtime.GOOS != "windows" && cfg.Type != "" {
 		if err := os.Chmod(runPath, 0o700); err != nil { //nolint:gosec // the private temp script must be executable by its owner
-			engine.Warn("Shell item '%s': %v", label, err)
+			warn("Shell item '%s': %v", label, err)
 			return engine.ExecResult{RC: 1, Stderr: err.Error()}
 		}
-		result = runExternalCommand(runPath, cfg.ItemArgs)
+		result = runExternalCommandWithOutput(runPath, cfg.ItemArgs, cfg.Silent)
 	} else {
 		exe := invocation[0]
 		args := append(append([]string{}, invocation[1:]...), append([]string{runPath}, cfg.ItemArgs...)...)
-		result = runExternalCommand(exe, args)
+		result = runExternalCommandWithOutput(exe, args, cfg.Silent)
 	}
 
 	if result.RC != 0 {
-		engine.Warn("Shell item '%s' exited with code %d", label, result.RC)
+		warn("Shell item '%s' exited with code %d", label, result.RC)
 	}
 	return result
 }

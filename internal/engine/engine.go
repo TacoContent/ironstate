@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -365,6 +366,9 @@ func SetEnvironment(values map[string]any) (func(), error) {
 		if value != nil {
 			text = expr.DisplayString(value)
 		}
+		if key == "PATH" || (runtime.GOOS == "windows" && strings.EqualFold(key, "PATH")) {
+			text = expandEnvironmentPath(text)
+		}
 		if err := os.Setenv(key, text); err != nil {
 			restore()
 			return nil, fmt.Errorf("envs.%s: %w", key, err)
@@ -403,7 +407,6 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 		if opts.Progress != nil {
 			opts.Progress(runStage, label, i+1, total)
 		}
-
 		handler, ok := opts.Handlers[module]
 		if !ok {
 			Warn("No handler registered for module '%s'; skipping.", module)
@@ -572,6 +575,10 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 				return true, nil
 			}
 			leaf.Item = model.AsMap(wrapper["item"])
+			silent, err := shellSilent(module, leaf.Item)
+			if err != nil {
+				return false, fmt.Errorf("task %q: %w", label, err)
+			}
 
 			// A fact's embedded shell, every 'assert', and every FactProducer
 			// (e.g. 'mount_facts') have no real system side effect - each only
@@ -607,6 +614,9 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 				}
 			}
 			result.Failed = failed
+			if failed && silent && !leaf.SecretID {
+				LogExecOutput(result.Exec)
+			}
 			result.Duration = time.Since(started)
 			results = append(results, result)
 			if opts.OnResult != nil {
@@ -890,6 +900,25 @@ func invokePackageItem(module, name string, item map[string]any, handler Handler
 		Apply:   apply,
 		Exec:    exec,
 	}, nil
+}
+
+func shellSilent(module string, item map[string]any) (bool, error) {
+	switch module {
+	case "shell", "ironstate.builtin.shell":
+	case "fact", "ironstate.builtin.fact":
+		item = model.AsMap(item["shell"])
+	default:
+		return false, nil
+	}
+	raw, present := item["silent"]
+	if !present {
+		return false, nil
+	}
+	silent, ok := raw.(bool)
+	if !ok {
+		return false, fmt.Errorf("shell.silent must resolve to a boolean")
+	}
+	return silent, nil
 }
 
 func actionWords(action Action) (verb, progressing, completed string) {
