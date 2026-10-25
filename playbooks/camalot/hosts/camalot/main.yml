@@ -96,7 +96,8 @@ tasks:
 
   # Includes: define a package once under packages/<name>/main.yml (using
   # the same 'tasks:' shape as this file) and pull it in with 'include:'.
-  # See README.md's "Includes" section for the full mechanism, including
+  # See https://tacocontent.github.io/ironstate/playbooks/includes.html for
+  # the full mechanism, including
   # 'src'/'script' path resolution and '${{ ... }}' template expressions.
   - name: install lolcat
     tags: 

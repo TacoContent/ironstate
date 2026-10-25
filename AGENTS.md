@@ -6,6 +6,13 @@
 - The executable entrypoint is `cmd/ironstate/main.go`; Cobra wiring stays thin in `internal/cli/`. The apply flow is: CLI/config -> `internal/packages` hierarchy loading -> `internal/tasks` flattening -> `internal/engine` dispatch -> `internal/handlers`.
 - `sdk/proto/*.pb.go` and `sdk/proto/*_grpc.pb.go` are generated from `sdk/proto/handler.proto`; do not hand-edit generated files.
 
+## Expectations
+
+- All new code must include passing tests and adhere to the existing module structure and coding standards.
+- All features must include documentation in docs/ corresponding to the implemented functionality. Update existing documentation as needed to reflect changes.
+- All tests must pass successfully, even if they are not directly related to the changes being made.
+- Code changes should not break existing functionality and must be backward compatible unless explicitly stated otherwise.
+
 ## Development Commands
 
 - Build or test the root module: `go build ./...` and `go test ./... -coverprofile=coverage.out`.

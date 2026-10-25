@@ -1,4 +1,5 @@
 ---
+render_with_liquid: false
 layout: default
 title: include
 parent: 👋 Handlers
@@ -13,7 +14,7 @@ The `include` handler pulls in packages/\<name\>/main.yml's task list as if writ
 
 | Field | Required | Default | Description |
 | --- | --- | --- | --- |
-| `name` | yes | - | Package directory name under install/windows/packages/. |
+| `name` | yes | - | Package directory, relative to the playbook root (for example `packages/kanata`). |
 | `state` | no | `present` | Made available inside the package as `${{ package.state }}`. |
 | `tags` | no | - | Made available inside the package as `${{ package.tags }}`. |
 | `with` | no | - | Arbitrary key/value inputs made available inside the package as `${{ inputs.<key> }}` (dotted paths work for nested values). |

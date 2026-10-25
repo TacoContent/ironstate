@@ -1,7 +1,8 @@
 ---
+render_with_liquid: false
 layout: default
 title: 📝 Handler Contract
-nav_order: 4
+nav_order: 3
 parent: 🧩 Plugins
 ---
 

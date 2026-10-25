@@ -1,4 +1,5 @@
 ---
+render_with_liquid: false
 layout: default
 title: lineinfile
 parent: 👋 Handlers

@@ -15,7 +15,7 @@
         },
         "tasks": {
           "type": "array",
-          "description": "Task/action list, executed in the order written. See README.md for the task/action model.",
+          "description": "Task/action list, executed in the order written. See https://tacocontent.github.io/ironstate/playbooks/tasks.html for the task/action model.",
           "items": { "$ref": "#/$defs/taskItem" }
         },
         "vars": {
@@ -97,7 +97,7 @@
     "templateString": {
       "type": "string",
       "pattern": "^\\$\\{\\{[\\s\\S]*\\}\\}$",
-      "description": "A single '${{ ... }}' template expression whose result replaces the field wholesale, native type preserved (see README.md's 'Template expressions' section for the full grammar). Typically a path - '${{ inputs.<key> }}' / '${{ package.state }}' / '${{ package.tags }}' / '${{ facts.<key> }}' / '${{ vars.<key> }}' / '${{ item.<key> }}' / '${{ <id>.<field> }}', optionally indexing into a list with '[N]' (e.g. '${{ example_task.results[0].rc }}') - but may also pipe through filters, e.g. '${{ package.state | default(\"present\") }}'. 'package'/'inputs' are only meaningful inside a package's own main.yml (see the 'include' module); 'item' only inside a looped task (see 'items'/'with'); the rest are available everywhere."
+      "description": "A single '${{ ... }}' template expression whose result replaces the field wholesale, native type preserved (see https://tacocontent.github.io/ironstate/playbooks/conditions.html for the full grammar). Typically a path - '${{ inputs.<key> }}' / '${{ package.state }}' / '${{ package.tags }}' / '${{ facts.<key> }}' / '${{ vars.<key> }}' / '${{ item.<key> }}' / '${{ <id>.<field> }}', optionally indexing into a list with '[N]' (e.g. '${{ example_task.results[0].rc }}') - but may also pipe through filters, e.g. '${{ package.state | default(\"present\") }}'. 'package'/'inputs' are only meaningful inside a package's own main.yml (see the 'include' module); 'item' only inside a looped task (see 'items'/'with'); the rest are available everywhere."
     },
     "state": {
       "description": "'present' installs if missing; 'absent' uninstalls if installed; 'latest' always (re-)installs / re-extracts. Inside a package's main.yml, this may instead be a single template expression such as '${{ package.state }}' or '${{ inputs.<key> }}'.",
@@ -110,7 +110,7 @@
       "oneOf": [{ "type": "array", "items": { "type": "string" } }, { "$ref": "#/$defs/templateString" }]
     },
     "when": {
-      "description": "Condition(s) gating this task/action and everything nested under it (AND'd with every ancestor task's own 'when'). A single expression string, or a list of expressions (implicit AND) - matches Ansible. Bare dotted/indexed identifiers (e.g. 'foo.rc', 'foo.results[0].rc') resolve against facts/vars/id-registered results/facts (no '${{ }}' wrapper); operators: == != < <= > >=, and, or, not, in/not in, is/is not, and a '|' filter pipeline (e.g. 'value | default(\"x\") == \"x\"'). See README.md for the full grammar.",
+      "description": "Condition(s) gating this task/action and everything nested under it (AND'd with every ancestor task's own 'when'). A single expression string, or a list of expressions (implicit AND) - matches Ansible. Bare dotted/indexed identifiers (e.g. 'foo.rc', 'foo.results[0].rc') resolve against facts/vars/id-registered results/facts (no '${{ }}' wrapper); operators: == != < <= > >=, and, or, not, in/not in, is/is not, and a '|' filter pipeline (e.g. 'value | default(\"x\") == \"x\"'). See https://tacocontent.github.io/ironstate/playbooks/conditions.html for the full grammar.",
       "oneOf": [{ "type": "string" }, { "type": "boolean" }, { "type": "array", "items": { "anyOf": [{ "type": "string" }, { "type": "boolean" }] } }]
     },
     "taskItem": {
@@ -1350,7 +1350,7 @@
         "run_level": { "type": "string", "enum": ["Limited", "Highest"], "default": "Limited", "description": "'Highest' runs elevated (\"Run with highest privileges\" in Task Scheduler's UI)." },
         "password_env": {
           "type": "string",
-          "description": "Name of an environment variable (populated via this repo's own .env/.secrets loading - see README.md) holding the account's password. Only used when 'logon_type' is 'Password'; never write a plaintext password here."
+          "description": "Name of an environment variable (populated via this repo's own .env/.secrets loading - see https://tacocontent.github.io/ironstate/playbooks/secrets.html) holding the account's password. Only used when 'logon_type' is 'Password'; never write a plaintext password here."
         }
       }
     },

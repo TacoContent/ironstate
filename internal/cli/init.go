@@ -102,8 +102,8 @@ func newInitCommand() *cobra.Command {
 		Use:   "init [playbook-name]",
 		Short: "Scaffold a new playbook's starter file/directory structure",
 		Long: `Creates a new playbook (or scaffolds the current directory, if no name is
-given) with the base file/directory structure ironstate expects - see the
-README's "Playbooks" section:
+given) with the base file/directory structure ironstate expects - see
+https://tacocontent.github.io/ironstate/playbooks/structure.html:
 
   <playbook>/
   |-- main.yml

@@ -3,6 +3,7 @@ layout: default
 title: 🖥️ Completions
 nav_order: 1
 parent: 🖥️ Commands
+grand_parent: 🖥️ CLI
 ---
 
 <!-- markdownlint-disable MD025 MD022 -->
@@ -49,5 +50,15 @@ ironstate completion fish | source
 To enable PowerShell completions, add the following to your PowerShell profile (e.g., `~\.config\powershell\Microsoft.PowerShell_profile.ps1`):
 
 ```powershell
-ironstate completion pwsh | Out-String | Invoke-Expression
+ironstate completion powershell | Out-String | Invoke-Expression
 ```
+
+> [!NOTE]
+> The shell argument is `powershell` (not `pwsh`); the generated script works in both Windows PowerShell and PowerShell 7+.
+
+## Flags
+
+| Flag | Description |
+| --- | --- |
+| `--no-descriptions` | Generate completions without command/flag descriptions. |
+| `-h`, `--help` | Show help for the completion command. |

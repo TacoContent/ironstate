@@ -7,7 +7,7 @@ nav_order: 37
 
 # shell
 
-The `shell` handler runs inline PowerShell commands or script files. It can be specified as a shorthand string or as a structured object.
+The `shell` handler runs inline commands or script files with any shell or interpreter (PowerShell, bash, zsh, Python, and so on). It can be specified as a shorthand string or as a structured object.
 
 ## Fields (when used as object)
 

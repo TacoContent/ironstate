@@ -1,7 +1,7 @@
 ---
 layout: default
 title: 🧩 Plugins
-nav_order: 3
+nav_order: 8
 has_children: true
 ---
 
@@ -55,7 +55,7 @@ The lockfile takes precedence for version selection. A checksum mismatch is a ha
 
 ## Plugins with remote apply
 
-Playbooks that declare plugins can be applied to remote targets (`--target`/`--inventory`, see the README's "Remote apply over SSH"). Handlers always run on the target, so the target needs the plugin binary for its own OS/arch:
+Playbooks that declare plugins can be applied to remote targets (`--target`/`--inventory`, see [Inventory](../playbooks/inventory.md)). Handlers always run on the target, so the target needs the plugin binary for its own OS/arch:
 
 - **Same OS/arch as the controller:** before the run, the controller copies each declared plugin it has installed (binary and `manifest.json`, at the lockfile's version when one exists) into the target's plugin cache. Each file is SHA-256 verified on the target and re-uploaded only when it changes, and the copied binary is byte-identical to the controller's, so `ironstate.lock.yaml` checksums still match. Shipped plugins appear in the host's status line (`plugins=...`) and as `plugins_shipped` in JSON output.
 - **Different OS/arch:** the target uses plugins already installed there (`ironstate plugin install` on the target). `--allow-plugin-install` is forwarded, so the agent may install a missing plugin itself, which needs Go on the target.

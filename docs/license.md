@@ -1,7 +1,7 @@
 ---
 layout: default
 title: 📋 License
-nav_order: 100
+nav_order: 101
 ---
 
 <!-- markdownlint-disable-next-line MD025 MD022 -->
