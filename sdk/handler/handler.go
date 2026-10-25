@@ -65,10 +65,19 @@ type RequiredToolsProvider interface {
 	RequiredTools() []string
 }
 
-// FactProducer optionally exposes a named result as a later-task fact.
+// FactProducer optionally exposes a named result as a later-task fact. The
+// fact's value is ExecResult.Extra["value"] from Install; Uninstall removes
+// the fact. Handlers that implement it run in ironstate's fact-gathering
+// phase, before every other task.
 type FactProducer interface {
 	FactName(item map[string]any) (name string, ok bool)
 }
+
+// Filter is an expression filter a plugin contributes to the host's '|'
+// pipeline. value is the piped-in value (nil for a bare call) and args are
+// the evaluated call arguments. Values cross the plugin boundary as JSON, so
+// numbers arrive as float64, lists as []any, and mappings as map[string]any.
+type Filter func(value any, args []any) (any, error)
 
 // ScanItem is one discovered configuration object suitable for a generated
 // ironstate playbook.

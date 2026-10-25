@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/TacoContent/ironstate/develop/ironstate.schema.json",
   "title": "IronState Configuration",
-  "description": "Schema for install/windows/main.yml and its per-machine (hosts/<COMPUTERNAME>.yml) and per-user (variables/<USERNAME>.yml) overlay files. A document is either the explicit mapping form ('tasks'/'vars') or, when 'vars' isn't needed, a bare list of tasks/actions directly. Overlays use the explicit mapping form so they can merge by key into the base file (see install/windows/README.md): 'tasks' appends, 'vars' deep-merges key-by-key.",
+  "description": "Schema for install/windows/main.yml and its per-machine (hosts/<COMPUTERNAME>.yml) and per-user (variables/<user>.yml) overlay files. A document is either the explicit mapping form ('tasks'/'vars') or, when 'vars' isn't needed, a bare list of tasks/actions directly. Overlays use the explicit mapping form so they can merge by key into the base file (see install/windows/README.md): 'tasks' appends, 'vars' deep-merges key-by-key.",
   "oneOf": [
     {
       "type": "object",
@@ -34,6 +34,22 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "File-level tags. A main.yml's tags apply to every task in that playbook/package, including tasks merged in from its overlays; an overlay file's (e.g. windows.yml) tags apply only to that overlay's own tasks."
+        },
+        "plugins": {
+          "type": "array",
+          "description": "External handler plugins this playbook uses. Each plugin's handlers are referenced in tasks as '<organization>.<plugin>.<handler>'. See https://tacocontent.github.io/ironstate/plugins/using.html.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["use"],
+            "properties": {
+              "use": {
+                "type": "string",
+                "pattern": "^\\s*[^.@\\s/\\\\]+\\.[^.@\\s/\\\\]+@[^@\\s]+\\s*$",
+                "description": "Plugin reference in 'organization.plugin@version' form, e.g. 'acme.hosts@v1.2.0'. Use 'latest' for the newest installed version."
+              }
+            }
+          }
         }
       }
     },
@@ -117,6 +133,11 @@
       "type": "object",
       "description": "A task or leaf action. A grouping task has 'actions' (a list of taskItem, recursively - arbitrary nesting depth); a leaf has exactly one of the module keys below instead. Enforced at runtime (Tasks.psm1), not by this schema.",
       "additionalProperties": false,
+      "patternProperties": {
+        "^[^.\\s/\\\\]+\\.[^.\\s/\\\\]+\\.[^.\\s/\\\\]+$": {
+          "description": "A plugin handler, '<organization>.<plugin>.<handler>', from a plugin declared under the root 'plugins' list. The plugin defines the value's shape."
+        }
+      },
       "properties": {
         "name": {
           "type": "string",

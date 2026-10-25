@@ -53,7 +53,7 @@ Relative paths inside `hosts/` and `variables/` files, such as `copy.src`, resol
 
 ## `variables/`: per user
 
-`variables/` accepts the same machine overlays, plus one more: **`<USERNAME>.yml`**, named after the `USERNAME` environment variable, which merges after all the others. Use it for settings that follow a person across machines:
+`variables/` accepts the same machine overlays, plus one more: **`<user>.yml`**, named after the current user, which merges after all the others. Use it for settings that follow a person across machines:
 
 ```yaml
 # variables/ryan.yml
@@ -67,7 +67,13 @@ tasks:
     pipx: { package: posting }
 ```
 
-Windows always sets `USERNAME`. Many Linux and macOS shells set only `USER`, so the `<USERNAME>.yml` file is skipped there unless you export `USERNAME` (for example, `export USERNAME=$USER` in your shell profile). Machine overlays such as `variables/linux.yml` and `variables/<hostname>.yml` work everywhere.
+ironstate looks for the file under each of these names:
+
+- The `user_name` [fact](./facts-vars#facts). On Linux and macOS this works even when `USERNAME` isn't set.
+- The `USERNAME` environment variable, when it differs from the fact.
+- The lowercase form of each, which is the name [`ironstate init`](../cli/commands/init) creates.
+
+A `DOMAIN\` prefix is dropped, so `CORP\ryan` looks for `ryan.yml`. Each matching file is merged once, in that order. Usually these are the same name, so only one file applies.
 
 ## Merge order
 
@@ -77,7 +83,7 @@ hosts/main.yml
 hosts/<overlays>           least to most specific
 variables/main.yml
 variables/<overlays>       least to most specific
-variables/<USERNAME>.yml
+variables/<user>.yml
 ```
 
 After that, inventory variables, `--vars-file`, and `--var` are applied. See [Variable precedence](./facts-vars#variable-precedence).

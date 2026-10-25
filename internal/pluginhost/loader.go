@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"github.com/hashicorp/go-hclog"
@@ -15,11 +16,19 @@ import (
 	pluginpb "github.com/TacoContent/ironstate/sdk/proto"
 )
 
-// Client owns one external plugin process and its discovered handlers.
+// Client owns one external plugin process and its discovered handlers and
+// filters.
 type Client struct {
 	client   *pluginlib.Client
+	remote   pluginpb.HandlerPluginClient
 	handlers map[string]engine.Handler
+	filters  []string
 }
+
+// FilterFunc is one plugin-provided filter, callable like a built-in.
+type FilterFunc func(value any, args []any) (any, error)
+
+var filterNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // Launch starts command, verifies its plugin handshake, and discovers its
 // declared handlers. The returned client must be closed when the run ends.
@@ -88,15 +97,46 @@ func launch(command *exec.Cmd, filters expr.Filters) (*Client, error) {
 		metadata := listed.GetHandlerMetadata()[name]
 		emoji := listed.GetHandlerEmojis()[name]
 		var requiredTools []string
+		factProducer := false
 		if metadata != nil {
 			if metadata.GetEmoji() != "" {
 				emoji = metadata.GetEmoji()
 			}
 			requiredTools = metadata.GetRequiredTools()
+			factProducer = metadata.GetFactProducer()
 		}
-		handlers[name] = handlerAdapter{client: remote, name: name, emoji: emoji, requiredTools: requiredTools, callbacks: callbacks}
+		handlers[name] = newAdapter(handlerAdapter{client: remote, name: name, emoji: emoji, requiredTools: requiredTools, callbacks: callbacks}, factProducer)
 	}
-	return &Client{client: client, handlers: handlers}, nil
+	for _, name := range listed.GetFilterNames() {
+		if !filterNamePattern.MatchString(name) {
+			client.Kill()
+			return nil, fmt.Errorf("plugin declared invalid filter name %q; use letters, digits, and underscores", name)
+		}
+	}
+	return &Client{client: client, remote: remote, handlers: handlers, filters: append([]string(nil), listed.GetFilterNames()...)}, nil
+}
+
+// FilterNames returns the plugin's declared filter names, unqualified.
+func (c *Client) FilterNames() []string {
+	if c == nil {
+		return nil
+	}
+	return append([]string(nil), c.filters...)
+}
+
+// Filters returns the plugin's filters by unqualified name.
+func (c *Client) Filters() map[string]FilterFunc {
+	if c == nil {
+		return nil
+	}
+	result := make(map[string]FilterFunc, len(c.filters))
+	for _, name := range c.filters {
+		filterName := name
+		result[filterName] = func(value any, args []any) (any, error) {
+			return callFilter(c.remote, filterName, value, args)
+		}
+	}
+	return result
 }
 
 // Handlers returns the plugin's discovered handlers by unqualified name.

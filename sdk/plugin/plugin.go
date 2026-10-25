@@ -4,6 +4,8 @@ package plugin
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"sort"
 
 	pluginlib "github.com/hashicorp/go-plugin"
@@ -50,13 +52,31 @@ type BrokeredHandlerClient interface {
 	CallbackBroker() *pluginlib.GRPCBroker
 }
 
+// ServeConfig describes everything one plugin binary contributes to the host.
+type ServeConfig struct {
+	// Handlers are addressed in playbooks as <organization>.<plugin>.<name>.
+	Handlers map[string]handler.Handler
+	// Filters are added to the host's '|' pipeline as
+	// <organization>.<plugin>.<name>, and also as the bare <name> when no
+	// built-in, script, or earlier plugin filter already uses it. Names must
+	// be identifiers: a letter or underscore, then letters, digits, or
+	// underscores.
+	Filters map[string]handler.Filter
+}
+
 // Serve starts an external handler plugin. It does not return.
 func Serve(handlers map[string]handler.Handler) {
+	ServeWithConfig(ServeConfig{Handlers: handlers})
+}
+
+// ServeWithConfig starts an external plugin that may provide handlers,
+// filters, or both. It does not return.
+func ServeWithConfig(config ServeConfig) {
 	pluginlib.Serve(&pluginlib.ServeConfig{
 		HandshakeConfig: handshakeConfig,
 		VersionedPlugins: map[int]pluginlib.PluginSet{
 			ProtocolVersion: {
-				HandlerServiceName: grpcPlugin{handlers: handlers},
+				HandlerServiceName: grpcPlugin{handlers: config.Handlers, filters: config.Filters},
 			},
 		},
 		GRPCServer: pluginlib.DefaultGRPCServer,
@@ -66,10 +86,11 @@ func Serve(handlers map[string]handler.Handler) {
 type grpcPlugin struct {
 	pluginlib.NetRPCUnsupportedPlugin
 	handlers map[string]handler.Handler
+	filters  map[string]handler.Filter
 }
 
 func (p grpcPlugin) GRPCServer(broker *pluginlib.GRPCBroker, server *grpc.Server) error {
-	pluginpb.RegisterHandlerPluginServer(server, handlerServer{handlers: p.handlers, broker: broker})
+	pluginpb.RegisterHandlerPluginServer(server, handlerServer{handlers: p.handlers, filters: p.filters, broker: broker})
 	return nil
 }
 
@@ -87,6 +108,7 @@ func (c brokeredHandlerClient) CallbackBroker() *pluginlib.GRPCBroker { return c
 type handlerServer struct {
 	pluginpb.UnimplementedHandlerPluginServer
 	handlers map[string]handler.Handler
+	filters  map[string]handler.Filter
 	broker   *pluginlib.GRPCBroker
 }
 
@@ -104,12 +126,46 @@ func (s handlerServer) ListHandlers(_ context.Context, _ *pluginpb.ListHandlersR
 		if provider, ok := registered.(handler.RequiredToolsProvider); ok {
 			info.RequiredTools = provider.RequiredTools()
 		}
-		if info.Emoji != "" || len(info.RequiredTools) > 0 {
+		if _, ok := registered.(handler.FactProducer); ok {
+			info.FactProducer = true
+		}
+		if info.Emoji != "" || len(info.RequiredTools) > 0 || info.FactProducer {
 			metadata[name] = info
 		}
 	}
 	sort.Strings(names)
-	return &pluginpb.ListHandlersResponse{HandlerNames: names, HandlerEmojis: emojis, HandlerMetadata: metadata}, nil
+	filterNames := make([]string, 0, len(s.filters))
+	for name, fn := range s.filters {
+		if fn != nil {
+			filterNames = append(filterNames, name)
+		}
+	}
+	sort.Strings(filterNames)
+	return &pluginpb.ListHandlersResponse{HandlerNames: names, HandlerEmojis: emojis, HandlerMetadata: metadata, FilterNames: filterNames}, nil
+}
+
+func (s handlerServer) CallFilter(_ context.Context, request *pluginpb.CallFilterRequest) (*pluginpb.CallFilterResponse, error) {
+	fn, ok := s.filters[request.GetName()]
+	if !ok || fn == nil {
+		return nil, status.Errorf(codes.NotFound, "filter %q is not provided by this plugin", request.GetName())
+	}
+	var value any
+	if request.GetValue() != nil {
+		value = request.GetValue().AsInterface()
+	}
+	args := make([]any, 0, len(request.GetArgs()))
+	for _, arg := range request.GetArgs() {
+		args = append(args, arg.AsInterface())
+	}
+	result, err := fn(value, args)
+	if err != nil {
+		return nil, handlerError(err)
+	}
+	encoded, err := encodeValue(result)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "filter %q result: %v", request.GetName(), err)
+	}
+	return &pluginpb.CallFilterResponse{Result: encoded}, nil
 }
 
 func (s handlerServer) Test(_ context.Context, request *pluginpb.HandlerRequest) (*pluginpb.TestResponse, error) {
@@ -334,6 +390,23 @@ func execResult(value handler.ExecResult) (*pluginpb.ExecResult, error) {
 		StderrLines: value.StderrLines,
 		Extra:       extra,
 	}, nil
+}
+
+// encodeValue converts a Go value to a protobuf Value, falling back to a
+// JSON round trip for typed slices and maps such as []string.
+func encodeValue(value any) (*structpb.Value, error) {
+	if converted, err := structpb.NewValue(value); err == nil {
+		return converted, nil
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("value of type %T is not JSON-compatible: %w", value, err)
+	}
+	var generic any
+	if err := json.Unmarshal(data, &generic); err != nil {
+		return nil, err
+	}
+	return structpb.NewValue(generic)
 }
 
 func handlerError(err error) error {

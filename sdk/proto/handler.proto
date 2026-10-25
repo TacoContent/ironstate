@@ -15,6 +15,7 @@ service HandlerPlugin {
   rpc FactName(FactNameRequest) returns (FactNameResponse);
   rpc ScanRole(ScanRoleRequest) returns (ScanRoleResponse);
   rpc Scan(ScanRequest) returns (ScanResponse);
+  rpc CallFilter(CallFilterRequest) returns (CallFilterResponse);
 }
 
 service HandlerHostCallback {
@@ -69,11 +70,23 @@ message ListHandlersResponse {
   repeated string handler_names = 1;
   map<string, string> handler_emojis = 2;
   map<string, HandlerMetadata> handler_metadata = 3;
+  repeated string filter_names = 4;
 }
 
 message HandlerMetadata {
   string emoji = 1;
   repeated string required_tools = 2;
+  bool fact_producer = 3;
+}
+
+message CallFilterRequest {
+  string name = 1;
+  google.protobuf.Value value = 2;
+  repeated google.protobuf.Value args = 3;
+}
+
+message CallFilterResponse {
+  google.protobuf.Value result = 1;
 }
 
 message FactNameRequest {

@@ -139,8 +139,8 @@ tasks:
         - --to=${{ facts.local_bin_path | join('oh-my-posh.exe') }}
         - --upgrade-only
         - --non-interactive
-      when: 
-        - facts.os_family == 'windows'
+    when: 
+      - facts.os_family == 'windows'
 
   - name: Install Oh-My-Posh
     xget:
@@ -150,8 +150,8 @@ tasks:
         - --to=${{ facts.local_bin_path | join('oh-my-posh') }}
         - --upgrade-only
         - --non-interactive
-      when: 
-        - facts.os_family != 'windows'
+    when: 
+      - facts.os_family != 'windows'
 
   - name: Copy Oh-My-Posh Configuration
     copy:

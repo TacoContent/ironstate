@@ -48,12 +48,19 @@ Failures report the file, YAML line and column, and the JSON-schema instance pat
 path/to/playbook/roles/shells/main.yml:12:7: /tasks/0/shell: ...
 ```
 
-> [!NOTE]
-> Every YAML file under the playbook directory is checked against the **playbook** schema. Keep other YAML files outside the playbook directory if they would not pass, such as an inventory, which uses [`inventory.schema.json`](../../playbooks/inventory).
+Some files get special handling:
+
+| File | Handling |
+| --- | --- |
+| Inventory files: top-level keys are only `defaults`, `hosts`, and `groups` | Checked against [`inventory.schema.json`](../../playbooks/inventory) instead. This includes the fragments of an inventory directory. |
+| `ironstate.lock.yaml` | Skipped. See [Pin with a lockfile](../../plugins/using#pin-with-a-lockfile). |
+| Directories whose names start with `.`, such as `.git` and `.github` | Skipped. |
+
+Playbooks that use [plugins](../../plugins/using) pass: the schema accepts the `plugins:` list and any `organization.plugin.handler` task key. It can't check the fields inside a plugin task, because each plugin defines its own. Use [`ironstate doctor --playbook`](./doctor) to check that each plugin handler exists.
 
 ## Schema lookup
 
-`validate` looks for `ironstate.schema.json` in this order:
+`validate` looks for `ironstate.schema.json` (and `inventory.schema.json`, for inventory files) in this order:
 
 1. The current directory.
 2. Next to the playbook.

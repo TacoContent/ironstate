@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -12,8 +13,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/TacoContent/ironstate/internal/engine"
+	"github.com/TacoContent/ironstate/internal/facts"
 	"github.com/TacoContent/ironstate/internal/filters"
 	"github.com/TacoContent/ironstate/internal/model"
+	"github.com/TacoContent/ironstate/internal/packages"
 	"github.com/TacoContent/ironstate/internal/pluginhost"
 )
 
@@ -237,50 +240,162 @@ func newPluginInfoCommand() *cobra.Command {
 	}
 }
 
+var (
+	pluginUpdateStore   = pluginhost.DefaultStore
+	pluginUpdateInstall = pluginhost.Install
+)
+
 func newPluginUpdateCommand() *cobra.Command {
-	var all bool
+	var all, lockFileOnly bool
+	var playbook string
 	command := &cobra.Command{
-		Use: "update <organization.plugin>[@version]", Short: "Install an updated plugin version", Args: cobra.MaximumNArgs(1),
+		Use:   "update [<organization.plugin>[@version]]",
+		Short: "Install an updated plugin version and pin it in ironstate.lock.yaml",
+		Long: `Install an updated plugin version and pin it in ironstate.lock.yaml.
+
+After installing, update writes ironstate.lock.yaml beside the playbook
+(--playbook, default: the current directory) with the version and checksum
+of every plugin the playbook declares. Without a playbook, only the install
+happens.
+
+--lock-file-only skips installing and pins the plugins that are already
+installed. With no plugin argument it re-pins every declared plugin.`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			if all == (len(args) == 1) {
+			if !lockFileOnly && all == (len(args) == 1) {
 				return fmt.Errorf("specify one plugin or --all")
 			}
-			store, err := pluginhost.DefaultStore()
+			if lockFileOnly && all && len(args) == 1 {
+				return fmt.Errorf("specify one plugin or --all, not both")
+			}
+			store, err := pluginUpdateStore()
 			if err != nil {
 				return err
 			}
-			references := args
-			if all {
-				manifests, err := store.ListInstalled()
-				if err != nil {
-					return err
+			updated := map[string]pluginhost.Manifest{}
+			if !lockFileOnly {
+				references := args
+				if all {
+					manifests, err := store.ListInstalled()
+					if err != nil {
+						return err
+					}
+					seen := map[string]bool{}
+					for _, manifest := range manifests {
+						if !seen[manifest.Namespace()] {
+							references = append(references, manifest.Namespace())
+							seen[manifest.Namespace()] = true
+						}
+					}
 				}
-				seen := map[string]bool{}
-				for _, manifest := range manifests {
-					if !seen[manifest.Namespace()] {
-						references = append(references, manifest.Namespace())
-						seen[manifest.Namespace()] = true
+				for _, reference := range references {
+					namespace, version, err := parsePluginReference(reference)
+					if err != nil {
+						return err
+					}
+					manifest, err := pluginUpdateInstall(command.Context(), store, namespace, version)
+					if err != nil {
+						return err
+					}
+					updated[namespace] = manifest
+					if _, err := fmt.Fprintf(command.OutOrStdout(), "updated %s@%s\n", manifest.Namespace(), manifest.Version); err != nil {
+						return err
 					}
 				}
 			}
-			for _, reference := range references {
-				namespace, version, err := parsePluginReference(reference)
-				if err != nil {
-					return err
-				}
-				manifest, err := pluginhost.Install(command.Context(), store, namespace, version)
-				if err != nil {
-					return err
-				}
-				if _, err := fmt.Fprintf(command.OutOrStdout(), "updated %s@%s\n", manifest.Namespace(), manifest.Version); err != nil {
-					return err
-				}
-			}
-			return nil
+			explicitPlaybook := command.Flags().Changed("playbook") || lockFileOnly
+			return writePluginLock(command, store, playbook, explicitPlaybook, updated, args, lockFileOnly)
 		},
 	}
 	command.Flags().BoolVar(&all, "all", false, "update every installed plugin")
+	command.Flags().BoolVar(&lockFileOnly, "lock-file-only", false, "only write ironstate.lock.yaml from already-installed plugins; install nothing")
+	command.Flags().StringVar(&playbook, "playbook", ".", "playbook whose ironstate.lock.yaml is written")
 	return command
+}
+
+// writePluginLock pins every plugin the playbook declares. Plugins updated in
+// this run use their new manifest; with lockFileOnly, the selected (or all)
+// declared plugins are re-resolved from the store; any other declared plugin
+// keeps its existing lock entry or is resolved at its declared version.
+func writePluginLock(command *cobra.Command, store *pluginhost.Store, playbook string, explicit bool, updated map[string]pluginhost.Manifest, args []string, lockFileOnly bool) error {
+	out := command.OutOrStdout()
+	resolvedFile, err := packages.ResolvePlaybookPath(playbook)
+	if err != nil {
+		if explicit {
+			return NewLoadError(err)
+		}
+		_, err = fmt.Fprintln(out, "no playbook found; ironstate.lock.yaml not written (use --playbook)")
+		return err
+	}
+	doc, err := packages.LoadHierarchy(resolvedFile, facts.Gather())
+	if err != nil {
+		return NewLoadError(err)
+	}
+	declared, err := model.Plugins(model.AsMap(doc))
+	if err != nil {
+		return NewLoadError(err)
+	}
+	root := filepath.Dir(resolvedFile)
+	if len(declared) == 0 {
+		_, err = fmt.Fprintf(out, "%s declares no plugins; ironstate.lock.yaml not written\n", resolvedFile)
+		return err
+	}
+	declaredVersions := map[string]string{}
+	for _, plugin := range declared {
+		declaredVersions[plugin.Namespace] = plugin.Version
+	}
+	selected := map[string]string{}
+	for _, arg := range args {
+		if !lockFileOnly {
+			break
+		}
+		namespace, version, err := parsePluginReference(arg)
+		if err != nil {
+			return err
+		}
+		if _, ok := declaredVersions[namespace]; !ok {
+			return fmt.Errorf("plugin %s is not declared by %s", namespace, resolvedFile)
+		}
+		if !strings.Contains(arg, "@") {
+			version = declaredVersions[namespace]
+		}
+		selected[namespace] = version
+	}
+	existing, err := pluginhost.LoadLockFile(root)
+	if err != nil {
+		return err
+	}
+	lock := pluginhost.LockFile{Plugins: map[string]pluginhost.LockedPlugin{}}
+	for _, plugin := range declared {
+		namespace := plugin.Namespace
+		if manifest, ok := updated[namespace]; ok {
+			lock.Plugins[namespace] = pluginhost.LockedPlugin{Version: manifest.Version, Checksum: manifest.Checksum}
+			continue
+		}
+		version, reresolve := selected[namespace]
+		if lockFileOnly && len(selected) == 0 {
+			version, reresolve = plugin.Version, true
+		}
+		if !reresolve && existing != nil {
+			if locked, ok := existing.Plugins[namespace]; ok {
+				lock.Plugins[namespace] = locked
+				continue
+			}
+		}
+		if !reresolve {
+			version = plugin.Version
+		}
+		manifest, err := store.ResolveVersion(namespace, version)
+		if err != nil {
+			return fmt.Errorf("plugin %s@%s is not installed; run: ironstate plugin install %s@%s", namespace, version, namespace, version)
+		}
+		lock.Plugins[namespace] = pluginhost.LockedPlugin{Version: manifest.Version, Checksum: manifest.Checksum}
+	}
+	if err := pluginhost.WriteLockFile(root, lock); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(out, "wrote %s (%d plugin(s))\n", filepath.Join(root, "ironstate.lock.yaml"), len(lock.Plugins))
+	return err
 }
 
 func newPluginUninstallCommand() *cobra.Command {

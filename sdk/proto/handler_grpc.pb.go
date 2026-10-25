@@ -27,6 +27,7 @@ const (
 	HandlerPlugin_FactName_FullMethodName     = "/ironstate.plugin.v1.HandlerPlugin/FactName"
 	HandlerPlugin_ScanRole_FullMethodName     = "/ironstate.plugin.v1.HandlerPlugin/ScanRole"
 	HandlerPlugin_Scan_FullMethodName         = "/ironstate.plugin.v1.HandlerPlugin/Scan"
+	HandlerPlugin_CallFilter_FullMethodName   = "/ironstate.plugin.v1.HandlerPlugin/CallFilter"
 )
 
 // HandlerPluginClient is the client API for HandlerPlugin service.
@@ -41,6 +42,7 @@ type HandlerPluginClient interface {
 	FactName(ctx context.Context, in *FactNameRequest, opts ...grpc.CallOption) (*FactNameResponse, error)
 	ScanRole(ctx context.Context, in *ScanRoleRequest, opts ...grpc.CallOption) (*ScanRoleResponse, error)
 	Scan(ctx context.Context, in *ScanRequest, opts ...grpc.CallOption) (*ScanResponse, error)
+	CallFilter(ctx context.Context, in *CallFilterRequest, opts ...grpc.CallOption) (*CallFilterResponse, error)
 }
 
 type handlerPluginClient struct {
@@ -131,6 +133,16 @@ func (c *handlerPluginClient) Scan(ctx context.Context, in *ScanRequest, opts ..
 	return out, nil
 }
 
+func (c *handlerPluginClient) CallFilter(ctx context.Context, in *CallFilterRequest, opts ...grpc.CallOption) (*CallFilterResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CallFilterResponse)
+	err := c.cc.Invoke(ctx, HandlerPlugin_CallFilter_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HandlerPluginServer is the server API for HandlerPlugin service.
 // All implementations must embed UnimplementedHandlerPluginServer
 // for forward compatibility.
@@ -143,6 +155,7 @@ type HandlerPluginServer interface {
 	FactName(context.Context, *FactNameRequest) (*FactNameResponse, error)
 	ScanRole(context.Context, *ScanRoleRequest) (*ScanRoleResponse, error)
 	Scan(context.Context, *ScanRequest) (*ScanResponse, error)
+	CallFilter(context.Context, *CallFilterRequest) (*CallFilterResponse, error)
 	mustEmbedUnimplementedHandlerPluginServer()
 }
 
@@ -176,6 +189,9 @@ func (UnimplementedHandlerPluginServer) ScanRole(context.Context, *ScanRoleReque
 }
 func (UnimplementedHandlerPluginServer) Scan(context.Context, *ScanRequest) (*ScanResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Scan not implemented")
+}
+func (UnimplementedHandlerPluginServer) CallFilter(context.Context, *CallFilterRequest) (*CallFilterResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CallFilter not implemented")
 }
 func (UnimplementedHandlerPluginServer) mustEmbedUnimplementedHandlerPluginServer() {}
 func (UnimplementedHandlerPluginServer) testEmbeddedByValue()                       {}
@@ -342,6 +358,24 @@ func _HandlerPlugin_Scan_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HandlerPlugin_CallFilter_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CallFilterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HandlerPluginServer).CallFilter(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HandlerPlugin_CallFilter_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HandlerPluginServer).CallFilter(ctx, req.(*CallFilterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // HandlerPlugin_ServiceDesc is the grpc.ServiceDesc for HandlerPlugin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -380,6 +414,10 @@ var HandlerPlugin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Scan",
 			Handler:    _HandlerPlugin_Scan_Handler,
+		},
+		{
+			MethodName: "CallFilter",
+			Handler:    _HandlerPlugin_CallFilter_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

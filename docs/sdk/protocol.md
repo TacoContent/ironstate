@@ -40,16 +40,19 @@ Implemented by the plugin.
 
 | RPC | Request → Response | Description |
 | --- | --- | --- |
-| `ListHandlers` | `ListHandlersRequest` → `ListHandlersResponse` | Handler names, plus per-handler `HandlerMetadata` (`emoji`, `required_tools`). The emojis are also mirrored in `handler_emojis`. |
+| `ListHandlers` | `ListHandlersRequest` → `ListHandlersResponse` | Handler names, plus per-handler `HandlerMetadata` (`emoji`, `required_tools`, `fact_producer`), and `filter_names`. The emojis are also mirrored in `handler_emojis`. |
 | `Test` | `HandlerRequest` → `TestResponse{satisfied}` | Whether the item is currently present. |
 | `Describe` | `DescribeRequest{handler, action}` → `DescribeResponse{description}` | `action` is `"Install"` or `"Uninstall"`. |
 | `Install` | `HandlerRequest` → `ExecResult` | Apply the item. |
 | `Uninstall` | `HandlerRequest` → `ExecResult` | Remove the item. |
-| `FactName` | `FactNameRequest` → `FactNameResponse{name, produced}` | Optional. See [`FactProducer`](./handler#factproducer). |
+| `FactName` | `FactNameRequest` → `FactNameResponse{name, produced}` | Optional. Called only for handlers whose metadata sets `fact_producer: true`. See [`FactProducer`](./handler#factproducer). |
+| `CallFilter` | `CallFilterRequest{name, value, args}` → `CallFilterResponse{result}` | Optional. Called only for names listed in `filter_names`. `value`, `args`, and `result` are `google.protobuf.Value`. See [`ServeWithConfig`](./plugin#servewithconfig). |
 | `ScanRole` | `ScanRoleRequest` → `ScanRoleResponse{role, supported}` | Optional. |
 | `Scan` | `ScanRequest` → `ScanResponse{items}` | Optional. Return `UNIMPLEMENTED` when unsupported. |
 
 `HandlerRequest` carries `handler_name`, `item` (a `Struct`), `name`, and `context`. `Context` carries `flat` (a `Struct`), `apply`, and `become{enabled, user}`.
+
+`fact_producer`, `filter_names`, and `CallFilter` were added within protocol version 1. A plugin built with an older SDK doesn't set them, and ironstate treats it as having no fact handlers and no filters.
 
 ## `HandlerHostCallback` service
 
@@ -65,7 +68,7 @@ To reach it, read the numeric broker ID that the host puts in `context.flat["__i
 
 ## Errors
 
-- Return gRPC `NOT_FOUND` for an unknown `handler_name`.
+- Return gRPC `NOT_FOUND` for an unknown `handler_name` or filter `name`.
 - Any other gRPC error fails the task, and its message is shown to the user.
 - A non-zero `ExecResult.rc` is a normal failed result, not an RPC error.
 

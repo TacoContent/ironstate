@@ -1,6 +1,7 @@
 package facts
 
 import (
+	"reflect"
 	"runtime"
 	"testing"
 )
@@ -140,3 +141,24 @@ type notFoundErr struct{}
 func (notFoundErr) Error() string { return "not found" }
 
 var errNotFound = notFoundErr{}
+
+func TestUserNameCandidatesConsidersFactAndUSERNAME(t *testing.T) {
+	for _, tc := range []struct {
+		name, fact, env string
+		want            []string
+	}{
+		{"fact first then env", "alice", "bob", []string{"alice", "bob"}},
+		{"same name once", "alice", "ALICE", []string{"alice"}},
+		{"strips domain", `CORP\alice`, "", []string{"alice"}},
+		{"env only", "", "bob", []string{"bob"}},
+		{"neither", "", "", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("USERNAME", tc.env)
+			got := UserNameCandidates(map[string]any{"user_name": tc.fact})
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("UserNameCandidates = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}

@@ -467,6 +467,7 @@ type ListHandlersResponse struct {
 	HandlerNames    []string                    `protobuf:"bytes,1,rep,name=handler_names,json=handlerNames,proto3" json:"handler_names,omitempty"`
 	HandlerEmojis   map[string]string           `protobuf:"bytes,2,rep,name=handler_emojis,json=handlerEmojis,proto3" json:"handler_emojis,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	HandlerMetadata map[string]*HandlerMetadata `protobuf:"bytes,3,rep,name=handler_metadata,json=handlerMetadata,proto3" json:"handler_metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	FilterNames     []string                    `protobuf:"bytes,4,rep,name=filter_names,json=filterNames,proto3" json:"filter_names,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -522,10 +523,18 @@ func (x *ListHandlersResponse) GetHandlerMetadata() map[string]*HandlerMetadata 
 	return nil
 }
 
+func (x *ListHandlersResponse) GetFilterNames() []string {
+	if x != nil {
+		return x.FilterNames
+	}
+	return nil
+}
+
 type HandlerMetadata struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Emoji         string                 `protobuf:"bytes,1,opt,name=emoji,proto3" json:"emoji,omitempty"`
 	RequiredTools []string               `protobuf:"bytes,2,rep,name=required_tools,json=requiredTools,proto3" json:"required_tools,omitempty"`
+	FactProducer  bool                   `protobuf:"varint,3,opt,name=fact_producer,json=factProducer,proto3" json:"fact_producer,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -574,6 +583,117 @@ func (x *HandlerMetadata) GetRequiredTools() []string {
 	return nil
 }
 
+func (x *HandlerMetadata) GetFactProducer() bool {
+	if x != nil {
+		return x.FactProducer
+	}
+	return false
+}
+
+type CallFilterRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Value         *structpb.Value        `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	Args          []*structpb.Value      `protobuf:"bytes,3,rep,name=args,proto3" json:"args,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CallFilterRequest) Reset() {
+	*x = CallFilterRequest{}
+	mi := &file_handler_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CallFilterRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CallFilterRequest) ProtoMessage() {}
+
+func (x *CallFilterRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_handler_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CallFilterRequest.ProtoReflect.Descriptor instead.
+func (*CallFilterRequest) Descriptor() ([]byte, []int) {
+	return file_handler_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *CallFilterRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CallFilterRequest) GetValue() *structpb.Value {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+func (x *CallFilterRequest) GetArgs() []*structpb.Value {
+	if x != nil {
+		return x.Args
+	}
+	return nil
+}
+
+type CallFilterResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Result        *structpb.Value        `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CallFilterResponse) Reset() {
+	*x = CallFilterResponse{}
+	mi := &file_handler_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CallFilterResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CallFilterResponse) ProtoMessage() {}
+
+func (x *CallFilterResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_handler_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CallFilterResponse.ProtoReflect.Descriptor instead.
+func (*CallFilterResponse) Descriptor() ([]byte, []int) {
+	return file_handler_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *CallFilterResponse) GetResult() *structpb.Value {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
 type FactNameRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	HandlerName   string                 `protobuf:"bytes,1,opt,name=handler_name,json=handlerName,proto3" json:"handler_name,omitempty"`
@@ -584,7 +704,7 @@ type FactNameRequest struct {
 
 func (x *FactNameRequest) Reset() {
 	*x = FactNameRequest{}
-	mi := &file_handler_proto_msgTypes[10]
+	mi := &file_handler_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -596,7 +716,7 @@ func (x *FactNameRequest) String() string {
 func (*FactNameRequest) ProtoMessage() {}
 
 func (x *FactNameRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_handler_proto_msgTypes[10]
+	mi := &file_handler_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -609,7 +729,7 @@ func (x *FactNameRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FactNameRequest.ProtoReflect.Descriptor instead.
 func (*FactNameRequest) Descriptor() ([]byte, []int) {
-	return file_handler_proto_rawDescGZIP(), []int{10}
+	return file_handler_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *FactNameRequest) GetHandlerName() string {
@@ -636,7 +756,7 @@ type FactNameResponse struct {
 
 func (x *FactNameResponse) Reset() {
 	*x = FactNameResponse{}
-	mi := &file_handler_proto_msgTypes[11]
+	mi := &file_handler_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -648,7 +768,7 @@ func (x *FactNameResponse) String() string {
 func (*FactNameResponse) ProtoMessage() {}
 
 func (x *FactNameResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_handler_proto_msgTypes[11]
+	mi := &file_handler_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -661,7 +781,7 @@ func (x *FactNameResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FactNameResponse.ProtoReflect.Descriptor instead.
 func (*FactNameResponse) Descriptor() ([]byte, []int) {
-	return file_handler_proto_rawDescGZIP(), []int{11}
+	return file_handler_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *FactNameResponse) GetName() string {
@@ -687,7 +807,7 @@ type ScanRoleRequest struct {
 
 func (x *ScanRoleRequest) Reset() {
 	*x = ScanRoleRequest{}
-	mi := &file_handler_proto_msgTypes[12]
+	mi := &file_handler_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -699,7 +819,7 @@ func (x *ScanRoleRequest) String() string {
 func (*ScanRoleRequest) ProtoMessage() {}
 
 func (x *ScanRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_handler_proto_msgTypes[12]
+	mi := &file_handler_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -712,7 +832,7 @@ func (x *ScanRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScanRoleRequest.ProtoReflect.Descriptor instead.
 func (*ScanRoleRequest) Descriptor() ([]byte, []int) {
-	return file_handler_proto_rawDescGZIP(), []int{12}
+	return file_handler_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ScanRoleRequest) GetHandlerName() string {
@@ -732,7 +852,7 @@ type ScanRoleResponse struct {
 
 func (x *ScanRoleResponse) Reset() {
 	*x = ScanRoleResponse{}
-	mi := &file_handler_proto_msgTypes[13]
+	mi := &file_handler_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -744,7 +864,7 @@ func (x *ScanRoleResponse) String() string {
 func (*ScanRoleResponse) ProtoMessage() {}
 
 func (x *ScanRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_handler_proto_msgTypes[13]
+	mi := &file_handler_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -757,7 +877,7 @@ func (x *ScanRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScanRoleResponse.ProtoReflect.Descriptor instead.
 func (*ScanRoleResponse) Descriptor() ([]byte, []int) {
-	return file_handler_proto_rawDescGZIP(), []int{13}
+	return file_handler_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ScanRoleResponse) GetRole() string {
@@ -784,7 +904,7 @@ type ScanRequest struct {
 
 func (x *ScanRequest) Reset() {
 	*x = ScanRequest{}
-	mi := &file_handler_proto_msgTypes[14]
+	mi := &file_handler_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -796,7 +916,7 @@ func (x *ScanRequest) String() string {
 func (*ScanRequest) ProtoMessage() {}
 
 func (x *ScanRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_handler_proto_msgTypes[14]
+	mi := &file_handler_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -809,7 +929,7 @@ func (x *ScanRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScanRequest.ProtoReflect.Descriptor instead.
 func (*ScanRequest) Descriptor() ([]byte, []int) {
-	return file_handler_proto_rawDescGZIP(), []int{14}
+	return file_handler_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ScanRequest) GetHandlerName() string {
@@ -835,7 +955,7 @@ type ScanResponse struct {
 
 func (x *ScanResponse) Reset() {
 	*x = ScanResponse{}
-	mi := &file_handler_proto_msgTypes[15]
+	mi := &file_handler_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -847,7 +967,7 @@ func (x *ScanResponse) String() string {
 func (*ScanResponse) ProtoMessage() {}
 
 func (x *ScanResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_handler_proto_msgTypes[15]
+	mi := &file_handler_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -860,7 +980,7 @@ func (x *ScanResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScanResponse.ProtoReflect.Descriptor instead.
 func (*ScanResponse) Descriptor() ([]byte, []int) {
-	return file_handler_proto_rawDescGZIP(), []int{15}
+	return file_handler_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ScanResponse) GetItems() []*ScanItem {
@@ -882,7 +1002,7 @@ type ScanItem struct {
 
 func (x *ScanItem) Reset() {
 	*x = ScanItem{}
-	mi := &file_handler_proto_msgTypes[16]
+	mi := &file_handler_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -894,7 +1014,7 @@ func (x *ScanItem) String() string {
 func (*ScanItem) ProtoMessage() {}
 
 func (x *ScanItem) ProtoReflect() protoreflect.Message {
-	mi := &file_handler_proto_msgTypes[16]
+	mi := &file_handler_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -907,7 +1027,7 @@ func (x *ScanItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScanItem.ProtoReflect.Descriptor instead.
 func (*ScanItem) Descriptor() ([]byte, []int) {
-	return file_handler_proto_rawDescGZIP(), []int{16}
+	return file_handler_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ScanItem) GetModule() string {
@@ -948,7 +1068,7 @@ type RenderTemplateRequest struct {
 
 func (x *RenderTemplateRequest) Reset() {
 	*x = RenderTemplateRequest{}
-	mi := &file_handler_proto_msgTypes[17]
+	mi := &file_handler_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -960,7 +1080,7 @@ func (x *RenderTemplateRequest) String() string {
 func (*RenderTemplateRequest) ProtoMessage() {}
 
 func (x *RenderTemplateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_handler_proto_msgTypes[17]
+	mi := &file_handler_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -973,7 +1093,7 @@ func (x *RenderTemplateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenderTemplateRequest.ProtoReflect.Descriptor instead.
 func (*RenderTemplateRequest) Descriptor() ([]byte, []int) {
-	return file_handler_proto_rawDescGZIP(), []int{17}
+	return file_handler_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *RenderTemplateRequest) GetTemplate() string {
@@ -999,7 +1119,7 @@ type RenderTemplateResponse struct {
 
 func (x *RenderTemplateResponse) Reset() {
 	*x = RenderTemplateResponse{}
-	mi := &file_handler_proto_msgTypes[18]
+	mi := &file_handler_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1011,7 +1131,7 @@ func (x *RenderTemplateResponse) String() string {
 func (*RenderTemplateResponse) ProtoMessage() {}
 
 func (x *RenderTemplateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_handler_proto_msgTypes[18]
+	mi := &file_handler_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1024,7 +1144,7 @@ func (x *RenderTemplateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenderTemplateResponse.ProtoReflect.Descriptor instead.
 func (*RenderTemplateResponse) Descriptor() ([]byte, []int) {
-	return file_handler_proto_rawDescGZIP(), []int{18}
+	return file_handler_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *RenderTemplateResponse) GetRendered() string {
@@ -1044,7 +1164,7 @@ type EvaluateConditionRequest struct {
 
 func (x *EvaluateConditionRequest) Reset() {
 	*x = EvaluateConditionRequest{}
-	mi := &file_handler_proto_msgTypes[19]
+	mi := &file_handler_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1056,7 +1176,7 @@ func (x *EvaluateConditionRequest) String() string {
 func (*EvaluateConditionRequest) ProtoMessage() {}
 
 func (x *EvaluateConditionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_handler_proto_msgTypes[19]
+	mi := &file_handler_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1069,7 +1189,7 @@ func (x *EvaluateConditionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluateConditionRequest.ProtoReflect.Descriptor instead.
 func (*EvaluateConditionRequest) Descriptor() ([]byte, []int) {
-	return file_handler_proto_rawDescGZIP(), []int{19}
+	return file_handler_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *EvaluateConditionRequest) GetExpression() string {
@@ -1095,7 +1215,7 @@ type EvaluateConditionResponse struct {
 
 func (x *EvaluateConditionResponse) Reset() {
 	*x = EvaluateConditionResponse{}
-	mi := &file_handler_proto_msgTypes[20]
+	mi := &file_handler_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1107,7 +1227,7 @@ func (x *EvaluateConditionResponse) String() string {
 func (*EvaluateConditionResponse) ProtoMessage() {}
 
 func (x *EvaluateConditionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_handler_proto_msgTypes[20]
+	mi := &file_handler_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1120,7 +1240,7 @@ func (x *EvaluateConditionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluateConditionResponse.ProtoReflect.Descriptor instead.
 func (*EvaluateConditionResponse) Descriptor() ([]byte, []int) {
-	return file_handler_proto_rawDescGZIP(), []int{20}
+	return file_handler_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *EvaluateConditionResponse) GetResult() bool {
@@ -1139,7 +1259,7 @@ type LogRequest struct {
 
 func (x *LogRequest) Reset() {
 	*x = LogRequest{}
-	mi := &file_handler_proto_msgTypes[21]
+	mi := &file_handler_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1151,7 +1271,7 @@ func (x *LogRequest) String() string {
 func (*LogRequest) ProtoMessage() {}
 
 func (x *LogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_handler_proto_msgTypes[21]
+	mi := &file_handler_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1164,7 +1284,7 @@ func (x *LogRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogRequest.ProtoReflect.Descriptor instead.
 func (*LogRequest) Descriptor() ([]byte, []int) {
-	return file_handler_proto_rawDescGZIP(), []int{21}
+	return file_handler_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *LogRequest) GetMessage() string {
@@ -1182,7 +1302,7 @@ type LogResponse struct {
 
 func (x *LogResponse) Reset() {
 	*x = LogResponse{}
-	mi := &file_handler_proto_msgTypes[22]
+	mi := &file_handler_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1194,7 +1314,7 @@ func (x *LogResponse) String() string {
 func (*LogResponse) ProtoMessage() {}
 
 func (x *LogResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_handler_proto_msgTypes[22]
+	mi := &file_handler_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1207,7 +1327,7 @@ func (x *LogResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogResponse.ProtoReflect.Descriptor instead.
 func (*LogResponse) Descriptor() ([]byte, []int) {
-	return file_handler_proto_rawDescGZIP(), []int{22}
+	return file_handler_proto_rawDescGZIP(), []int{24}
 }
 
 var File_handler_proto protoreflect.FileDescriptor
@@ -1242,20 +1362,28 @@ const file_handler_proto_rawDesc = "" +
 	"\x06stderr\x18\x04 \x01(\tR\x06stderr\x12!\n" +
 	"\fstderr_lines\x18\x05 \x03(\tR\vstderrLines\x12-\n" +
 	"\x05extra\x18\x06 \x01(\v2\x17.google.protobuf.StructR\x05extra\"\x15\n" +
-	"\x13ListHandlersRequest\"\xb7\x03\n" +
+	"\x13ListHandlersRequest\"\xda\x03\n" +
 	"\x14ListHandlersResponse\x12#\n" +
 	"\rhandler_names\x18\x01 \x03(\tR\fhandlerNames\x12c\n" +
 	"\x0ehandler_emojis\x18\x02 \x03(\v2<.ironstate.plugin.v1.ListHandlersResponse.HandlerEmojisEntryR\rhandlerEmojis\x12i\n" +
-	"\x10handler_metadata\x18\x03 \x03(\v2>.ironstate.plugin.v1.ListHandlersResponse.HandlerMetadataEntryR\x0fhandlerMetadata\x1a@\n" +
+	"\x10handler_metadata\x18\x03 \x03(\v2>.ironstate.plugin.v1.ListHandlersResponse.HandlerMetadataEntryR\x0fhandlerMetadata\x12!\n" +
+	"\ffilter_names\x18\x04 \x03(\tR\vfilterNames\x1a@\n" +
 	"\x12HandlerEmojisEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1ah\n" +
 	"\x14HandlerMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12:\n" +
-	"\x05value\x18\x02 \x01(\v2$.ironstate.plugin.v1.HandlerMetadataR\x05value:\x028\x01\"N\n" +
+	"\x05value\x18\x02 \x01(\v2$.ironstate.plugin.v1.HandlerMetadataR\x05value:\x028\x01\"s\n" +
 	"\x0fHandlerMetadata\x12\x14\n" +
 	"\x05emoji\x18\x01 \x01(\tR\x05emoji\x12%\n" +
-	"\x0erequired_tools\x18\x02 \x03(\tR\rrequiredTools\"a\n" +
+	"\x0erequired_tools\x18\x02 \x03(\tR\rrequiredTools\x12#\n" +
+	"\rfact_producer\x18\x03 \x01(\bR\ffactProducer\"\x81\x01\n" +
+	"\x11CallFilterRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12,\n" +
+	"\x05value\x18\x02 \x01(\v2\x16.google.protobuf.ValueR\x05value\x12*\n" +
+	"\x04args\x18\x03 \x03(\v2\x16.google.protobuf.ValueR\x04args\"D\n" +
+	"\x12CallFilterResponse\x12.\n" +
+	"\x06result\x18\x01 \x01(\v2\x16.google.protobuf.ValueR\x06result\"a\n" +
 	"\x0fFactNameRequest\x12!\n" +
 	"\fhandler_name\x18\x01 \x01(\tR\vhandlerName\x12+\n" +
 	"\x04item\x18\x02 \x01(\v2\x17.google.protobuf.StructR\x04item\"B\n" +
@@ -1292,7 +1420,7 @@ const file_handler_proto_rawDesc = "" +
 	"\n" +
 	"LogRequest\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\"\r\n" +
-	"\vLogResponse2\xc0\x05\n" +
+	"\vLogResponse2\x9f\x06\n" +
 	"\rHandlerPlugin\x12c\n" +
 	"\fListHandlers\x12(.ironstate.plugin.v1.ListHandlersRequest\x1a).ironstate.plugin.v1.ListHandlersResponse\x12N\n" +
 	"\x04Test\x12#.ironstate.plugin.v1.HandlerRequest\x1a!.ironstate.plugin.v1.TestResponse\x12W\n" +
@@ -1301,7 +1429,9 @@ const file_handler_proto_rawDesc = "" +
 	"\tUninstall\x12#.ironstate.plugin.v1.HandlerRequest\x1a\x1f.ironstate.plugin.v1.ExecResult\x12W\n" +
 	"\bFactName\x12$.ironstate.plugin.v1.FactNameRequest\x1a%.ironstate.plugin.v1.FactNameResponse\x12W\n" +
 	"\bScanRole\x12$.ironstate.plugin.v1.ScanRoleRequest\x1a%.ironstate.plugin.v1.ScanRoleResponse\x12K\n" +
-	"\x04Scan\x12 .ironstate.plugin.v1.ScanRequest\x1a!.ironstate.plugin.v1.ScanResponse2\xbe\x02\n" +
+	"\x04Scan\x12 .ironstate.plugin.v1.ScanRequest\x1a!.ironstate.plugin.v1.ScanResponse\x12]\n" +
+	"\n" +
+	"CallFilter\x12&.ironstate.plugin.v1.CallFilterRequest\x1a'.ironstate.plugin.v1.CallFilterResponse2\xbe\x02\n" +
 	"\x13HandlerHostCallback\x12i\n" +
 	"\x0eRenderTemplate\x12*.ironstate.plugin.v1.RenderTemplateRequest\x1a+.ironstate.plugin.v1.RenderTemplateResponse\x12r\n" +
 	"\x11EvaluateCondition\x12-.ironstate.plugin.v1.EvaluateConditionRequest\x1a..ironstate.plugin.v1.EvaluateConditionResponse\x12H\n" +
@@ -1319,7 +1449,7 @@ func file_handler_proto_rawDescGZIP() []byte {
 	return file_handler_proto_rawDescData
 }
 
-var file_handler_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_handler_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_handler_proto_goTypes = []any{
 	(*Context)(nil),                   // 0: ironstate.plugin.v1.Context
 	(*Become)(nil),                    // 1: ironstate.plugin.v1.Become
@@ -1331,66 +1461,74 @@ var file_handler_proto_goTypes = []any{
 	(*ListHandlersRequest)(nil),       // 7: ironstate.plugin.v1.ListHandlersRequest
 	(*ListHandlersResponse)(nil),      // 8: ironstate.plugin.v1.ListHandlersResponse
 	(*HandlerMetadata)(nil),           // 9: ironstate.plugin.v1.HandlerMetadata
-	(*FactNameRequest)(nil),           // 10: ironstate.plugin.v1.FactNameRequest
-	(*FactNameResponse)(nil),          // 11: ironstate.plugin.v1.FactNameResponse
-	(*ScanRoleRequest)(nil),           // 12: ironstate.plugin.v1.ScanRoleRequest
-	(*ScanRoleResponse)(nil),          // 13: ironstate.plugin.v1.ScanRoleResponse
-	(*ScanRequest)(nil),               // 14: ironstate.plugin.v1.ScanRequest
-	(*ScanResponse)(nil),              // 15: ironstate.plugin.v1.ScanResponse
-	(*ScanItem)(nil),                  // 16: ironstate.plugin.v1.ScanItem
-	(*RenderTemplateRequest)(nil),     // 17: ironstate.plugin.v1.RenderTemplateRequest
-	(*RenderTemplateResponse)(nil),    // 18: ironstate.plugin.v1.RenderTemplateResponse
-	(*EvaluateConditionRequest)(nil),  // 19: ironstate.plugin.v1.EvaluateConditionRequest
-	(*EvaluateConditionResponse)(nil), // 20: ironstate.plugin.v1.EvaluateConditionResponse
-	(*LogRequest)(nil),                // 21: ironstate.plugin.v1.LogRequest
-	(*LogResponse)(nil),               // 22: ironstate.plugin.v1.LogResponse
-	nil,                               // 23: ironstate.plugin.v1.ListHandlersResponse.HandlerEmojisEntry
-	nil,                               // 24: ironstate.plugin.v1.ListHandlersResponse.HandlerMetadataEntry
-	(*structpb.Struct)(nil),           // 25: google.protobuf.Struct
+	(*CallFilterRequest)(nil),         // 10: ironstate.plugin.v1.CallFilterRequest
+	(*CallFilterResponse)(nil),        // 11: ironstate.plugin.v1.CallFilterResponse
+	(*FactNameRequest)(nil),           // 12: ironstate.plugin.v1.FactNameRequest
+	(*FactNameResponse)(nil),          // 13: ironstate.plugin.v1.FactNameResponse
+	(*ScanRoleRequest)(nil),           // 14: ironstate.plugin.v1.ScanRoleRequest
+	(*ScanRoleResponse)(nil),          // 15: ironstate.plugin.v1.ScanRoleResponse
+	(*ScanRequest)(nil),               // 16: ironstate.plugin.v1.ScanRequest
+	(*ScanResponse)(nil),              // 17: ironstate.plugin.v1.ScanResponse
+	(*ScanItem)(nil),                  // 18: ironstate.plugin.v1.ScanItem
+	(*RenderTemplateRequest)(nil),     // 19: ironstate.plugin.v1.RenderTemplateRequest
+	(*RenderTemplateResponse)(nil),    // 20: ironstate.plugin.v1.RenderTemplateResponse
+	(*EvaluateConditionRequest)(nil),  // 21: ironstate.plugin.v1.EvaluateConditionRequest
+	(*EvaluateConditionResponse)(nil), // 22: ironstate.plugin.v1.EvaluateConditionResponse
+	(*LogRequest)(nil),                // 23: ironstate.plugin.v1.LogRequest
+	(*LogResponse)(nil),               // 24: ironstate.plugin.v1.LogResponse
+	nil,                               // 25: ironstate.plugin.v1.ListHandlersResponse.HandlerEmojisEntry
+	nil,                               // 26: ironstate.plugin.v1.ListHandlersResponse.HandlerMetadataEntry
+	(*structpb.Struct)(nil),           // 27: google.protobuf.Struct
+	(*structpb.Value)(nil),            // 28: google.protobuf.Value
 }
 var file_handler_proto_depIdxs = []int32{
-	25, // 0: ironstate.plugin.v1.Context.flat:type_name -> google.protobuf.Struct
+	27, // 0: ironstate.plugin.v1.Context.flat:type_name -> google.protobuf.Struct
 	1,  // 1: ironstate.plugin.v1.Context.become:type_name -> ironstate.plugin.v1.Become
-	25, // 2: ironstate.plugin.v1.HandlerRequest.item:type_name -> google.protobuf.Struct
+	27, // 2: ironstate.plugin.v1.HandlerRequest.item:type_name -> google.protobuf.Struct
 	0,  // 3: ironstate.plugin.v1.HandlerRequest.context:type_name -> ironstate.plugin.v1.Context
 	2,  // 4: ironstate.plugin.v1.DescribeRequest.handler:type_name -> ironstate.plugin.v1.HandlerRequest
-	25, // 5: ironstate.plugin.v1.ExecResult.extra:type_name -> google.protobuf.Struct
-	23, // 6: ironstate.plugin.v1.ListHandlersResponse.handler_emojis:type_name -> ironstate.plugin.v1.ListHandlersResponse.HandlerEmojisEntry
-	24, // 7: ironstate.plugin.v1.ListHandlersResponse.handler_metadata:type_name -> ironstate.plugin.v1.ListHandlersResponse.HandlerMetadataEntry
-	25, // 8: ironstate.plugin.v1.FactNameRequest.item:type_name -> google.protobuf.Struct
-	0,  // 9: ironstate.plugin.v1.ScanRequest.context:type_name -> ironstate.plugin.v1.Context
-	16, // 10: ironstate.plugin.v1.ScanResponse.items:type_name -> ironstate.plugin.v1.ScanItem
-	25, // 11: ironstate.plugin.v1.ScanItem.config:type_name -> google.protobuf.Struct
-	25, // 12: ironstate.plugin.v1.RenderTemplateRequest.variables:type_name -> google.protobuf.Struct
-	25, // 13: ironstate.plugin.v1.EvaluateConditionRequest.variables:type_name -> google.protobuf.Struct
-	9,  // 14: ironstate.plugin.v1.ListHandlersResponse.HandlerMetadataEntry.value:type_name -> ironstate.plugin.v1.HandlerMetadata
-	7,  // 15: ironstate.plugin.v1.HandlerPlugin.ListHandlers:input_type -> ironstate.plugin.v1.ListHandlersRequest
-	2,  // 16: ironstate.plugin.v1.HandlerPlugin.Test:input_type -> ironstate.plugin.v1.HandlerRequest
-	3,  // 17: ironstate.plugin.v1.HandlerPlugin.Describe:input_type -> ironstate.plugin.v1.DescribeRequest
-	2,  // 18: ironstate.plugin.v1.HandlerPlugin.Install:input_type -> ironstate.plugin.v1.HandlerRequest
-	2,  // 19: ironstate.plugin.v1.HandlerPlugin.Uninstall:input_type -> ironstate.plugin.v1.HandlerRequest
-	10, // 20: ironstate.plugin.v1.HandlerPlugin.FactName:input_type -> ironstate.plugin.v1.FactNameRequest
-	12, // 21: ironstate.plugin.v1.HandlerPlugin.ScanRole:input_type -> ironstate.plugin.v1.ScanRoleRequest
-	14, // 22: ironstate.plugin.v1.HandlerPlugin.Scan:input_type -> ironstate.plugin.v1.ScanRequest
-	17, // 23: ironstate.plugin.v1.HandlerHostCallback.RenderTemplate:input_type -> ironstate.plugin.v1.RenderTemplateRequest
-	19, // 24: ironstate.plugin.v1.HandlerHostCallback.EvaluateCondition:input_type -> ironstate.plugin.v1.EvaluateConditionRequest
-	21, // 25: ironstate.plugin.v1.HandlerHostCallback.Log:input_type -> ironstate.plugin.v1.LogRequest
-	8,  // 26: ironstate.plugin.v1.HandlerPlugin.ListHandlers:output_type -> ironstate.plugin.v1.ListHandlersResponse
-	4,  // 27: ironstate.plugin.v1.HandlerPlugin.Test:output_type -> ironstate.plugin.v1.TestResponse
-	5,  // 28: ironstate.plugin.v1.HandlerPlugin.Describe:output_type -> ironstate.plugin.v1.DescribeResponse
-	6,  // 29: ironstate.plugin.v1.HandlerPlugin.Install:output_type -> ironstate.plugin.v1.ExecResult
-	6,  // 30: ironstate.plugin.v1.HandlerPlugin.Uninstall:output_type -> ironstate.plugin.v1.ExecResult
-	11, // 31: ironstate.plugin.v1.HandlerPlugin.FactName:output_type -> ironstate.plugin.v1.FactNameResponse
-	13, // 32: ironstate.plugin.v1.HandlerPlugin.ScanRole:output_type -> ironstate.plugin.v1.ScanRoleResponse
-	15, // 33: ironstate.plugin.v1.HandlerPlugin.Scan:output_type -> ironstate.plugin.v1.ScanResponse
-	18, // 34: ironstate.plugin.v1.HandlerHostCallback.RenderTemplate:output_type -> ironstate.plugin.v1.RenderTemplateResponse
-	20, // 35: ironstate.plugin.v1.HandlerHostCallback.EvaluateCondition:output_type -> ironstate.plugin.v1.EvaluateConditionResponse
-	22, // 36: ironstate.plugin.v1.HandlerHostCallback.Log:output_type -> ironstate.plugin.v1.LogResponse
-	26, // [26:37] is the sub-list for method output_type
-	15, // [15:26] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	27, // 5: ironstate.plugin.v1.ExecResult.extra:type_name -> google.protobuf.Struct
+	25, // 6: ironstate.plugin.v1.ListHandlersResponse.handler_emojis:type_name -> ironstate.plugin.v1.ListHandlersResponse.HandlerEmojisEntry
+	26, // 7: ironstate.plugin.v1.ListHandlersResponse.handler_metadata:type_name -> ironstate.plugin.v1.ListHandlersResponse.HandlerMetadataEntry
+	28, // 8: ironstate.plugin.v1.CallFilterRequest.value:type_name -> google.protobuf.Value
+	28, // 9: ironstate.plugin.v1.CallFilterRequest.args:type_name -> google.protobuf.Value
+	28, // 10: ironstate.plugin.v1.CallFilterResponse.result:type_name -> google.protobuf.Value
+	27, // 11: ironstate.plugin.v1.FactNameRequest.item:type_name -> google.protobuf.Struct
+	0,  // 12: ironstate.plugin.v1.ScanRequest.context:type_name -> ironstate.plugin.v1.Context
+	18, // 13: ironstate.plugin.v1.ScanResponse.items:type_name -> ironstate.plugin.v1.ScanItem
+	27, // 14: ironstate.plugin.v1.ScanItem.config:type_name -> google.protobuf.Struct
+	27, // 15: ironstate.plugin.v1.RenderTemplateRequest.variables:type_name -> google.protobuf.Struct
+	27, // 16: ironstate.plugin.v1.EvaluateConditionRequest.variables:type_name -> google.protobuf.Struct
+	9,  // 17: ironstate.plugin.v1.ListHandlersResponse.HandlerMetadataEntry.value:type_name -> ironstate.plugin.v1.HandlerMetadata
+	7,  // 18: ironstate.plugin.v1.HandlerPlugin.ListHandlers:input_type -> ironstate.plugin.v1.ListHandlersRequest
+	2,  // 19: ironstate.plugin.v1.HandlerPlugin.Test:input_type -> ironstate.plugin.v1.HandlerRequest
+	3,  // 20: ironstate.plugin.v1.HandlerPlugin.Describe:input_type -> ironstate.plugin.v1.DescribeRequest
+	2,  // 21: ironstate.plugin.v1.HandlerPlugin.Install:input_type -> ironstate.plugin.v1.HandlerRequest
+	2,  // 22: ironstate.plugin.v1.HandlerPlugin.Uninstall:input_type -> ironstate.plugin.v1.HandlerRequest
+	12, // 23: ironstate.plugin.v1.HandlerPlugin.FactName:input_type -> ironstate.plugin.v1.FactNameRequest
+	14, // 24: ironstate.plugin.v1.HandlerPlugin.ScanRole:input_type -> ironstate.plugin.v1.ScanRoleRequest
+	16, // 25: ironstate.plugin.v1.HandlerPlugin.Scan:input_type -> ironstate.plugin.v1.ScanRequest
+	10, // 26: ironstate.plugin.v1.HandlerPlugin.CallFilter:input_type -> ironstate.plugin.v1.CallFilterRequest
+	19, // 27: ironstate.plugin.v1.HandlerHostCallback.RenderTemplate:input_type -> ironstate.plugin.v1.RenderTemplateRequest
+	21, // 28: ironstate.plugin.v1.HandlerHostCallback.EvaluateCondition:input_type -> ironstate.plugin.v1.EvaluateConditionRequest
+	23, // 29: ironstate.plugin.v1.HandlerHostCallback.Log:input_type -> ironstate.plugin.v1.LogRequest
+	8,  // 30: ironstate.plugin.v1.HandlerPlugin.ListHandlers:output_type -> ironstate.plugin.v1.ListHandlersResponse
+	4,  // 31: ironstate.plugin.v1.HandlerPlugin.Test:output_type -> ironstate.plugin.v1.TestResponse
+	5,  // 32: ironstate.plugin.v1.HandlerPlugin.Describe:output_type -> ironstate.plugin.v1.DescribeResponse
+	6,  // 33: ironstate.plugin.v1.HandlerPlugin.Install:output_type -> ironstate.plugin.v1.ExecResult
+	6,  // 34: ironstate.plugin.v1.HandlerPlugin.Uninstall:output_type -> ironstate.plugin.v1.ExecResult
+	13, // 35: ironstate.plugin.v1.HandlerPlugin.FactName:output_type -> ironstate.plugin.v1.FactNameResponse
+	15, // 36: ironstate.plugin.v1.HandlerPlugin.ScanRole:output_type -> ironstate.plugin.v1.ScanRoleResponse
+	17, // 37: ironstate.plugin.v1.HandlerPlugin.Scan:output_type -> ironstate.plugin.v1.ScanResponse
+	11, // 38: ironstate.plugin.v1.HandlerPlugin.CallFilter:output_type -> ironstate.plugin.v1.CallFilterResponse
+	20, // 39: ironstate.plugin.v1.HandlerHostCallback.RenderTemplate:output_type -> ironstate.plugin.v1.RenderTemplateResponse
+	22, // 40: ironstate.plugin.v1.HandlerHostCallback.EvaluateCondition:output_type -> ironstate.plugin.v1.EvaluateConditionResponse
+	24, // 41: ironstate.plugin.v1.HandlerHostCallback.Log:output_type -> ironstate.plugin.v1.LogResponse
+	30, // [30:42] is the sub-list for method output_type
+	18, // [18:30] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_handler_proto_init() }
@@ -1404,7 +1542,7 @@ func file_handler_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_handler_proto_rawDesc), len(file_handler_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   25,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

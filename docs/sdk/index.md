@@ -30,7 +30,7 @@ The SDK is its own module, so plugins don't depend on ironstate's internal packa
 | Package | Import path | Purpose |
 | --- | --- | --- |
 | [`handler`](./handler) | `github.com/TacoContent/ironstate/sdk/handler` | The `Handler` interface, `Context`, `ExecResult`, and optional capability interfaces. |
-| [`plugin`](./plugin) | `github.com/TacoContent/ironstate/sdk/plugin` | `Serve`, which runs your handlers as a plugin, plus handshake constants. |
+| [`plugin`](./plugin) | `github.com/TacoContent/ironstate/sdk/plugin` | `Serve` and `ServeWithConfig`, which run your handlers and filters as a plugin, plus handshake constants. |
 | [`testing`](./testing) | `github.com/TacoContent/ironstate/sdk/testing` | Test doubles and a profiling helper. |
 | [`becomeexec`](./becomeexec) | `github.com/TacoContent/ironstate/sdk/becomeexec` | Wraps commands with `sudo` when a task requests `become`. |
 | [`proto`](./protocol) | `github.com/TacoContent/ironstate/sdk/proto` | Generated gRPC types for the `ironstate.plugin.v1` protocol. |
@@ -46,18 +46,21 @@ The SDK is its own module, so plugins don't depend on ironstate's internal packa
 ironstate (host)                          your plugin binary
 ────────────────                          ──────────────────
 launch binary  ─── handshake (cookie + protocol v1) ───▶ plugin.Serve(...)
-ListHandlers   ───────────────────────────────────────▶ names, emojis, required tools
+ListHandlers   ───────────────────────────────────────▶ names, emojis, required tools, fact handlers, filters
+fact tasks     ───────────────────────────────────────▶ FactName + Install          (before other tasks, even in dry runs)
 for each task using acme.hosts.entry:
   Test         ───────────────────────────────────────▶ handlers["entry"].Test
   Describe     ───────────────────────────────────────▶ handlers["entry"].Describe   (only if not skipped)
   Install /    ───────────────────────────────────────▶ handlers["entry"].Install    (only with --apply)
   Uninstall
                ◀────── RenderTemplate / EvaluateCondition / Log (optional callbacks)
+expressions    ───────────────────────────────────────▶ CallFilter                   (for each use of a plugin filter)
 end of run     ─── kill process
 ```
 
 - ironstate starts **one process per declared plugin** for each run, and stops it when the run ends.
 - A plugin can serve **several handlers**. The playbook addresses each one as `<organization>.<plugin>.<handler>`, such as `acme.hosts.entry`.
+- A plugin can also serve **filters**, addressed as `<organization>.<plugin>.<filter>` or by the bare filter name.
 - The plugin runs with the same privileges as ironstate. It is process-isolated but **not sandboxed**.
 
 ## Related

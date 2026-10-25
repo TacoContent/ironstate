@@ -218,6 +218,61 @@ tasks:
 	}
 }
 
+func TestLoadHierarchyUsesUserNameFactWithoutUSERNAME(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "main.yml"), "tasks:\n  - log: { message: base }\n")
+	writeFile(t, filepath.Join(dir, "variables", "alice.yml"), "tasks:\n  - log: { message: user }\n")
+	t.Setenv("USERNAME", "")
+
+	doc, err := LoadHierarchy(filepath.Join(dir, "main.yml"), map[string]any{"user_name": `CORP\alice`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tasks := doc.(map[string]any)["tasks"].([]any); len(tasks) != 2 {
+		t.Fatalf("tasks = %#v, want base+user from the user_name fact", tasks)
+	}
+}
+
+func TestLoadHierarchyMergesFactAndEnvUserOverlaysOnce(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "main.yml"), "tasks:\n  - log: { message: base }\n")
+	writeFile(t, filepath.Join(dir, "variables", "alice.yml"), "tasks:\n  - log: { message: fact user }\n")
+	writeFile(t, filepath.Join(dir, "variables", "bob.yml"), "tasks:\n  - log: { message: env user }\n")
+
+	t.Setenv("USERNAME", "bob")
+	doc, err := LoadHierarchy(filepath.Join(dir, "main.yml"), map[string]any{"user_name": "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tasks := doc.(map[string]any)["tasks"].([]any); len(tasks) != 3 {
+		t.Fatalf("tasks = %#v, want base+alice+bob", tasks)
+	}
+
+	t.Setenv("USERNAME", "ALICE")
+	doc, err = LoadHierarchy(filepath.Join(dir, "main.yml"), map[string]any{"user_name": "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tasks := doc.(map[string]any)["tasks"].([]any); len(tasks) != 2 {
+		t.Fatalf("tasks = %#v, want the same user overlay merged once", tasks)
+	}
+}
+
+func TestLoadHierarchyFindsLowercasedUserOverlay(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "main.yml"), "tasks:\n  - log: { message: base }\n")
+	writeFile(t, filepath.Join(dir, "variables", "alice.yml"), "tasks:\n  - log: { message: user }\n")
+	t.Setenv("USERNAME", "Alice")
+
+	doc, err := LoadHierarchy(filepath.Join(dir, "main.yml"), map[string]any{"user_name": "Alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tasks := doc.(map[string]any)["tasks"].([]any); len(tasks) != 2 {
+		t.Fatalf("tasks = %#v, want the lowercased user overlay merged once", tasks)
+	}
+}
+
 func TestLoadIncludedPackageResolvesTemplateContext(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "cli", "main.yml"), `

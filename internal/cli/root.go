@@ -13,7 +13,6 @@ import (
 
 	"github.com/TacoContent/ironstate/internal/config"
 	"github.com/TacoContent/ironstate/internal/engine"
-	"github.com/TacoContent/ironstate/internal/expr"
 	"github.com/TacoContent/ironstate/internal/facts"
 	"github.com/TacoContent/ironstate/internal/filters"
 	"github.com/TacoContent/ironstate/internal/handlers"
@@ -260,6 +259,16 @@ func runApply(cmd *cobra.Command, _ []string) (err error) {
 			_ = client.Close()
 		}
 	}()
+	if len(pluginClients) > 0 {
+		// The first soft pass deferred any expression that used a plugin
+		// filter; resolve those now that plugin filters are registered.
+		restoreTasks = template.DeferTaskEnvs(model.AsList(docMap["tasks"]), false)
+		err = template.ResolveInPlace(docMap, softCtx, fset, "site", true)
+		restoreTasks()
+		if err != nil {
+			return NewLoadError(err)
+		}
+	}
 
 	out.message("expanding playbook tasks")
 	taskList, err := model.TaskList(docMap)
@@ -331,7 +340,7 @@ func runApply(cmd *cobra.Command, _ []string) (err error) {
 	return nil
 }
 
-func loadPluginRegistry(declared []model.Plugin, repoRoot string, allowInstall bool, fset expr.Filters) (*handlers.Registry, []*pluginhost.Client, error) {
+func loadPluginRegistry(declared []model.Plugin, repoRoot string, allowInstall bool, fset *filters.Registry) (*handlers.Registry, []*pluginhost.Client, error) {
 	registry := handlers.NewRegistry()
 	if len(declared) == 0 {
 		return registry, nil, nil
@@ -392,7 +401,23 @@ func loadPluginRegistry(declared []model.Plugin, repoRoot string, allowInstall b
 			closeClients()
 			return nil, nil, err
 		}
+		registerPluginFilters(fset, declaredPlugin.Namespace, client)
 		clients = append(clients, client)
 	}
 	return registry, clients, nil
+}
+
+// registerPluginFilters adds a plugin's filters under their qualified
+// organization.plugin.name form, and under the bare name when no built-in,
+// script, or earlier plugin filter already claims it.
+func registerPluginFilters(fset *filters.Registry, namespace string, client *pluginhost.Client) {
+	if fset == nil {
+		return
+	}
+	for name, fn := range client.Filters() {
+		fset.Register(namespace+"."+name, filters.Func(fn))
+		if !fset.Has(name) {
+			fset.Register(name, filters.Func(fn))
+		}
+	}
 }

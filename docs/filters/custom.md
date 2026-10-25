@@ -147,6 +147,20 @@ filters:
 
 When you run a playbook with `--target` or `--inventory`, the playbook directory, including `filters/`, is sent to each target. A `filters.dir` outside the playbook and your `filters.*` config are sent too. Filters run **on the target**, so the target needs the interpreter, plus `jq` for the shell languages.
 
+## Filters from plugins
+
+[Plugins](../plugins/using#plugin-facts-and-filters) can provide filters too, written in Go. Once a playbook declares the plugin under `plugins:`, its filters are available by their qualified name, `organization.plugin.name`, and by their bare name when nothing else uses it:
+
+```yaml
+plugins:
+  - use: acme.text@v1.0.0
+
+vars:
+  slug: ${{ 'Hello World' | acme.text.slugify }}
+```
+
+When names collide, the order is: built-in filters, then script filters from `filters/`, then plugins in the order they're declared. The qualified name always reaches the plugin. To write one, see [`ServeWithConfig`](../sdk/plugin#servewithconfig).
+
 ## Tips
 
 - Keep filters **pure**: compute a value from the input and arguments. Use tasks for side effects.

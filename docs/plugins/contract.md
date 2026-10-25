@@ -34,5 +34,6 @@ Optional capabilities:
 
 - Implement `handler.EmojiProvider` to set the glyph used in CLI progress and result tables. A missing or empty value uses the default `🏷️` glyph.
 - Implement `handler.RequiredToolsProvider` to declare zero or more executable names ironstate should require on `PATH` before dispatch. Without it, the handler owns its own availability checks.
-- Implement `handler.FactProducer` to expose `ExecResult.Extra["value"]` as a named fact.
+- Implement `handler.FactProducer` to expose `ExecResult.Extra["value"]` as a named fact. Fact handlers run before other tasks, and their `Install` runs during dry runs too, so it must only read state. See [`FactProducer`](../sdk/handler#factproducer).
+- Serve `handler.Filter` functions with `plugin.ServeWithConfig` to add filters to `${{ }}` expressions and `when:` conditions. See [`ServeWithConfig`](../sdk/plugin#servewithconfig).
 - Implement `handler.ScanCapable` to participate in future/current scan workflows with `ScanRole` and `Scan`.

@@ -246,6 +246,21 @@ func TestFilterPipelineAndChaining(t *testing.T) {
 	}
 }
 
+func TestQualifiedPluginFilterName(t *testing.T) {
+	node := mustParse(t, `"  hi  " | acme.text.trim | upper`)
+	trimNode, ok := node.(*FilterNode)
+	if !ok {
+		t.Fatalf("node = %T, want *FilterNode", node)
+	}
+	inner, ok := trimNode.Target.(*FilterNode)
+	if !ok || inner.Name != "acme.text.trim" || trimNode.Name != "upper" {
+		t.Fatalf("qualified filter parsed as %#v", node)
+	}
+	if _, err := Parse(`1 | acme.`); err == nil {
+		t.Fatal("trailing dot after a filter name must be a syntax error")
+	}
+}
+
 func TestBareFilterCall(t *testing.T) {
 	got := evalOK(t, `echo("bare")`, nil)
 	if got != "bare" {

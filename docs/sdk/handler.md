@@ -76,7 +76,7 @@ Failed results (not `Test`/`Describe` errors) follow the playbook's [`failed_whe
 
 | Calls | Timeout |
 | --- | --- |
-| `Test`, `Describe` (and `ListHandlers`, `ScanRole`) | 30 seconds |
+| `Test`, `Describe` (and `ListHandlers`, `ScanRole`, `FactName`, filter calls) | 30 seconds |
 | `Install`, `Uninstall`, `Scan` | 5 minutes |
 
 ## `Action`
@@ -228,8 +228,25 @@ type FactProducer interface {
 
 Declares that a handler's result should be stored as a fact named `name`, with the value taken from `ExecResult.Extra["value"]`.
 
-> [!WARNING]
-> The current ironstate host doesn't call `FactName` for plugin handlers, so plugin facts aren't stored yet. Until it does, have users register the task with `id` and read your `Extra` keys from the result instead (see [`ExecResult`](#execresult)).
+```go
+func (hostsLookup) FactName(item map[string]any) (string, bool) {
+    name, ok := item["fact"].(string)
+    return name, ok && name != ""
+}
+
+func (hostsLookup) Install(item map[string]any, _ string, _ handler.Context) (handler.ExecResult, error) {
+    ip, err := lookup(item["hostname"])
+    return handler.ExecResult{Extra: map[string]any{"value": ip}}, err
+}
+```
+
+ironstate checks for this interface when it loads the plugin. A handler that implements it is treated like the built-in `fact` handler:
+
+- Its tasks run **before** all other tasks, so later tasks can read `facts.<name>`.
+- `Install` runs **even in a dry run**, so other tasks' previews can use the fact. It must only read state, never change it.
+- Return `ok == false` to skip storing a fact for an item. A result without `Extra["value"]`, such as a failure, leaves any existing fact alone.
+- With `state: absent`, `Uninstall` runs and the fact is removed.
+- `FactName` is called with the task's resolved item and has a 30-second limit.
 
 ### `ScanCapable`
 
@@ -261,3 +278,11 @@ Lets your handler contribute to [`ironstate init --scan`](../cli/commands/init),
 | `Role` | Not sent over the protocol. The role always comes from `ScanRole()`. |
 
 The generated `main.yml` gets a `plugins:` entry for your plugin automatically.
+
+## `Filter`
+
+```go
+type Filter func(value any, args []any) (any, error)
+```
+
+A filter a plugin provides for `${{ }}` expressions and `when:` conditions. `value` is the input on the left of `|`, and `args` are the call's arguments. Register filters with [`plugin.ServeWithConfig`](./plugin#servewithconfig).

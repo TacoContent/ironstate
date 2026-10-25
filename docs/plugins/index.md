@@ -51,7 +51,7 @@ plugins:
   - use: acme.hosts@v1.2.3
 ```
 
-The lockfile takes precedence for version selection. A checksum mismatch is a hard error; ironstate does not silently fall back to another installed version.
+The lockfile takes precedence for version selection. A checksum mismatch is a hard error; ironstate does not silently fall back to another installed version. Write or refresh the lockfile with `ironstate plugin update --lock-file-only` (see [Pin with a lockfile](./using#pin-with-a-lockfile)).
 
 ## Plugins with remote apply
 

@@ -56,7 +56,7 @@ my-playbook/
 ```
 
 - Every YAML file contains only `vars: {}` and `tasks: []`: a valid, empty document ready to edit.
-- `<computer_name>`, `<os_family>`, and `<user_name>` come from this machine's [facts](../../playbooks/facts-vars#facts), lowercased. For example: `hosts/krayt.yml`, `hosts/windows.yml`, `variables/ryan.yml`.
+- `<computer_name>`, `<os_family>`, and `<user_name>` come from this machine's [facts](../../playbooks/facts-vars#facts), lowercased. For example: `hosts/krayt.yml`, `hosts/windows.yml`, `variables/ryan.yml`. When the `user_name` fact is empty, the `USERNAME` environment variable is used, and a `DOMAIN\` prefix is dropped. A run looks for the user file under the same names, so the generated file is always picked up. See [per user](../../playbooks/hosts#variables-per-user).
 - `.gitkeep` files keep the empty folders in git.
 - **Nothing is overwritten.** Existing files are reported as `skip ... (already exists)`, so running `init` again is safe.
 

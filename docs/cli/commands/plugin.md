@@ -87,15 +87,33 @@ acme.hosts@v1.2.3
 ## `update`
 
 ```shell
-ironstate plugin update <organization.plugin>[@version]
-ironstate plugin update --all
+ironstate plugin update <organization.plugin>[@version] [--playbook <path>]
+ironstate plugin update --all [--playbook <path>]
+ironstate plugin update --lock-file-only [<organization.plugin>[@version]] [--playbook <path>]
 ```
 
 Installs the given version, or `latest`, side by side with existing versions. Pass exactly one plugin **or** `--all`.
 
-| Flag | Description |
-| --- | --- |
-| `--all` | Update every installed plugin to its latest version. |
+After installing, `update` writes `ironstate.lock.yaml` beside the playbook, pinning the version and checksum of every plugin the playbook declares under `plugins:`:
+
+- A plugin updated by this command is pinned to its new version.
+- Other declared plugins keep their existing lock entry, or are pinned at their declared version if they have none.
+- Plugins the playbook doesn't declare aren't written.
+
+If there's no playbook in the current directory and you didn't pass `--playbook`, `update` only installs and says the lockfile wasn't written.
+
+With `--lock-file-only`, nothing is installed. `update` pins the named plugin (at `@version`, or its declared version), or every declared plugin when none is named, using what is already installed. Use it to create a lockfile for a working setup, or to re-pin after `plugin install`.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--all` | `false` | Update every installed plugin to its latest version. |
+| `--lock-file-only` | `false` | Only write `ironstate.lock.yaml` from installed plugins; install nothing. |
+| `--playbook <path>` | `.` | Playbook whose `ironstate.lock.yaml` is written. Required to exist when given, or with `--lock-file-only`. |
+
+```shell
+$ ironstate plugin update --lock-file-only --playbook ~/playbooks/workstation
+wrote /home/ryan/playbooks/workstation/ironstate.lock.yaml (2 plugin(s))
+```
 
 ## `uninstall`
 

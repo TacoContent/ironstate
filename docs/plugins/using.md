@@ -43,8 +43,22 @@ tasks:
 
 Plugin tasks work like built-in ones. They support `state`, `when`, `loop`, `tags`, `become`, `id`, `failed_when`, and `continue_on_error`. See [Tasks](../playbooks/tasks).
 
-> [!NOTE]
-> `ironstate validate` doesn't know about `plugins:` or qualified handler names yet, so it reports them as schema errors. Use `ironstate doctor --playbook` (below) to check a plugin playbook.
+`ironstate validate` accepts `plugins:` and any `organization.plugin.handler` key, but it can't check what goes inside a plugin task. Use `ironstate doctor --playbook` (below) to confirm the plugin provides each handler you use.
+
+### Plugin facts and filters
+
+A plugin can also provide:
+
+- **Fact handlers.** A plugin handler can store its result as a fact, as the built-in `fact` handler does. Read it with `facts.<name>` in later tasks.
+- **Filters.** Use them in any `${{ }}` expression or `when:` condition, by their qualified name or, when nothing else claims it, by their bare name:
+
+  ```yaml
+  vars:
+    host_label: ${{ facts.computer_name | acme.hosts.fqdn }}
+    short_label: ${{ facts.computer_name | fqdn }}
+  ```
+
+  A bare name never replaces a built-in or [playbook filter](../filters/custom) of the same name. If two plugins provide the same name, the plugin declared first wins. Use the qualified name to be sure which one runs.
 
 ## Install the plugin
 
@@ -92,19 +106,17 @@ plugins:
 - The lockfile's `version` **overrides** the version in `plugins:`.
 - Before launching the plugin, ironstate compares the installed binary's checksum with `checksum`. A mismatch is a hard error; ironstate never falls back to another version.
 
-ironstate doesn't write the lockfile for you. Copy the values from `ironstate plugin info`:
+[`ironstate plugin update`](../cli/commands/plugin#update) writes the lockfile. Run it from the playbook directory, or pass `--playbook`:
 
 ```shell
-$ ironstate plugin info acme.hosts
-acme.hosts@v1.2.3
-  source: github.com/acme/ironstate-handler-hosts
-  checksum: sha256:4f6c0e1d...
-  license:
-  handlers: entry
-  summary:
+# Pin the plugins that are already installed, without installing anything
+ironstate plugin update --lock-file-only --playbook path/to/playbook
+
+# Install the newest acme.hosts and pin it
+ironstate plugin update acme.hosts --playbook path/to/playbook
 ```
 
-When you upgrade a plugin, update both `version` and `checksum`.
+Every plugin listed under `plugins:` is written to the lockfile. A plugin you just updated is pinned to its new version. Plugins already in the lockfile keep their entry, and new ones are pinned at their declared version. `--lock-file-only` re-pins the plugin you name, or every declared plugin when you name none, from what is installed.
 
 > [!IMPORTANT]
 > The checksum covers the binary built for **one** OS and architecture. A lockfile written on Linux amd64 rejects the same plugin built for Windows or arm64. Keep one lockfile per platform you apply from, or leave plugins unlocked for mixed fleets.

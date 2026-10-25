@@ -103,7 +103,7 @@ When the same variable is set in several places, the later source wins. Maps **d
 
 1. `main.yml`
 2. `hosts/main.yml`, then `hosts/` overlays, least to most specific
-3. `variables/main.yml`, then `variables/` overlays, then `variables/<USERNAME>.yml`
+3. `variables/main.yml`, then `variables/` overlays, then `variables/<user>.yml` (see [per user](./hosts#variables-per-user))
 4. Inventory `defaults.vars` (remote apply)
 5. Inventory host `vars` (remote apply)
 6. `--vars-file` files, in the order given

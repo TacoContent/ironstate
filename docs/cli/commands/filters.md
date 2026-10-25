@@ -54,3 +54,5 @@ A script whose name matches a built-in filter is never registered; the built-in 
 
 > [!NOTE]
 > During a playbook run, ironstate discovers script filters in the `filters/` folder next to the playbook's `main.yml`, or the folder set by `filters.dir` in `ironstate.yaml`. `filters list` scans `--dir` relative to your current directory, so point it at the playbook's folder when you run it from elsewhere.
+>
+> Filters provided by [plugins](../../plugins/using#plugin-facts-and-filters) aren't listed, because `filters list` doesn't launch plugins. They're available during a run of a playbook that declares the plugin.

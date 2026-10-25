@@ -16,7 +16,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const RemoteSchemaURL = "https://raw.githubusercontent.com/TacoContent/ironstate/refs/heads/develop/ironstate.schema.json"
+const (
+	remoteSchemaBase = "https://raw.githubusercontent.com/TacoContent/ironstate/refs/heads/develop/"
+	RemoteSchemaURL  = remoteSchemaBase + PlaybookSchema
+
+	// PlaybookSchema validates playbooks, packages, roles, and overlays.
+	PlaybookSchema = "ironstate.schema.json"
+	// InventorySchema validates remote-execution inventory files.
+	InventorySchema = "inventory.schema.json"
+
+	lockFileName = "ironstate.lock.yaml"
+)
 
 var httpClient = &http.Client{Timeout: 10 * time.Second}
 var schemaLoader = loadSchema
@@ -25,6 +35,16 @@ var schemaLoader = loadSchema
 // Schema lookup is local-first so offline validation works from a checkout or
 // release archive, with the develop-branch schema as the fallback.
 func ValidateFile(playbookPath string) error {
+	return validateFileAgainst(playbookPath, PlaybookSchema)
+}
+
+// ValidateInventoryFile validates one inventory YAML file against
+// inventory.schema.json.
+func ValidateInventoryFile(inventoryPath string) error {
+	return validateFileAgainst(inventoryPath, InventorySchema)
+}
+
+func validateFileAgainst(playbookPath, schemaName string) error {
 	data, err := os.ReadFile(playbookPath) //nolint:gosec // the path is the user-selected playbook
 	if err != nil {
 		return fmt.Errorf("cannot read playbook %s: %w", playbookPath, err)
@@ -39,7 +59,7 @@ func ValidateFile(playbookPath string) error {
 		return fmt.Errorf("cannot parse playbook %s: %w", playbookPath, err)
 	}
 
-	schemaData, schemaSource, err := schemaLoader(playbookPath)
+	schemaData, schemaSource, err := schemaLoader(playbookPath, schemaName)
 	if err != nil {
 		return err
 	}
@@ -48,11 +68,12 @@ func ValidateFile(playbookPath string) error {
 		return fmt.Errorf("schema %s is not valid JSON: %w", schemaSource, err)
 	}
 
+	schemaURL := remoteSchemaBase + schemaName
 	compiler := jsonschema.NewCompiler()
-	if err := compiler.AddResource(RemoteSchemaURL, schemaDoc); err != nil {
+	if err := compiler.AddResource(schemaURL, schemaDoc); err != nil {
 		return fmt.Errorf("cannot load schema %s: %w", schemaSource, err)
 	}
-	schema, err := compiler.Compile(RemoteSchemaURL)
+	schema, err := compiler.Compile(schemaURL)
 	if err != nil {
 		return fmt.Errorf("cannot compile schema %s: %w", schemaSource, err)
 	}
@@ -64,7 +85,9 @@ func ValidateFile(playbookPath string) error {
 
 // ValidatePlaybook validates the root playbook and every YAML document below
 // its directory. Included packages, roles, host overlays, and variable
-// overlays are standalone schema documents in the playbook layout.
+// overlays are standalone schema documents in the playbook layout. Inventory
+// files are validated against inventory.schema.json; the plugin lockfile and
+// dot-directories such as .git and .github are skipped.
 func ValidatePlaybook(playbookPath string) ([]string, error) {
 	abs, err := filepath.Abs(playbookPath)
 	if err != nil {
@@ -76,7 +99,13 @@ func ValidatePlaybook(playbookPath string) ([]string, error) {
 		if walkErr != nil {
 			return walkErr
 		}
-		if entry.IsDir() || filepath.Clean(path) == filepath.Clean(abs) {
+		if entry.IsDir() {
+			if path != rootDir && strings.HasPrefix(entry.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filepath.Clean(path) == filepath.Clean(abs) || strings.EqualFold(entry.Name(), lockFileName) {
 			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(path))
@@ -93,7 +122,11 @@ func ValidatePlaybook(playbookPath string) ([]string, error) {
 	valid := make([]string, 0, len(files))
 	var failures []string
 	for _, file := range files {
-		if err := ValidateFile(file); err != nil {
+		validate := ValidateFile
+		if file != abs && isInventoryFile(file) {
+			validate = ValidateInventoryFile
+		}
+		if err := validate(file); err != nil {
 			failures = append(failures, err.Error())
 			continue
 		}
@@ -105,13 +138,35 @@ func ValidatePlaybook(playbookPath string) ([]string, error) {
 	return valid, nil
 }
 
-func loadSchema(playbookPath string) ([]byte, string, error) {
-	candidates := []string{"ironstate.schema.json"}
+// isInventoryFile reports whether a YAML document is shaped like an
+// inventory (or an inventory-directory fragment): a mapping whose top-level
+// keys are all inventory keys.
+func isInventoryFile(path string) bool {
+	data, err := os.ReadFile(path) //nolint:gosec // file found under the user-selected playbook directory
+	if err != nil {
+		return false
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(data, &doc); err != nil || len(doc) == 0 {
+		return false
+	}
+	for key := range doc {
+		switch key {
+		case "defaults", "hosts", "groups":
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func loadSchema(playbookPath, schemaName string) ([]byte, string, error) {
+	candidates := []string{schemaName}
 	if abs, err := filepath.Abs(playbookPath); err == nil {
-		candidates = append(candidates, filepath.Join(filepath.Dir(abs), "ironstate.schema.json"))
+		candidates = append(candidates, filepath.Join(filepath.Dir(abs), schemaName))
 	}
 	if executable, err := os.Executable(); err == nil {
-		candidates = append(candidates, filepath.Join(filepath.Dir(executable), "ironstate.schema.json"))
+		candidates = append(candidates, filepath.Join(filepath.Dir(executable), schemaName))
 	}
 
 	seen := map[string]bool{}
@@ -126,17 +181,18 @@ func loadSchema(playbookPath string) ([]byte, string, error) {
 		}
 	}
 
-	response, err := httpClient.Get(RemoteSchemaURL)
+	remoteURL := remoteSchemaBase + schemaName
+	response, err := httpClient.Get(remoteURL)
 	if err == nil {
 		defer func() { _ = response.Body.Close() }()
 		if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
 			data, readErr := io.ReadAll(response.Body)
 			if readErr == nil {
-				return data, RemoteSchemaURL, nil
+				return data, remoteURL, nil
 			}
 		}
 	}
-	return nil, "", fmt.Errorf("playbook cannot be validated because the schema could not be found")
+	return nil, "", fmt.Errorf("%s cannot be validated because the schema %s could not be found", playbookPath, schemaName)
 }
 
 type sourceLocation struct {

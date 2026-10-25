@@ -9,8 +9,8 @@ import (
 
 func TestValidateEnvironmentAliasesAndSources(t *testing.T) {
 	originalLoader := schemaLoader
-	schemaLoader = func(string) ([]byte, string, error) {
-		path := filepath.Join("..", "..", "ironstate.schema.json")
+	schemaLoader = func(_ string, name string) ([]byte, string, error) {
+		path := filepath.Join("..", "..", name)
 		data, err := os.ReadFile(path)
 		return data, path, err
 	}
@@ -51,6 +51,10 @@ func TestValidateEnvironmentAliasesAndSources(t *testing.T) {
 		{"unknown-task-field", "envs: {A: {valueFrom: {task: {value: x, extra: x}}}}", false},
 		{"unknown-entry-field", "envs: {A: {valueFrom: {file: x}, extra: x}}", false},
 		{"map-without-source", "envs: {A: {value: x}}", false},
+		{"plugins-and-handler", "plugins:\n  - use: acme.hosts@v1.2.0\ntasks:\n  - name: entry\n    acme.hosts.entry: {hostname: example, ip: 127.0.0.1}\n", true},
+		{"plugin-missing-version", "plugins:\n  - use: acme.hosts\n", false},
+		{"plugin-unknown-field", "plugins:\n  - use: acme.hosts@v1\n    extra: x\n", false},
+		{"two-part-handler-rejected", "tasks:\n  - acme.hosts: {}\n", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "main.yml")
@@ -67,8 +71,8 @@ func TestValidateEnvironmentAliasesAndSources(t *testing.T) {
 
 func TestValidateFileReportsSourceLocation(t *testing.T) {
 	originalLoader := schemaLoader
-	schemaLoader = func(string) ([]byte, string, error) {
-		path := filepath.Join("..", "..", "ironstate.schema.json")
+	schemaLoader = func(_ string, name string) ([]byte, string, error) {
+		path := filepath.Join("..", "..", name)
 		data, err := os.ReadFile(path)
 		return data, path, err
 	}
@@ -94,8 +98,8 @@ func TestValidateFileReportsSourceLocation(t *testing.T) {
 
 func TestValidatePlaybookRecursesThroughYAMLTree(t *testing.T) {
 	originalLoader := schemaLoader
-	schemaLoader = func(string) ([]byte, string, error) {
-		path := filepath.Join("..", "..", "ironstate.schema.json")
+	schemaLoader = func(_ string, name string) ([]byte, string, error) {
+		path := filepath.Join("..", "..", name)
 		data, err := os.ReadFile(path)
 		return data, path, err
 	}
@@ -125,8 +129,8 @@ func TestValidatePlaybookRecursesThroughYAMLTree(t *testing.T) {
 
 func TestValidateJinja2TemplateEngines(t *testing.T) {
 	originalLoader := schemaLoader
-	schemaLoader = func(string) ([]byte, string, error) {
-		path := filepath.Join("..", "..", "ironstate.schema.json")
+	schemaLoader = func(_ string, name string) ([]byte, string, error) {
+		path := filepath.Join("..", "..", name)
 		data, err := os.ReadFile(path)
 		return data, path, err
 	}
@@ -149,5 +153,56 @@ func TestValidateJinja2TemplateEngines(t *testing.T) {
 	}
 	if err := ValidateFile(playbook); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func useRepositorySchemas(t *testing.T) {
+	t.Helper()
+	originalLoader := schemaLoader
+	schemaLoader = func(_ string, name string) ([]byte, string, error) {
+		path := filepath.Join("..", "..", name)
+		data, err := os.ReadFile(path)
+		return data, path, err
+	}
+	t.Cleanup(func() { schemaLoader = originalLoader })
+}
+
+func TestValidatePlaybookHandlesInventoryLockfileAndDotDirectories(t *testing.T) {
+	useRepositorySchemas(t)
+	root := t.TempDir()
+	write := func(rel, content string) string {
+		t.Helper()
+		path := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	rootFile := write("main.yml", "plugins:\n  - use: acme.hosts@v1.0.0\ntasks: []\n")
+	write("ironstate.lock.yaml", "plugins:\n  acme.hosts:\n    version: v1.0.0\n    checksum: sha256:abc\n")
+	inventory := write("inventory.yml", "defaults:\n  user: deploy\nhosts:\n  web1:\n    address: 10.0.0.5\n")
+	fragment := write("inventory/groups.yml", "groups:\n  web: [web1]\n")
+	write(".github/workflows/ci.yml", "on: push\njobs: {}\n")
+
+	valid, err := ValidatePlaybook(rootFile)
+	if err != nil {
+		t.Fatalf("ValidatePlaybook: %v", err)
+	}
+	want := map[string]bool{rootFile: true, inventory: true, fragment: true}
+	if len(valid) != len(want) {
+		t.Fatalf("valid files = %#v, want %v", valid, want)
+	}
+	for _, file := range valid {
+		if !want[file] {
+			t.Fatalf("unexpected validated file %q", file)
+		}
+	}
+
+	write("bad-inventory.yml", "hosts:\n  web1:\n    bogus: true\n")
+	if _, err := ValidatePlaybook(rootFile); err == nil || !strings.Contains(err.Error(), "bad-inventory.yml") {
+		t.Fatalf("ValidatePlaybook error = %v, want inventory schema failure", err)
 	}
 }

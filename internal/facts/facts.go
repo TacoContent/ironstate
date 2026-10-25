@@ -133,6 +133,37 @@ func userName() string {
 	return os.Getenv("USER")
 }
 
+// UserNameCandidates returns the names that identify the current user for
+// per-user files such as variables/<user>.yml: the user_name fact first, then
+// the USERNAME environment variable. They are normally equal, but either may
+// be missing or differ (e.g. USERNAME is unset on Linux, or remote facts
+// describe another machine). Any "DOMAIN\" prefix is stripped, and
+// duplicates are removed case-insensitively.
+func UserNameCandidates(hostFacts map[string]any) []string {
+	var raw []string
+	if hostFacts != nil {
+		if name, ok := hostFacts["user_name"].(string); ok {
+			raw = append(raw, name)
+		}
+	}
+	raw = append(raw, os.Getenv("USERNAME"))
+	var names []string
+	seen := map[string]bool{}
+	for _, name := range raw {
+		name = strings.TrimSpace(name)
+		if i := strings.LastIndex(name, `\`); i >= 0 {
+			name = name[i+1:]
+		}
+		key := strings.ToLower(name)
+		if name == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		names = append(names, name)
+	}
+	return names
+}
+
 func homeDir() string {
 	if h, err := os.UserHomeDir(); err == nil {
 		return h

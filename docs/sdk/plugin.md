@@ -47,6 +47,49 @@ func main() {
 
 The binary is meant to be launched by ironstate. Running it by hand prints go-plugin's "This binary is a plugin" message and exits.
 
+## `ServeWithConfig`
+
+```go
+type ServeConfig struct {
+    Handlers map[string]handler.Handler
+    Filters  map[string]handler.Filter
+}
+
+func ServeWithConfig(config ServeConfig)
+```
+
+Like `Serve`, but the plugin can also provide **filters**. `Serve(handlers)` is the same as `ServeWithConfig(ServeConfig{Handlers: handlers})`. A plugin can provide handlers, filters, or both.
+
+```go
+func main() {
+    plugin.ServeWithConfig(plugin.ServeConfig{
+        Handlers: map[string]handler.Handler{"entry": hostsEntry{}},
+        Filters: map[string]handler.Filter{
+            "fqdn": func(value any, args []any) (any, error) {
+                domain := "local"
+                if len(args) > 0 {
+                    domain = fmt.Sprint(args[0])
+                }
+                return fmt.Sprintf("%v.%s", value, domain), nil
+            },
+        },
+    })
+}
+```
+
+In a playbook that declares `acme.hosts`, the filter above is available as `acme.hosts.fqdn`. It's also available as plain `fqdn`, unless a built-in filter, a [script filter](../filters/custom), or an earlier plugin already uses that name:
+
+```yaml
+vars:
+  host_fqdn: ${{ facts.computer_name | acme.hosts.fqdn('example.com') }}
+```
+
+- Filter names must be identifiers: a letter or underscore, then letters, digits, or underscores. ironstate refuses to load a plugin that declares any other name.
+- `value` and `args` arrive as JSON-like values: `nil`, `bool`, `float64` (every number), `string`, `[]any`, and `map[string]any`.
+- Return any JSON-compatible value. Typed slices and maps (such as `[]string`) are converted for you.
+- A returned error fails the expression with your message.
+- Each call has a 30-second limit.
+
 ### Output
 
 go-plugin owns the process's stdout and stderr. Don't print to them for user-facing output; use [`ctx.Callbacks.Log`](./handler#hostcallbacks). Write your own diagnostics to a log file.

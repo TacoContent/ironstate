@@ -88,7 +88,7 @@ Every matching file is merged, from the **lowest** total weight to the **highest
 | `archlinux.linux.amd64.yml` | os_family + platform + arch | 11 |
 | `traya.yml` | hostname | 16 |
 | `traya.amd64.yml` | hostname + arch | 17 |
-| `ryan.yml` (in `variables/` only) | `USERNAME` env var | merged last |
+| `ryan.yml` (in `variables/` only) | `user_name` fact or `USERNAME` env var | merged last |
 
 A hostname is worth more than all the other parts together (16 > 8 + 4 + 2 + 1), so **any file that names the machine outranks any file that doesn't**.
 

@@ -172,7 +172,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 	hostFacts := facts.Gather()
 	machineName := factString(hostFacts, "computer_name", "host")
 	osFamily := factString(hostFacts, "os_family", "linux")
-	userName := factString(hostFacts, "user_name", "user")
+	userName := "user"
+	if names := facts.UserNameCandidates(hostFacts); len(names) > 0 {
+		userName = strings.ToLower(names[0])
+	}
 
 	dirs := []string{
 		root,

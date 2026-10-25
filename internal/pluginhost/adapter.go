@@ -3,6 +3,7 @@ package pluginhost
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -32,6 +33,31 @@ type handlerAdapter struct {
 	emoji         string
 	requiredTools []string
 	callbacks     *callbackBroker
+}
+
+// factHandlerAdapter is a handlerAdapter whose plugin handler declared
+// itself a FactProducer, so the engine stores its result as a fact.
+type factHandlerAdapter struct {
+	handlerAdapter
+}
+
+// FactName implements engine.FactProducer by asking the plugin which fact
+// this item produces.
+func (h factHandlerAdapter) FactName(item map[string]any) (string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+	response, err := h.client.FactName(ctx, &pluginpb.FactNameRequest{HandlerName: h.name, Item: mustStruct(item)})
+	if err != nil {
+		return "", false
+	}
+	return response.GetName(), response.GetProduced()
+}
+
+func newAdapter(adapter handlerAdapter, factProducer bool) engine.Handler {
+	if factProducer {
+		return factHandlerAdapter{handlerAdapter: adapter}
+	}
+	return adapter
 }
 
 func (h handlerAdapter) Emoji() string { return h.emoji }
@@ -165,6 +191,50 @@ func mustStruct(value map[string]any) *structpb.Struct {
 		return &structpb.Struct{}
 	}
 	return converted
+}
+
+// callFilter invokes one plugin-provided filter.
+func callFilter(client pluginpb.HandlerPluginClient, name string, value any, args []any) (any, error) {
+	request := &pluginpb.CallFilterRequest{Name: name, Args: make([]*structpb.Value, 0, len(args))}
+	encoded, err := encodeValue(value)
+	if err != nil {
+		return nil, fmt.Errorf("filter %q value: %w", name, err)
+	}
+	request.Value = encoded
+	for i, arg := range args {
+		encodedArg, err := encodeValue(arg)
+		if err != nil {
+			return nil, fmt.Errorf("filter %q argument %d: %w", name, i+1, err)
+		}
+		request.Args = append(request.Args, encodedArg)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+	response, err := client.CallFilter(ctx, request)
+	if err != nil {
+		return nil, fmt.Errorf("plugin filter %q: %w", name, err)
+	}
+	if response.GetResult() == nil {
+		return nil, nil
+	}
+	return response.GetResult().AsInterface(), nil
+}
+
+// encodeValue converts a Go value to a protobuf Value, falling back to a
+// JSON round trip for typed slices and maps such as []string.
+func encodeValue(value any) (*structpb.Value, error) {
+	if converted, err := structpb.NewValue(value); err == nil {
+		return converted, nil
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("value of type %T is not JSON-compatible: %w", value, err)
+	}
+	var generic any
+	if err := json.Unmarshal(data, &generic); err != nil {
+		return nil, err
+	}
+	return structpb.NewValue(generic)
 }
 
 func structMap(value *structpb.Struct) map[string]any {

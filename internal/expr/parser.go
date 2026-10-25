@@ -29,6 +29,13 @@ type parser struct {
 func (p *parser) current() token { return p.tokens[p.pos] }
 func (p *parser) advance()       { p.pos++ }
 
+func (p *parser) peek(offset int) token {
+	if p.pos+offset < len(p.tokens) {
+		return p.tokens[p.pos+offset]
+	}
+	return p.tokens[len(p.tokens)-1]
+}
+
 func (p *parser) errf(msg string) error {
 	return &SyntaxError{Expression: p.expression, Message: msg}
 }
@@ -180,6 +187,13 @@ func (p *parser) parsePipeline() (Node, error) {
 			return nil, p.errf("expected filter name after '|'")
 		}
 		p.advance()
+		filterName := nameTok.str
+		// Plugin filters are qualified as organization.plugin.name.
+		for p.current().typ == tokDot && p.peek(1).typ == tokIdent {
+			p.advance()
+			filterName += "." + p.current().str
+			p.advance()
+		}
 		var args []Node
 		if p.current().typ == tokLParen {
 			args, err = p.parseCallArguments()
@@ -187,7 +201,7 @@ func (p *parser) parsePipeline() (Node, error) {
 				return nil, err
 			}
 		}
-		left = &FilterNode{Target: left, Name: nameTok.str, Args: args}
+		left = &FilterNode{Target: left, Name: filterName, Args: args}
 	}
 	return left, nil
 }
