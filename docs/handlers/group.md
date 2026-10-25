@@ -1,3 +1,10 @@
+---
+layout: default
+title: group
+parent: 👋 Handlers
+nav_order: 21
+---
+
 # group
 
 The `group` handler manages local groups on Windows, Linux, and macOS.
@@ -6,8 +13,8 @@ The `group` handler manages local groups on Windows, Linux, and macOS.
 
 | Field | Required | Default | Description |
 | --- | --- | --- | --- |
-| `name` | yes | unset | Group name |
-| `gid` | no | unset | Group id on Unix/macOS |
+| `name` | yes | - | Group name |
+| `gid` | no | - | Group id on Unix/macOS |
 | `system` | no | `false` | Create as a system group where supported |
 | `state` | no | `present` | `present` / `absent` / `latest` |
 

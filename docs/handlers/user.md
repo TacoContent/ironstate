@@ -1,3 +1,10 @@
+---
+layout: default
+title: user
+parent: 👋 Handlers
+nav_order: 44
+---
+
 # user
 
 The `user` handler manages local users on Windows, Linux, and macOS.
@@ -6,15 +13,15 @@ The `user` handler manages local users on Windows, Linux, and macOS.
 
 | Field | Required | Default | Description |
 | --- | --- | --- | --- |
-| `name` | yes | unset | User name |
-| `password` | no | unset | Password value (platform behavior varies) |
-| `password_env` | no | unset | Environment variable name containing password |
-| `uid` | no | unset | User id on Unix/macOS |
-| `group` / `gid` | no | unset | Primary group (name or gid) |
-| `groups` | no | unset | Supplementary groups |
-| `shell` | no | unset | Login shell |
-| `home` | no | unset | Home directory |
-| `comment` | no | unset | Display/full name/comment |
+| `name` | yes | - | User name |
+| `password` | no | - | Password value (platform behavior varies) |
+| `password_env` | no | - | Environment variable name containing password |
+| `uid` | no | - | User id on Unix/macOS |
+| `group` / `gid` | no | - | Primary group (name or gid) |
+| `groups` | no | - | Supplementary groups |
+| `shell` | no | - | Login shell |
+| `home` | no | - | Home directory |
+| `comment` | no | - | Display/full name/comment |
 | `system` | no | `false` | Create as a system account where supported |
 | `create_home` | no | `true` | Linux: create home directory |
 | `remove_home` | no | `false` | Linux: remove home directory on delete |
