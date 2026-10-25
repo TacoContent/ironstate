@@ -17,9 +17,13 @@
     "playbooks/**/*.yaml"
   ],
   "cSpell.words": [
+    "armv",
     "blockinfile",
+    "camalot",
+    "choco",
     "IRONSTATE",
     "ollama",
+    "Termux",
     "winget"
   ]
 }
