@@ -1,9 +1,10 @@
-<!-- markdownlint-disable MD033 MD041 MD024 -->
+<!-- markdownlint-disable MD033 MD041 MD024 MD022 -->
 
 # Installation
 {: .no_toc }
 
 ## xget
+{: .no_toc }
 
 [xget](https://github.com/camalot/xget) is the simplest, cross-platform way to install Ironstate.
 

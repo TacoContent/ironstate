@@ -6,7 +6,7 @@ nav_order: 1
 ---
 
 <!-- markdownlint-disable-next-line MD025 MD022 -->
-# Ironstate
+# ![Ironstate](assets/images/logo-64x64.png){: style="vertical-align: middle;" } Ironstate
 {: .fs-9 }
 
 A declarative, Ansible-style task runner driven by YAML. Describe the state a machine should be in, preview the changes, then apply them, from a single cross-platform binary.
