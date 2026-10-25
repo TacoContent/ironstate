@@ -1,5 +1,5 @@
 // Package runstate holds the target-side state of remote-apply runs: the
-// single-writer lock and per-run event logs (docs/plans/remote-apply.md §10).
+// single-writer lock and per-run event logs (docs/_plans/remote-apply.md §10).
 package runstate
 
 import (

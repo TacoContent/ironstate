@@ -31,8 +31,8 @@ ironstate filters list [--dir <dir>]
 
 Prints every available filter, sorted by name, one per line, with its kind:
 
-- `built-in`: compiled into ironstate. See [Built-in filters](../../filters/builtin.md).
-- `script`: a script discovered under `--dir`. See [Custom filters](../../filters/custom.md).
+- `built-in`: compiled into ironstate. See [Built-in filters](../../filters/builtin).
+- `script`: a script discovered under `--dir`. See [Custom filters](../../filters/custom).
 
 | Flag | Default | Description |
 | --- | --- | --- |

@@ -50,7 +50,7 @@ tasks:
 
 | Field | Required | Description |
 | --- | --- | --- |
-| `name` | yes | Folder to load, relative to the **playbook root**, such as `roles/shells`, `packages/kanata`, or `hosts/base`. ironstate loads `<name>/main.yml` and that folder's [overlays](./naming.md). |
+| `name` | yes | Folder to load, relative to the **playbook root**, such as `roles/shells`, `packages/kanata`, or `hosts/base`. ironstate loads `<name>/main.yml` and that folder's [overlays](./naming). |
 | `state` | no | Exposed as `${{ package.state }}` (default `present`). |
 | `tags` | no | Exposed as `${{ package.tags }}` (default `[]`). |
 | `with` | no | Inputs exposed as `${{ inputs.<key> }}`. |
@@ -77,7 +77,7 @@ This lets a package decide what an "absent" state means. A package can remove it
 | `facts.*`, `vars.*`, results | The same as everywhere else. |
 
 - **Relative paths** in `copy.src`, `template.src`, and `shell.script` resolve from the package folder.
-- **Package `vars:`** are defaults visible only inside that package. A site variable with the same name replaces them. See [Package variables](./facts-vars.md#package-variables).
+- **Package `vars:`** are defaults visible only inside that package. A site variable with the same name replaces them. See [Package variables](./facts-vars#package-variables).
 - **Package `envs:`** apply while the package's tasks run.
 - **Overlays** such as `packages/kanata/windows.yml` or `roles/shells/krayt.yml` are merged on top of the package's `main.yml`.
 - **Nested includes** also resolve `name` from the playbook root.
@@ -98,4 +98,4 @@ tasks:
   - copy: { src: files/kanata.kbd, dest: ~/.kanata/kanata.kbd, state: "${{ package.state }}" }
 ```
 
-To pull tasks from **outside** the playbook, such as a git repository or a shared folder, use [`uses`](./uses.md).
+To pull tasks from **outside** the playbook, such as a git repository or a shared folder, use [`uses`](./uses).

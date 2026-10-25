@@ -136,7 +136,7 @@ From internal/engine/engine.go:99-104, verbatim:
 
 // Handler is the uniform Test/Describe/Install/Uninstall shape every
 // module implements — ports modules/Handlers/*.psm1's PSCustomObject
-// script-block contract (docs/plans/go-rewrite.md §4.8).
+// script-block contract (docs/_plans/go-rewrite.md §4.8).
 type Handler interface {
 	Test(item map[string]any, name string, ctx Context) (bool, error)
 	Describe(item map[string]any, action Action, ctx Context) (string, error)
@@ -248,13 +248,13 @@ Treat command-invocation failures as "nothing to report" (return nil, nil //noli
 internal/scan/scan.go's Registry.ScanAll()/ScanAllWithProgress() calls every registered Scanner.Scan(), stamps Role from Scanner.Role() if the item didn't already set one, and aggregates into one []Item slice, which GeneratePlaybook then buckets by Role and writes out as roles/<role>/main.yml YAML task lists (this backs ironstate init --scan).
 
 6. Documentation on intended design for pacman/yum/apk/appimage/snap/flatpak/scoop/macports
-I found no documentation anywhere in the repo describing these 8 specific handlers. I searched (case-insensitively) for pacman|yum|apk|appimage|snap|flatpak|scoop|macports|dnf|zypper across the whole repo. Matches were all false positives/unrelated (.goreleaser.yaml's --snapshot flag, internal/engine/async.go's "wait_for"/"snapshot" doc comments about async task state, internal/handlers/waitfor.go, CI workflow "snap"-shot builds). None of the design docs (docs/plans/go-rewrite.md, docs/plans/go-rewrite-progress.md, docs/plans/notes.md, docs/plans/ironstate-plugins.md, docs/plans/secrets-masking.md) or README.md or ironstate.schema.json mention any of these 8 package managers by name.
+I found no documentation anywhere in the repo describing these 8 specific handlers. I searched (case-insensitively) for pacman|yum|apk|appimage|snap|flatpak|scoop|macports|dnf|zypper across the whole repo. Matches were all false positives/unrelated (.goreleaser.yaml's --snapshot flag, internal/engine/async.go's "wait_for"/"snapshot" doc comments about async task state, internal/handlers/waitfor.go, CI workflow "snap"-shot builds). None of the design docs (docs/_plans/go-rewrite.md, docs/_plans/go-rewrite-progress.md, docs/_plans/notes.md, docs/_plans/ironstate-plugins.md, docs/_plans/secrets-masking.md) or README.md or ironstate.schema.json mention any of these 8 package managers by name.
 
-docs/plans/notes.md's "Possible Handlers" section only lists non-package-manager ideas (find, get_url, hostname, choice, service, service_facts, tempfile, unarchive) — nothing about pacman/yum/etc.
+docs/_plans/notes.md's "Possible Handlers" section only lists non-package-manager ideas (find, get_url, hostname, choice, service, service_facts, tempfile, unarchive) — nothing about pacman/yum/etc.
 
 This means there is no existing design intent to follow for these 8 handlers beyond the general pattern established by apt/homebrew/winget/chocolatey/npm/pipx/cargo/go/gem/eget — you'll be extrapolating the pattern, not implementing a pre-specified design. Given the org's "ask when you need clarification, don't assume context" instruction, you may want to confirm scope/behavior choices (e.g., should pacman/yum/apk/dnf-equivalents batch multiple packages like apt does, or one-at-a-time like the rest? should appimage/snap/flatpak have distinct install semantics like go/eget's file-existence-based Test? should all 8 implement ScanCapable?) before implementation.
 
-docs/plans/ironstate-plugins.md (9 lines) is a separate, unrelated future-looking note about an external plugin system (ironstate-handler-<name> Go modules discovered/installed dynamically) — not relevant to built-in handlers and not yet implemented.
+docs/_plans/ironstate-plugins.md (9 lines) is a separate, unrelated future-looking note about an external plugin system (ironstate-handler-<name> Go modules discovered/installed dynamically) — not relevant to built-in handlers and not yet implemented.
 
 7. Test conventions (from packagemanagers_test.go and handlers_test.go)
 Tests for package-manager handlers all live in internal/handlers/packagemanagers_test.go (one shared file, not per-handler — matches the flat-package convention). Non-package-manager handler tests live in per-concern files (handlers_test.go, group_test.go, user_test.go, template_test.go, mountfacts_test.go, async_test.go, registry_windows_test.go, scheduledtask_windows_test.go).

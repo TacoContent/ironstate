@@ -1,7 +1,7 @@
 // Package template implements '${{ ... }}' expansion — span scanning,
 // whole-value vs. embedded substitution, and the soft/strict two-pass
 // resolution model — a port of modules/Templates.psm1 built on top of
-// internal/expr. See docs/plans/go-rewrite.md §4.4 for the three-pass
+// internal/expr. See docs/_plans/go-rewrite.md §4.4 for the three-pass
 // model this package is one part of (the third, self-referential pass
 // lives in the future internal/handlers/template package).
 package template

@@ -6,7 +6,7 @@ import (
 )
 
 // ParseVarOverride splits a '--var key=value' argument into its dotted
-// key path and raw string value — ports docs/plans/notes.md's
+// key path and raw string value — ports docs/_plans/notes.md's
 // "--var key=value" flag. The key may contain '.'-separated segments
 // addressing a nested vars map (e.g. "ssh.port"); the value is always
 // kept as a literal string (no type coercion), matching the flag's

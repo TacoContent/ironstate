@@ -23,17 +23,17 @@ The ironstate SDK is a standalone Go module for building **external handler plug
 go get github.com/TacoContent/ironstate/sdk@latest
 ```
 
-The SDK is its own module, so plugins don't depend on ironstate's internal packages. For a walkthrough, start with [Create A Plugin](../plugins/create.md). These pages are the API reference.
+The SDK is its own module, so plugins don't depend on ironstate's internal packages. For a walkthrough, start with [Create A Plugin](../plugins/crea). These pages are the API reference.
 
 ## Packages
 
 | Package | Import path | Purpose |
 | --- | --- | --- |
-| [`handler`](./handler.md) | `github.com/TacoContent/ironstate/sdk/handler` | The `Handler` interface, `Context`, `ExecResult`, and optional capability interfaces. |
-| [`plugin`](./plugin.md) | `github.com/TacoContent/ironstate/sdk/plugin` | `Serve`, which runs your handlers as a plugin, plus handshake constants. |
-| [`testing`](./testing.md) | `github.com/TacoContent/ironstate/sdk/testing` | Test doubles and a profiling helper. |
-| [`becomeexec`](./becomeexec.md) | `github.com/TacoContent/ironstate/sdk/becomeexec` | Wraps commands with `sudo` when a task requests `become`. |
-| [`proto`](./protocol.md) | `github.com/TacoContent/ironstate/sdk/proto` | Generated gRPC types for the `ironstate.plugin.v1` protocol. |
+| [`handler`](./handler) | `github.com/TacoContent/ironstate/sdk/handler` | The `Handler` interface, `Context`, `ExecResult`, and optional capability interfaces. |
+| [`plugin`](./plugin) | `github.com/TacoContent/ironstate/sdk/plugin` | `Serve`, which runs your handlers as a plugin, plus handshake constants. |
+| [`testing`](./testing) | `github.com/TacoContent/ironstate/sdk/testing` | Test doubles and a profiling helper. |
+| [`becomeexec`](./becomeexec) | `github.com/TacoContent/ironstate/sdk/becomeexec` | Wraps commands with `sudo` when a task requests `become`. |
+| [`proto`](./protocol) | `github.com/TacoContent/ironstate/sdk/proto` | Generated gRPC types for the `ironstate.plugin.v1` protocol. |
 
 ## Requirements
 
@@ -62,6 +62,6 @@ end of run     ─── kill process
 
 ## Related
 
-- [Plugins](../plugins/index.md): naming, installation, diagnostics, and remote apply.
-- [Using A Plugin](../plugins/using.md): declaring plugins in a playbook.
-- [`ironstate plugin`](../cli/commands/plugin.md): install, update, test, and benchmark plugins.
+- [Plugins](../plugins/index): naming, installation, diagnostics, and remote apply.
+- [Using A Plugin](../plugins/using): declaring plugins in a playbook.
+- [`ironstate plugin`](../cli/commands/plugin): install, update, test, and benchmark plugins.

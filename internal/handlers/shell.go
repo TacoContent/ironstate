@@ -20,7 +20,7 @@ import (
 // '${{ pf.ProgramFilesDir }}', see Merge-ShellNativeResult). Go has no
 // equivalent to "run PowerShell script content in-process" - every host,
 // including 'pwsh', is always a subprocess here. Per
-// docs/plans/go-rewrite.md §4.8/§8/§11, that native-object merge is
+// docs/_plans/go-rewrite.md §4.8/§8/§11, that native-object merge is
 // already audited as unused anywhere in this repo's real YAML today, so
 // this gap is accepted rather than worked around.
 type shellHandler struct{}

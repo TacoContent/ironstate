@@ -17,7 +17,7 @@ import (
 // fakeHandler is a minimal, call-tracking Handler double used to drive
 // internal/engine's dispatch loop without any real filesystem/CLI I/O -
 // exactly what the "prove the loop end-to-end" Phase 3 exit criterion
-// calls for (docs/plans/go-rewrite.md §10).
+// calls for (docs/_plans/go-rewrite.md §10).
 type fakeHandler struct {
 	installed     bool
 	emoji         string

@@ -48,20 +48,20 @@ Because each leaf is resolved just before it runs, later tasks can react to earl
 
 | Page | Covers |
 | --- | --- |
-| [Folder structure](./structure.md) | What each folder in a playbook is for. |
-| [Task files](./task-files.md) | The top-level keys of a YAML file: `tasks`, `vars`, `envs`, `tags`, `plugins`. |
-| [Tasks](./tasks.md) | Leaf actions, grouping tasks, modules, and the shared task fields. |
-| [File naming](./naming.md) | How overlay file names select machines, and their precedence. |
-| [Hosts and variables](./hosts.md) | Per-machine and per-user overlays in `hosts/` and `variables/`. |
-| [Facts and variables](./facts-vars.md) | Built-in facts, `vars`, and variable precedence. |
-| [Conditions and expressions](./conditions.md) | `when`, `${{ }}` templates, operators, and type tests. |
-| [Loops](./loops.md) | `items`, `with`, and nested loops with `parent`. |
-| [Results and failures](./results.md) | `id`, `failed_when`, `continue_on_error`, and `become`. |
-| [Tags](./tags.md) | Tagging tasks and running a subset with `--tags`. |
-| [Environment variables](./environment.md) | `envs` / `environment` and `valueFrom` sources. |
-| [Includes](./includes.md) | Reusable packages and roles with `include`. |
-| [Remote sources](./uses.md) | Pulling tasks from git or shared folders with `uses`. |
-| [Secrets](./secrets.md) | `.env`, `.secrets`, and redacting sensitive values. |
-| [Inventory](./inventory.md) | Running a playbook on other machines over SSH. |
+| [Folder structure](./structurd) | What each folder in a playbook is for. |
+| [Task files](./task-files) | The top-level keys of a YAML file: `tasks`, `vars`, `envs`, `tags`, `plugins`. |
+| [Tasks](./tasks) | Leaf actions, grouping tasks, modules, and the shared task fields. |
+| [File naming](./naming) | How overlay file names select machines, and their precedence. |
+| [Hosts and variables](./hosts) | Per-machine and per-user overlays in `hosts/` and `variables/`. |
+| [Facts and variables](./facts-vars) | Built-in facts, `vars`, and variable precedence. |
+| [Conditions and expressions](./conditions) | `when`, `${{ }}` templates, operators, and type tests. |
+| [Loops](./loops) | `items`, `with`, and nested loops with `parent`. |
+| [Results and failures](./results) | `id`, `failed_when`, `continue_on_error`, and `become`. |
+| [Tags](./tags) | Tagging tasks and running a subset with `--tags`. |
+| [Environment variables](./environment) | `envs` / `environment` and `valueFrom` sources. |
+| [Includes](./includes) | Reusable packages and roles with `include`. |
+| [Remote sources](./uses) | Pulling tasks from git or shared folders with `uses`. |
+| [Secrets](./secrets) | `.env`, `.secrets`, and redacting sensitive values. |
+| [Inventory](./inventory) | Running a playbook on other machines over SSH. |
 
-For each module's fields, such as `winget`, `shell`, or `copy`, see [Handlers](../handlers/index.md).
+For each module's fields, such as `winget`, `shell`, or `copy`, see [Handlers](../handlers/).

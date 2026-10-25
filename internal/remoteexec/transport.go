@@ -1,5 +1,5 @@
 // Package remoteexec is the controller side of remote apply
-// (docs/plans/remote-apply.md): it packages a playbook into a job, starts
+// (docs/_plans/remote-apply.md): it packages a playbook into a job, starts
 // an 'ironstate agent' over a Transport, and collects its event stream.
 package remoteexec
 

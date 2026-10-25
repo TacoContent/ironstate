@@ -2,7 +2,7 @@ package templateengines
 
 // gotemplate.go: an additive, non-compatibility-required render engine
 // using Go's stdlib text/template directly - offered because it's
-// effectively free once the engine is Go (docs/plans/go-rewrite.md §4.7).
+// effectively free once the engine is Go (docs/_plans/go-rewrite.md §4.7).
 // gotemplate's own '{{ }}' delimiter is unrelated to ironstate's own
 // '${{ }}' expression syntax - the render *context* is still built the
 // same way (facts/vars/registry); only the template body's own syntax

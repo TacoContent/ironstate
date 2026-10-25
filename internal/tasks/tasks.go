@@ -1,6 +1,6 @@
 // Package tasks implements task/action tree normalization and flattening
 // — a port of modules/Tasks.psm1's Expand-TaskTree. See that module's
-// docstring (mirrored in docs/plans/go-rewrite.md §4.9) for the full
+// docstring (mirrored in docs/_plans/go-rewrite.md §4.9) for the full
 // algorithm description: tags/when accumulate top-down; 'with'/'items'
 // materializes a task once per loop value *before* anything else about it
 // is evaluated; 'include' loads another document's tasks via
@@ -78,7 +78,7 @@ type EnvironmentScope struct {
 // first one in this list wins; the original PowerShell instead used
 // whatever key order ConvertFrom-Yaml -Ordered preserved from the YAML
 // source, which this port does not reproduce (map key order is not
-// preserved through Go's map[string]any — see docs/plans/go-rewrite.md
+// preserved through Go's map[string]any — see docs/_plans/go-rewrite.md
 // §4.2). This only affects a document that is already invalid by the
 // schema (two module keys on one leaf), so the different tie-break is a
 // documented, low-risk gap rather than a silent behavior change for any

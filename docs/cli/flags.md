@@ -18,7 +18,7 @@ parent: 🖥️ CLI
 
 ---
 
-These flags apply when **running a playbook** (`ironstate [flags]`). Subcommands have their own flags, documented on each [command page](./commands/index.md).
+These flags apply when **running a playbook** (`ironstate [flags]`). Subcommands have their own flags, documented on each [command page](./commands/).
 
 ## Playbook selection and variables
 
@@ -33,7 +33,7 @@ ironstate --playbook main.yml --vars-file ./ci-vars.yml --vars-file ./local.yml
 ironstate --playbook main.yml --var editor=nvim --var ssh.port=2222
 ```
 
-The full variable precedence order is described in [Facts & Variables](../playbooks/facts-vars.md#variable-precedence).
+The full variable precedence order is described in [Facts & Variables](../playbooks/facts-vars#variable-precedence).
 
 ## Execution
 
@@ -49,19 +49,19 @@ The full variable precedence order is described in [Facts & Variables](../playbo
 ironstate --tags cli,security --tag editors --apply
 ```
 
-Untagged tasks always run, even when tags are selected. See [Tags](../playbooks/tags.md).
+Untagged tasks always run, even when tags are selected. See [Tags](../playbooks/tags).
 
 ## Output
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--output <format>` | `table` | `table`, `json`, or `ndjson`. See [Output](./index.md#output). |
+| `--output <format>` | `table` | `table`, `json`, or `ndjson`. See [Output](./#output). |
 | `-v`, `--verbose` | `false` | Also print a line for every already-satisfied or skipped task. |
 | `--no-color` | `false` | Disable colored output. `NO_COLOR` and `IRONSTATE_NO_COLOR` do the same. |
 
 ## Remote apply
 
-These flags run the playbook on other machines over SSH. They are shared with [`ironstate remote`](./commands/remote.md). See [Inventory files](../playbooks/inventory.md) for the inventory format and how remote apply works.
+These flags run the playbook on other machines over SSH. They are shared with [`ironstate remote`](./commands/remote). See [Inventory files](../playbooks/inventory) for the inventory format and how remote apply works.
 
 | Flag | Default | Description |
 | --- | --- | --- |
@@ -129,7 +129,7 @@ filters:
     .sh: [/usr/local/bin/bash]
 ```
 
-`filters.dir` and `filters.interpreters` exist only in the config file. Setting `filters.interpreters` **replaces** the default map, so list every extension you want discovered. See [Custom filters](../filters/custom.md#choosing-interpreters).
+`filters.dir` and `filters.interpreters` exist only in the config file. Setting `filters.interpreters` **replaces** the default map, so list every extension you want discovered. See [Custom filters](../filters/custom#choosing-interpreters).
 
 ### `.env` and `.secrets`
 
@@ -137,6 +137,6 @@ Before a run, ironstate reads `KEY=VALUE` lines from `.env`, then from `.secrets
 
 - Blank lines and lines starting with `#` are ignored.
 - A value wrapped in matching `'...'` or `"..."` has the quotes stripped.
-- Every value from `.secrets` is registered as a secret and is redacted as `***` in all output. See [Secrets](../playbooks/secrets.md).
+- Every value from `.secrets` is registered as a secret and is redacted as `***` in all output. See [Secrets](../playbooks/secrets).
 
 These values are visible to `lookup('env', 'KEY')`, the `env` filter, `envs.KEY`, and any process ironstate starts. With remote apply, they're forwarded in memory to each target.

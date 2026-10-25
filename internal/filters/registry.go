@@ -1,6 +1,6 @@
 // Package filters implements the built-in '|' pipeline filters (a direct
 // port of filters/*.ps1) plus the external script-filter adapter
-// described in docs/plans/go-rewrite.md §4.5 (see script.go/pool.go). It
+// described in docs/_plans/go-rewrite.md §4.5 (see script.go/pool.go). It
 // implements internal/expr.Filters so internal/expr never imports it.
 package filters
 

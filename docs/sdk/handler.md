@@ -70,7 +70,7 @@ For each task, ironstate:
 | any result, non-nil `error` from `Install`/`Uninstall` | The task failed with `rc: 1` and your error message as `stderr`. |
 | non-nil `error` from `Test`/`Describe` | The **whole run stops** with that error, and `continue_on_error` doesn't apply. Reserve errors for broken input; report "not there" as `false`. |
 
-Failed results (not `Test`/`Describe` errors) follow the playbook's [`failed_when` and `continue_on_error`](../playbooks/results.md).
+Failed results (not `Test`/`Describe` errors) follow the playbook's [`failed_when` and `continue_on_error`](../playbooks/results).
 
 ### Timeouts
 
@@ -120,9 +120,9 @@ type Become struct {
 }
 ```
 
-ironstate **doesn't** elevate the plugin process. When `Enabled` is `true`, your handler must elevate the commands it runs itself. [`becomeexec.WrapForBecome`](./becomeexec.md) does this for Linux and macOS.
+ironstate **doesn't** elevate the plugin process. When `Enabled` is `true`, your handler must elevate the commands it runs itself. [`becomeexec.WrapForBecome`](./becomeexec) does this for Linux and macOS.
 
-`Enabled` is already `false` when elevation isn't allowed: inside an isolated [`uses`](../playbooks/uses.md#isolation), or on a remote inventory host with `become: false`.
+`Enabled` is already `false` when elevation isn't allowed: inside an isolated [`uses`](../playbooks/uses#isolation), or on a remote inventory host with `become: false`.
 
 ## `HostCallbacks`
 
@@ -248,7 +248,7 @@ type ScanItem struct {
 }
 ```
 
-Lets your handler contribute to [`ironstate init --scan`](../cli/commands/init.md), which generates a playbook from the current system. Every installed plugin, at its latest version, is scanned.
+Lets your handler contribute to [`ironstate init --scan`](../cli/commands/init), which generates a playbook from the current system. Every installed plugin, at its latest version, is scanned.
 
 | Field / method | Description |
 | --- | --- |

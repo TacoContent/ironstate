@@ -1,5 +1,5 @@
 // Package bundle packs the files a remote run needs into a tar.gz stream
-// and safely unpacks it on the target (docs/plans/remote-apply.md §7).
+// and safely unpacks it on the target (docs/_plans/remote-apply.md §7).
 package bundle
 
 import (

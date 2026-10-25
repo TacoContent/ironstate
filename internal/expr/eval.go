@@ -9,7 +9,7 @@ import (
 
 // Filters is the pipeline's filter registry, injected rather than
 // hardcoded — internal/filters implements this so internal/expr never
-// depends on it (docs/plans/go-rewrite.md §4.3).
+// depends on it (docs/_plans/go-rewrite.md §4.3).
 type Filters interface {
 	Apply(name string, value any, args []any) (any, error)
 }

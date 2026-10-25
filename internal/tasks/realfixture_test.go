@@ -13,7 +13,7 @@ import (
 )
 
 // realModuleNames mirrors ironstate.ps1's Get-PackageManagerHandlers
-// registration list (docs/plans/go-rewrite.md §2) — used to flatten the
+// registration list (docs/_plans/go-rewrite.md §2) — used to flatten the
 // *real* repo's main.yml against, as an integration smoke test that this
 // port doesn't choke on real content ahead of internal/engine existing.
 var realModuleNames = []string{

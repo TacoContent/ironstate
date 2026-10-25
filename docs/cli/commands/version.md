@@ -37,7 +37,7 @@ Builds made with `go install` or `go build` don't receive release build metadata
 ironstate dev (commit none, built unknown)
 ```
 
-They work the same otherwise. When reporting a bug, include this output. See [Support](../../support.md).
+They work the same otherwise. When reporting a bug, include this output. See [Support](../../support).
 
 > [!NOTE]
-> The remote-apply controller ships its own binary to targets of the same OS and architecture. For other platforms, it downloads the release that matches this version. A `dev` build can't download one, so pass `--agent-binary` instead. See [Flags › Remote apply](../flags.md#remote-apply).
+> The remote-apply controller ships its own binary to targets of the same OS and architecture. For other platforms, it downloads the release that matches this version. A `dev` build can't download one, so pass `--agent-binary` instead. See [Flags › Remote apply](../flags#remote-apply).

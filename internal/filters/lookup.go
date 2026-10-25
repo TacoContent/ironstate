@@ -11,7 +11,7 @@ import (
 )
 
 // httpGet is overridable in tests so 'lookup("url", ...)' never needs a
-// live network endpoint (docs/plans/go-rewrite.md §4.5). headers is nil
+// live network endpoint (docs/_plans/go-rewrite.md §4.5). headers is nil
 // for a plain request.
 var httpGet = func(url string, headers http.Header) (string, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil) //nolint:gosec // target is user-authored YAML content, same trust boundary as the rest of this tool

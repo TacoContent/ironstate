@@ -134,4 +134,4 @@ go tool pprof -top cpu.out
 
 ## End-to-end tests
 
-To test the real binary through the plugin protocol, install it and use [`ironstate plugin test`](../cli/commands/plugin.md) or `ironstate plugin bench`. See [Plugin Testing](../plugins/test.md).
+To test the real binary through the plugin protocol, install it and use [`ironstate plugin test`](../cli/commands/plugin) or `ironstate plugin bench`. See [Plugin Testing](../plugins/test).

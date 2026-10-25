@@ -46,7 +46,7 @@ tasks:
   - shell: echo $GREETING          # hello
 ```
 
-Read the current value in expressions with `envs.NAME`, which includes inherited OS variables, or with the [`env`](../filters/builtin.md#env) filter.
+Read the current value in expressions with `envs.NAME`, which includes inherited OS variables, or with the [`env`](../filters/builtin#env) filter.
 
 ## `PATH`
 

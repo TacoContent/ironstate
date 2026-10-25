@@ -18,7 +18,7 @@ grand_parent: 🖥️ CLI
 {:toc}
 
 ---
-Manages external handler [plugins](../../plugins/index.md).
+Manages external handler [plugins](../../plugins/).
 
 ## Usage
 
@@ -145,5 +145,5 @@ ironstate plugin bench acme.hosts --handler entry --item '{"hostname":"build.loc
 
 ## See also
 
-- [Using a plugin](../../plugins/using.md): declaring plugins in a playbook and using the lockfile.
-- [`doctor --playbook`](./doctor.md#plugins---playbook): validating a playbook's plugins.
+- [Using a plugin](../../plugins/using): declaring plugins in a playbook and using the lockfile.
+- [`doctor --playbook`](./doctor#plugins---playbook): validating a playbook's plugins.

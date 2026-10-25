@@ -41,7 +41,7 @@ tasks:
 | `@v1.2.3` | The version. Required. `@latest` means the newest version **installed** on this machine, which isn't reproducible; prefer an exact version. |
 | `entry` | One handler the plugin provides. A plugin can provide several. |
 
-Plugin tasks work like built-in ones. They support `state`, `when`, `loop`, `tags`, `become`, `id`, `failed_when`, and `continue_on_error`. See [Tasks](../playbooks/tasks.md).
+Plugin tasks work like built-in ones. They support `state`, `when`, `loop`, `tags`, `become`, `id`, `failed_when`, and `continue_on_error`. See [Tasks](../playbooks/tasks).
 
 > [!NOTE]
 > `ironstate validate` doesn't know about `plugins:` or qualified handler names yet, so it reports them as schema errors. Use `ironstate doctor --playbook` (below) to check a plugin playbook.
@@ -62,7 +62,7 @@ This runs `go install github.com/acme/ironstate-handler-hosts@v1.2.3`, checks th
 | macOS | `~/Library/Caches/ironstate/plugins` |
 | Windows | `%LocalAppData%\ironstate\plugins` |
 
-Several versions can be installed side by side. Manage them with [`ironstate plugin`](../cli/commands/plugin.md): `list`, `info`, `update`, and `uninstall`.
+Several versions can be installed side by side. Manage them with [`ironstate plugin`](../cli/commands/plugin): `list`, `info`, `update`, and `uninstall`.
 
 ### Installing automatically
 
@@ -117,7 +117,7 @@ ironstate doctor --playbook path/to/playbook
 
 `doctor` checks that every declared plugin is installed and matches the lockfile, launches each one, and confirms every qualified handler the playbook uses is provided by its plugin. Each problem includes the command that fixes it.
 
-To try a single handler without a playbook, use [`ironstate plugin test`](../cli/commands/plugin.md):
+To try a single handler without a playbook, use [`ironstate plugin test`](../cli/commands/plugin):
 
 ```shell
 ironstate plugin test acme.hosts --handler entry \
@@ -126,12 +126,12 @@ ironstate plugin test acme.hosts --handler entry \
 
 ## Remote targets
 
-Plugin playbooks work with [remote apply](../playbooks/inventory.md#plugins). Handlers run on the target:
+Plugin playbooks work with [remote apply](../playbooks/inventory#plugins). Handlers run on the target:
 
 - **Same OS and architecture as the controller**: the controller copies its installed plugin, at the locked version when there is one, to the target.
 - **Otherwise**: the target uses its own installed plugins. `--allow-plugin-install` is passed through, so the target can install them itself if it has Go.
 
-See [Plugins with remote apply](./index.md#plugins-with-remote-apply) for details.
+See [Plugins with remote apply](./#plugins-with-remote-apply) for details.
 
 ## Trust
 

@@ -18,7 +18,7 @@ grand_parent: 🖥️ CLI
 {:toc}
 
 ---
-Helper commands for [remote apply](../../playbooks/inventory.md). Running the playbook remotely uses the main command with `--target` or `--inventory`. These subcommands check targets and maintain them.
+Helper commands for [remote apply](../../playbooks/inventory). Running the playbook remotely uses the main command with `--target` or `--inventory`. These subcommands check targets and maintain them.
 
 ## Usage
 
@@ -47,7 +47,7 @@ Use it to check SSH access, host keys, and agent bootstrap before your first `--
 ironstate remote logs <host> [run_id] --inventory inventory.yml
 ```
 
-Prints the raw NDJSON event log of a host's most recent run. If you pass `run_id`, it prints that run's log instead. Every remote run writes its events to the target's cache (`runs/<run_id>/events.ndjson`), and the last 20 runs are kept. This is how you collect results from a [detached](../flags.md#remote-apply) (`--remote-detach`) run.
+Prints the raw NDJSON event log of a host's most recent run. If you pass `run_id`, it prints that run's log instead. Every remote run writes its events to the target's cache (`runs/<run_id>/events.ndjson`), and the last 20 runs are kept. This is how you collect results from a [detached](../flags#remote-apply) (`--remote-detach`) run.
 
 `<host>` is an inventory host name when you pass `--inventory`. Otherwise it's a target string, such as `user@host`. It must select exactly one host.
 
@@ -77,7 +77,7 @@ All three subcommands accept the shared remote flags:
 | `--ssh-accept-new-host-keys` | `false` | Use `StrictHostKeyChecking=accept-new`. |
 | `--skip-agent-verification` | `false` | Skip target-side SHA-256 verification. |
 
-See [Flags › Remote apply](../flags.md#remote-apply) for full descriptions.
+See [Flags › Remote apply](../flags#remote-apply) for full descriptions.
 
 ## Exit codes
 

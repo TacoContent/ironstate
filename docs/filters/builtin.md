@@ -17,7 +17,7 @@ parent: 🧹 Filters
 {:toc}
 
 ---
-Every filter below ships with ironstate and is always available. Built-ins take priority over [custom script filters](./custom.md) with the same name.
+Every filter below ships with ironstate and is always available. Built-ins take priority over [custom script filters](./custom) with the same name.
 
 Unless noted, a filter is **null-in/null-out**: piping `null` returns `null`.
 
@@ -303,7 +303,7 @@ tasks:
 ```
 
 > [!NOTE]
-> During a [remote apply](../playbooks/inventory.md), `lookup` runs **on the target**, not the controller.
+> During a [remote apply](../playbooks/inventory), `lookup` runs **on the target**, not the controller.
 
 ### `from_json`
 

@@ -19,7 +19,7 @@ has_children: false
 
 ---
 
-This page walks you from a freshly [installed](./installation.md) `ironstate` binary to your first applied playbook. It takes about five minutes.
+This page walks you from a freshly [installed](./installation) `ironstate` binary to your first applied playbook. It takes about five minutes.
 
 ## 1. Check your environment
 
@@ -28,7 +28,7 @@ ironstate version
 ironstate doctor
 ```
 
-`doctor` lists which package managers and shells are on your `PATH`. A `[missing]` line only matters if your playbook uses that tool. See [doctor](./cli/commands/doctor.md).
+`doctor` lists which package managers and shells are on your `PATH`. A `[missing]` line only matters if your playbook uses that tool. See [doctor](./cli/commands/doctor).
 
 ## 2. Scaffold a playbook
 
@@ -53,10 +53,10 @@ my-playbook/
     └── <your-username>.yml   ← tasks/vars for your user account
 ```
 
-Every generated YAML file contains just `vars: {}` and `tasks: []`. Running `init` again never overwrites existing files. See [Folder structure](./playbooks/structure.md) for what each folder is for.
+Every generated YAML file contains just `vars: {}` and `tasks: []`. Running `init` again never overwrites existing files. See [Folder structure](./playbooks/structure) for what each folder is for.
 
 > [!TIP]
-> `ironstate init my-playbook --scan` fills the playbook from the software already installed on this machine. That's a quick way to capture an existing setup. See [init](./cli/commands/init.md).
+> `ironstate init my-playbook --scan` fills the playbook from the software already installed on this machine. That's a quick way to capture an existing setup. See [init](./cli/commands/init).
 
 ## 3. Write a task
 
@@ -111,7 +111,7 @@ Run it a second time and the shell task reports as already satisfied, because th
 ironstate --playbook . --tags config --apply
 ```
 
-Only tasks tagged `config` run, along with any task that has no tags at all. See [Tags](./playbooks/tags.md).
+Only tasks tagged `config` run, along with any task that has no tags at all. See [Tags](./playbooks/tags).
 
 ## 7. Add a machine-specific override
 
@@ -127,12 +127,12 @@ tasks:
       message: This task runs on one host only.
 ```
 
-Overlay `vars` deep-merge over `main.yml`, and overlay `tasks` are appended. See [Task file naming](./playbooks/naming.md) for every name you can use (`windows.yml`, `ubuntu.yml`, `archlinux.yml`, `amd64.yml`, `myhost.amd64.yml`, ...).
+Overlay `vars` deep-merge over `main.yml`, and overlay `tasks` are appended. See [Task file naming](./playbooks/naming) for every name you can use (`windows.yml`, `ubuntu.yml`, `archlinux.yml`, `amd64.yml`, `myhost.amd64.yml`, ...).
 
 ## Next steps
 
-- [Playbooks](./playbooks/index.md): the full playbook format.
-- [Handlers](./handlers/index.md): every built-in handler and its fields.
-- [Filters](./filters/index.md): transforming values in `when` and `${{ }}`.
-- [CLI](./cli/index.md): every command and flag.
-- [Inventory files](./playbooks/inventory.md): applying a playbook to other machines over SSH.
+- [Playbooks](./playbooks/): the full playbook format.
+- [Handlers](./handlers/): every built-in handler and its fields.
+- [Filters](./filters/): transforming values in `when` and `${{ }}`.
+- [CLI](./cli/): every command and flag.
+- [Inventory files](./playbooks/inventory): applying a playbook to other machines over SSH.

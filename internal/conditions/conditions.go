@@ -1,7 +1,7 @@
 // Package conditions implements 'when'/'failed_when'/'that' condition evaluation — a
 // thin consumer of internal/expr's shared tokenizer/parser/evaluator, a
 // port of modules/Conditions.psm1. See that module's docstring (mirrored
-// in docs/plans/go-rewrite.md §4.3/§10) for condition syntax details
+// in docs/_plans/go-rewrite.md §4.3/§10) for condition syntax details
 // (bare identifiers, e.g. 'computer_name == "KRAYT"').
 package conditions
 
@@ -33,7 +33,7 @@ func TestCondition(expression string, ctx map[string]any, filters expr.Filters) 
 // being parsed - NOT PowerShell's "True"/"False". PowerShell's tokenizer
 // happens to accept "True" too (case-insensitive keyword matching), but
 // internal/expr's tokenizer is deliberately case-sensitive (see
-// docs/plans/go-rewrite-progress.md's "Phase 3's 'when'-boolean gotcha"),
+// docs/_plans/go-rewrite-progress.md's "Phase 3's 'when'-boolean gotcha"),
 // so the fix belongs here, at the boundary, not in the tokenizer.
 func TestWhen(when []any, ctx map[string]any, filters expr.Filters) (bool, error) {
 	for _, raw := range when {

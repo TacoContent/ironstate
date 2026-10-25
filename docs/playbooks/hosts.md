@@ -17,7 +17,7 @@ parent: 📖 Playbooks
 {:toc}
 
 ---
-The `hosts/` and `variables/` folders hold **overlays**: files that are merged on top of `main.yml` when their name matches the machine. Both folders follow the [file naming](./naming.md) rules.
+The `hosts/` and `variables/` folders hold **overlays**: files that are merged on top of `main.yml` when their name matches the machine. Both folders follow the [file naming](./naming) rules.
 
 ## `hosts/`: per machine
 
@@ -80,7 +80,7 @@ variables/<overlays>       least to most specific
 variables/<USERNAME>.yml
 ```
 
-After that, inventory variables, `--vars-file`, and `--var` are applied. See [Variable precedence](./facts-vars.md#variable-precedence).
+After that, inventory variables, `--vars-file`, and `--var` are applied. See [Variable precedence](./facts-vars#variable-precedence).
 
 ## Patterns
 
@@ -101,4 +101,4 @@ vars:
     editors: { vscode: true }
 ```
 
-**No file needed for remote hosts**: hosts managed through an [inventory](./inventory.md) can carry their `vars` in the inventory instead of in a `hosts/` file.
+**No file needed for remote hosts**: hosts managed through an [inventory](./inventory) can carry their `vars` in the inventory instead of in a `hosts/` file.

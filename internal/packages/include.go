@@ -35,7 +35,7 @@ var reservedNamespaces = map[string]bool{"package": true, "inputs": true, "facts
 // LoadIncludedPackage loads '<packagesRoot>/<name>/main.yml' for the
 // 'include' module — ports Import-IncludedPackage. 'name' is just a
 // root-relative path fragment (not specific to a 'packages/' or 'roles/'
-// folder — see docs/plans/go-rewrite.md §2). Returns (nil, nil) for a
+// folder — see docs/_plans/go-rewrite.md §2). Returns (nil, nil) for a
 // missing 'name' or a package that doesn't exist (warned, not errored,
 // matching the original); a real load/parse failure once the file is
 // known to exist is a real error.
@@ -63,7 +63,7 @@ func LoadIncludedPackage(includeSpec map[string]any, packagesRoot string, facts,
 	// alongside this package's main.yml (e.g. 'roles/foo/krayt.yml' or
 	// 'roles/foo/amd64.windows.yml') — least-specific first, most
 	// specific wins — same mechanism as the top-level hosts:/variables:
-	// overlays in LoadHierarchy, per docs/plans/notes.md.
+	// overlays in LoadHierarchy, per docs/_plans/notes.md.
 	pkgData, err = MergeChainOverlays(pkgData, pkgDir, pkgDir, facts)
 	if err != nil {
 		return nil, err

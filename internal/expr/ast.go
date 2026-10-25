@@ -3,7 +3,7 @@ package expr
 // Node is a parsed expression AST node. The set is closed (sealed via the
 // unexported marker method) — a stronger, compiler-checked representation
 // than the PowerShell implementation's hashtable AST, per
-// docs/plans/go-rewrite.md §4.3.
+// docs/_plans/go-rewrite.md §4.3.
 type Node interface{ isNode() }
 
 type OrNode struct{ Left, Right Node }

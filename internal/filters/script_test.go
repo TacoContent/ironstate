@@ -440,7 +440,7 @@ func TestDiscoverScriptFiltersPriorityOrder(t *testing.T) {
 }
 
 // TestPoolConcurrentDistinctWorkersDoNotBlockEachOther exercises the one
-// place in this package with real concurrency (docs/plans/go-rewrite.md
+// place in this package with real concurrency (docs/_plans/go-rewrite.md
 // §4.5/§6 - required to pass under 'go test -race' in CI): calls to two
 // *different* script filters, each backed by its own worker/process,
 // must be able to proceed concurrently without racing on shared state.

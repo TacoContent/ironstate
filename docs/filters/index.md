@@ -65,7 +65,7 @@ Unless a filter's reference says otherwise, piping `null` into a filter returns 
 message: "${{ maybe_missing | trim | upper | default('UNSET') }}"
 ```
 
-Exceptions include `default`, `ternary`, `length`, `exists`, `enabled`, `map`, `merge`, `toggle`, `env`, and `contains`. Each one's behavior with `null` is described in [Built-in filters](./builtin.md).
+Exceptions include `default`, `ternary`, `length`, `exists`, `enabled`, `map`, `merge`, `toggle`, `env`, and `contains`. Each one's behavior with `null` is described in [Built-in filters](./builtin).
 
 ## Common recipes
 
@@ -123,9 +123,9 @@ when: "lookup('file', '~/.config/app.json') | from_json | json_query('.enabled')
 ironstate filters list --dir path/to/playbook/filters
 ```
 
-This prints every built-in and discovered script filter. See [`ironstate filters`](../cli/commands/filters.md).
+This prints every built-in and discovered script filter. See [`ironstate filters`](../cli/commands/filters).
 
 ## Next
 
-- [Built-in filters](./builtin.md): a reference for every filter that ships with ironstate.
-- [Custom filters](./custom.md): write your own filters in PowerShell, bash, zsh, fish, or nushell.
+- [Built-in filters](./builtin): a reference for every filter that ships with ironstate.
+- [Custom filters](./custom): write your own filters in PowerShell, bash, zsh, fish, or nushell.

@@ -79,7 +79,7 @@ jobs:
   # Windows carries the full suite (incl. //go:build windows-tagged
   # handler tests added in later phases); ubuntu-latest only exercises the
   # OS-agnostic packages — not a symmetric full-suite run, see
-  # docs/plans/go-rewrite.md §6/§9.
+  # docs/_plans/go-rewrite.md §6/§9.
   test:
     permissions:
       contents: read

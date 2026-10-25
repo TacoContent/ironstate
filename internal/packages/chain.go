@@ -9,7 +9,7 @@ import (
 )
 
 // chainCharacteristic is one host characteristic usable in a "chained"
-// override filename, with its fixed priority weight (docs/plans/notes.md:
+// override filename, with its fixed priority weight (docs/_plans/notes.md:
 // priority order is hostname, then os_family, distribution, platform, arch).
 // Weights are powers of two specifically so that any subset containing a
 // higher-priority characteristic always outranks every subset that
@@ -174,7 +174,7 @@ func fileExists(path string) bool {
 // MergeChainOverlays merges each of ChainCandidates(facts) that exists as
 // "<scanDir>/<candidate>.yml"/".yaml" onto data, least-specific first (so
 // the most specific one wins on conflicting keys) — ports
-// docs/plans/notes.md's "chained" hostname/os_family/distribution/platform/arch
+// docs/_plans/notes.md's "chained" hostname/os_family/distribution/platform/arch
 // override filenames. Relative paths inside each overlay resolve against
 // baseDir, the same root every sibling overlay in a given hierarchy uses,
 // regardless of which subdirectory the overlay file itself lives in.

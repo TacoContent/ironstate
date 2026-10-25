@@ -1,7 +1,7 @@
 package handlers
 
 // Package handlers implements the Handler interface for every module
-// implemented so far (docs/plans/go-rewrite.md §10): log, path, fact,
+// implemented so far (docs/_plans/go-rewrite.md §10): log, path, fact,
 // assert, file, copy, symlinks, blockinfile, ssh_host_block, zip (Phase 3);
 // winget, chocolatey, homebrew, apt, pacman, yum, apk, snap, flatpak,
 // scoop, macports, pipx, npm, cargo, go, gem, eget, xget,
@@ -18,7 +18,7 @@ package handlers
 import "github.com/TacoContent/ironstate/internal/engine"
 
 // AllModuleNames lists every module key ironstate.ps1's
-// Get-PackageManagerHandlers recognizes structurally (docs/plans/
+// Get-PackageManagerHandlers recognizes structurally (docs/_plans/
 // go-rewrite.md §2) - used for internal/tasks.Options.ModuleNames so
 // flattening recognizes every leaf shape even before every module has a
 // registered Handler (Phase 4 fills in the rest). Order matches

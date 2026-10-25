@@ -18,7 +18,7 @@ parent: 📖 Playbooks
 {:toc}
 
 ---
-`uses` is like [`include`](./includes.md), but it can pull tasks from **outside** the playbook: a git repository, another local folder, or a network share. Use it to share roles between playbooks or teams.
+`uses` is like [`include`](./includes), but it can pull tasks from **outside** the playbook: a git repository, another local folder, or a network share. Use it to share roles between playbooks or teams.
 
 ```yaml
 - name: Shared SSH role

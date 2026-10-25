@@ -9,7 +9,7 @@ import (
 )
 
 // registryHandler is a stub on non-Windows platforms: the Windows
-// registry has no equivalent here - matches docs/plans/go-rewrite.md
+// registry has no equivalent here - matches docs/_plans/go-rewrite.md
 // §1's "Windows-only handlers stay Windows-only" scope decision.
 type registryHandler struct{}
 

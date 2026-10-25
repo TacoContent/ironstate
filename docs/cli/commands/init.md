@@ -56,7 +56,7 @@ my-playbook/
 ```
 
 - Every YAML file contains only `vars: {}` and `tasks: []`: a valid, empty document ready to edit.
-- `<computer_name>`, `<os_family>`, and `<user_name>` come from this machine's [facts](../../playbooks/facts-vars.md#facts), lowercased. For example: `hosts/krayt.yml`, `hosts/windows.yml`, `variables/ryan.yml`.
+- `<computer_name>`, `<os_family>`, and `<user_name>` come from this machine's [facts](../../playbooks/facts-vars#facts), lowercased. For example: `hosts/krayt.yml`, `hosts/windows.yml`, `variables/ryan.yml`.
 - `.gitkeep` files keep the empty folders in git.
 - **Nothing is overwritten.** Existing files are reported as `skip ... (already exists)`, so running `init` again is safe.
 
@@ -72,7 +72,7 @@ Playbook ready. Try:
   ironstate --playbook my-playbook/main.yml
 ```
 
-See [Folder structure](../../playbooks/structure.md) for what each folder is for.
+See [Folder structure](../../playbooks/structure) for what each folder is for.
 
 ## `--scan`
 
@@ -82,7 +82,7 @@ ironstate init my-playbook --scan
 
 With `--scan`, ironstate asks every scan-capable handler what is already configured on this machine. Examples include packages installed through supported package managers. ironstate then writes those findings into the playbook as tasks, grouped into roles.
 
-- Built-in handlers and installed [plugins](../../plugins/index.md) that implement scanning both participate.
+- Built-in handlers and installed [plugins](../../plugins/) that implement scanning both participate.
 - If any plugin contributed items, it is added to the playbook's `plugins:` list at its installed version.
 - A progress indicator shows each handler as it is scanned.
 

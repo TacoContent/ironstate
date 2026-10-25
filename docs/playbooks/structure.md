@@ -47,21 +47,21 @@ my-playbook/
     └── main.yml
 ```
 
-`ironstate init` creates this layout for you. See [`ironstate init`](../cli/commands/init.md).
+`ironstate init` creates this layout for you. See [`ironstate init`](../cli/commands/init).
 
 ## Automatically loaded
 
 | Path | Purpose |
 | --- | --- |
 | `main.yml` | The root task file. ironstate also accepts `site.yml`, `site.yaml`, or `main.yaml`. |
-| `hosts/` | Overlays chosen by **machine** characteristics: hostname, OS family, distribution, platform, architecture. See [Hosts and variables](./hosts.md). |
-| `variables/` | The same overlays, plus a `<username>.yml` that merges last. Use it for per-user settings. |
-| `filters/` | Script filters, registered by file name. See [Custom filters](../filters/custom.md). |
-| `ironstate.lock.yaml` | Plugin versions and checksums. See [Using a plugin](../plugins/using.md). |
+| `hosts/` | Overlays chosen by **machine** characteristics: hostname, OS family, distribution, platform, architecture. See [Hosts and variables](./hosts). |
+| `variables/` | The same overlays, plus a `<username>.yml` that merges last. Use it for per-user settings. See [Hosts and variables](./hosts). |
+| `filters/` | Script filters, registered by file name. See [Custom filters](../filters/custom). |
+| `ironstate.lock.yaml` | Plugin versions and checksums. See [Using a plugin](../plugins/using). |
 
 ## Referenced by you
 
-`roles/`, `packages/`, and `tasks/` aren't loaded on their own. You pull them in with an [`include`](./includes.md), which names a folder **relative to the playbook root**:
+`roles/`, `packages/`, and `tasks/` aren't loaded on their own. You pull them in with an [`include`](./includes), which names a folder **relative to the playbook root**:
 
 ```yaml
 - include: { name: roles/shells }
@@ -75,11 +75,11 @@ The folder names are only conventions. ironstate treats them the same, so organi
 - **`packages/`**: one tool and everything it needs, such as its binary, config file, and symlink.
 - **`tasks/`**: small shared task lists reused by several roles.
 
-Each included folder has its own `main.yml` and can carry its own [overlays](./naming.md) (`windows.yml`, `krayt.yml`, …) and supporting files. Relative paths in `copy.src`, `template.src`, and `shell.script` resolve from the included folder.
+Each included folder has its own `main.yml` and can carry its own [overlays](./naming) (`windows.yml`, `krayt.yml`, …) and supporting files. Relative paths in `copy.src`, `template.src`, and `shell.script` resolve from the included folder.
 
 ## Where to keep the inventory
 
-An [inventory](./inventory.md) can live anywhere. [`ironstate validate`](../cli/commands/validate.md) checks every YAML file under the playbook folder against the playbook schema, so an inventory kept **inside** the playbook folder fails validation. Keep it beside the playbook instead if you rely on `validate`.
+An [inventory](./inventory) can live anywhere. [`ironstate validate`](../cli/commands/validate) checks every YAML file under the playbook folder against the playbook schema, so an inventory kept **inside** the playbook folder fails validation. Keep it beside the playbook instead if you rely on `validate`.
 
 ## Running from another directory
 
@@ -92,4 +92,4 @@ ironstate --playbook playbooks/camalot                # bare name: also tries pl
 ironstate                                             # current directory
 ```
 
-`.env` and `.secrets` are read from the **current directory**, not the playbook folder. See [Secrets](./secrets.md).
+`.env` and `.secrets` are read from the **current directory**, not the playbook folder. See [Secrets](./secrets).

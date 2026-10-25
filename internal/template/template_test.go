@@ -70,7 +70,7 @@ func TestSoftPassFactsRequiresFullPathResolution(t *testing.T) {
 
 	// A user-defined fact that hasn't run yet must defer, even though
 	// 'facts' itself is present in ctx — this is the special case that
-	// differs from every other namespace (docs/plans/go-rewrite.md §4.3).
+	// differs from every other namespace (docs/_plans/go-rewrite.md §4.3).
 	original := "${{ facts.not_yet_gathered }}"
 	got, err = ExpandValue(original, ctx, fset, "test", true)
 	if err != nil {

@@ -49,7 +49,7 @@ The binary is meant to be launched by ironstate. Running it by hand prints go-pl
 
 ### Output
 
-go-plugin owns the process's stdout and stderr. Don't print to them for user-facing output; use [`ctx.Callbacks.Log`](./handler.md#hostcallbacks). Write your own diagnostics to a log file.
+go-plugin owns the process's stdout and stderr. Don't print to them for user-facing output; use [`ctx.Callbacks.Log`](./handler#hostcallbacks). Write your own diagnostics to a log file.
 
 ## Constants
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# Persistent JSON-over-stdio filter shim (docs/plans/go-rewrite.md §4.5) for
+# Persistent JSON-over-stdio filter shim (docs/_plans/go-rewrite.md §4.5) for
 # zsh script filters - the '.zsh' counterpart to shim.sh.
 #
 # Usage: shim.zsh <path-to-filter-script.zsh>

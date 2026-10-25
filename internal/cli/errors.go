@@ -4,7 +4,7 @@ import "errors"
 
 // ExitCodeError is an error that carries an explicit process exit code,
 // distinguishing a deliberate stopped-run (1) from a load/parse/config
-// error (2) — see docs/plans/go-rewrite.md §11's exit-code decision.
+// error (2) — see docs/_plans/go-rewrite.md §11's exit-code decision.
 type ExitCodeError struct {
 	Code int
 	Err  error

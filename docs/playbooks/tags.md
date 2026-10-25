@@ -61,10 +61,10 @@ Tags only decide whether a task is considered. `when` still applies.
 | `tags:` at the top of an overlay (`windows.yml`) | Only that overlay's tasks. |
 
 > [!NOTE]
-> `include: { name: x, tags: [a] }` (tags **inside** `include`) is different: it doesn't tag anything. It only passes `package.tags` to the package. See [Includes](./includes.md).
+> `include: { name: x, tags: [a] }` (tags **inside** `include`) is different: it doesn't tag anything. It only passes `package.tags` to the package. See [Includes](./includes).
 
 ## Selecting tags
 
 - `--tags a,b` and `--tag a --tag b` can be combined.
-- You can also set them with the `IRONSTATE_TAGS` environment variable or `tags:` in `ironstate.yaml`; flags on the command line override both. See [Flags](../cli/flags.md).
+- You can also set them with the `IRONSTATE_TAGS` environment variable or `tags:` in `ironstate.yaml`; flags on the command line override both. See [Flags](../cli/flags).
 - There's no exclusion syntax. To leave something out, give it a distinct tag and select the others.

@@ -10,7 +10,7 @@ import (
 // overlays, variables/'s default (main.yml) plus the same chained
 // overlays, then the legacy username-keyed variables/<USERNAME>.yml
 // overlay — ports Packages.psm1's Import-PackagesHierarchy, extended per
-// docs/plans/notes.md so a host/variant-specific overlay isn't limited to
+// docs/_plans/notes.md so a host/variant-specific overlay isn't limited to
 // a single hosts/<COMPUTERNAME>.yml file. Every overlay file resolves its
 // own 'copy.src'/'shell.script' paths relative to the same root
 // (baseFile's directory), regardless of which subdirectory the overlay

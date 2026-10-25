@@ -9,7 +9,7 @@ import (
 )
 
 // scheduledTaskHandler is a stub on non-Windows platforms: Windows Task
-// Scheduler has no equivalent here - matches docs/plans/go-rewrite.md
+// Scheduler has no equivalent here - matches docs/_plans/go-rewrite.md
 // §1's "Windows-only handlers stay Windows-only" scope decision.
 type scheduledTaskHandler struct{}
 

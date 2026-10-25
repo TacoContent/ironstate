@@ -1,6 +1,6 @@
 // Package protocol defines the line-delimited JSON contract between a
 // remote-apply controller and an 'ironstate agent' process (see
-// docs/plans/remote-apply.md §9): one job header line in, NDJSON events out.
+// docs/_plans/remote-apply.md §9): one job header line in, NDJSON events out.
 package protocol
 
 import (

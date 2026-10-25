@@ -1,7 +1,7 @@
 // Package facts gathers host facts made available to 'when' conditions
 // and '${{ facts.* }}' templating — a port of modules/Facts.psm1's small,
 // deliberately fixed starter set, plus 'platform'/'arch'/'os_family'/'distribution'
-// (docs/plans/go-rewrite.md §1's cross-platform goal): ironstate.ps1 was
+// (docs/_plans/go-rewrite.md §1's cross-platform goal): ironstate.ps1 was
 // always Windows-only, but the Go binary itself is genuinely
 // cross-platform (windows/linux/darwin builds, see .goreleaser.yaml), so
 // a main.yml can now usefully branch on 'when: facts.platform == "linux"'

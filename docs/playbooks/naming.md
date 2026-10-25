@@ -24,7 +24,7 @@ Naming applies in three places:
 
 - `hosts/`
 - `variables/`
-- next to the `main.yml` of any [included](./includes.md) folder, such as `roles/shells/windows.yml`
+- next to the `main.yml` of any [included](./includes) folder, such as `roles/shells/windows.yml`
 
 ## Name parts
 

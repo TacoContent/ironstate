@@ -3,7 +3,7 @@
 // scalars, mirroring how the PowerShell implementation treats
 // ConvertFrom-Yaml's [ordered] hashtables + IList duck-typing. A strict Go
 // struct per module would fight the '${{ }}'/'when' substitution model
-// (docs/plans/go-rewrite.md §4.2), so this stays intentionally loose.
+// (docs/_plans/go-rewrite.md §4.2), so this stays intentionally loose.
 package model
 
 import (
@@ -32,7 +32,7 @@ func Unmarshal(data []byte) (any, error) {
 // normalize defensively converts any map[any]any (which a YAML library
 // could in principle still produce for a non-string-keyed mapping) into
 // map[string]any, recursing through slices/maps — see
-// docs/plans/go-rewrite.md §11's "YAML library behavioral differences" risk.
+// docs/_plans/go-rewrite.md §11's "YAML library behavioral differences" risk.
 func normalize(v any) any {
 	switch val := v.(type) {
 	case map[string]any:

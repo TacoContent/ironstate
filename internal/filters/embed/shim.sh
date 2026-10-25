@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Persistent JSON-over-stdio filter shim (docs/plans/go-rewrite.md §4.5) for
+# Persistent JSON-over-stdio filter shim (docs/_plans/go-rewrite.md §4.5) for
 # bash script filters - the '.sh' counterpart to shim.ps1.
 #
 # Usage: shim.sh <path-to-filter-script.sh>

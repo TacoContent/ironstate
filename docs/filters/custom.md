@@ -48,9 +48,9 @@ Each language has a small embedded **shim** that ironstate runs with the interpr
 
 ## Discovery rules
 
-- **Location**: `filters/` next to the root playbook file, or the folder set by `filters.dir` in [`ironstate.yaml`](../cli/flags.md#ironstateyaml). A relative `filters.dir` is resolved from the playbook's directory.
+- **Location**: `filters/` next to the root playbook file, or the folder set by `filters.dir` in [`ironstate.yaml`](../cli/flags#ironstateyaml). A relative `filters.dir` is resolved from the playbook's directory.
 - **Name**: the file name without its extension (`slugify.ps1` becomes `slugify`). Subfolders and files with unrecognized extensions are ignored, so a `filters/README.md` is fine.
-- **Built-ins win**: a script named after a [built-in filter](./builtin.md) (for example, `upper.sh`) is never registered.
+- **Built-ins win**: a script named after a [built-in filter](./builtin) (for example, `upper.sh`) is never registered.
 - **One script per name**: when several languages implement the same name, the winner is picked in this order: **PowerShell → bash → zsh → fish → nushell**.
 - **Lifetime**: each script's interpreter starts the first time the filter is used and stays running for the rest of the run, so later calls are fast. Nushell is the exception: it starts a new `nu` process for every call.
 
@@ -151,5 +151,5 @@ When you run a playbook with `--target` or `--inventory`, the playbook directory
 
 - Keep filters **pure**: compute a value from the input and arguments. Use tasks for side effects.
 - Return `null` (PowerShell) or empty output (shell languages) for "no value", so `| default(...)` works afterward.
-- When a filter needs structured output (maps or lists), write it in PowerShell. The shell languages always return strings, so pipe them through [`from_json`](./builtin.md#from_json) if they print JSON.
-- When a filter becomes widely useful, consider contributing it as a built-in. See [Contributing](../contributing.md).
+- When a filter needs structured output (maps or lists), write it in PowerShell. The shell languages always return strings, so pipe them through [`from_json`](./builtin#from_json) if they print JSON.
+- When a filter becomes widely useful, consider contributing it as a built-in. See [Contributing](../contributing).

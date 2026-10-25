@@ -3,7 +3,7 @@ package ui
 // Package ui provides small terminal styling helpers (ANSI colors, module
 // emoji) shared by internal/engine's per-leaf output and internal/cli's
 // facts/summary panels — additive CLI polish, not a compatibility
-// requirement (docs/plans/go-rewrite.md §1). Honors NO_COLOR
+// requirement (docs/_plans/go-rewrite.md §1). Honors NO_COLOR
 // (https://no-color.org) and IRONSTATE_NO_COLOR, and auto-disables when
 // stdout isn't a real terminal (e.g. piped/redirected output, matching
 // how `--output json` should never carry escape codes).
@@ -77,7 +77,7 @@ func Gray(s string) string    { return style(codeGray, s) }
 // BoldRed/BoldGreen/BoldCyan are the "danger"/"changed"/"preview" tones
 // used for a failed task, an applied change, and a dry-run preview
 // respectively - deliberately brighter/bolder than Gray's muted
-// already-satisfied look (docs/plans/go-rewrite.md-adjacent CLI polish
+// already-satisfied look (docs/_plans/go-rewrite.md-adjacent CLI polish
 // request: "changed" state should read brighter than "unchanged").
 func BoldRed(s string) string    { return style(codeBold+codeBrightRed, s) }
 func BoldGreen(s string) string  { return style(codeBold+codeBrightGreen, s) }

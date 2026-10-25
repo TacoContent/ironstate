@@ -4,7 +4,7 @@ import "github.com/TacoContent/ironstate/internal/engine"
 
 // rubyGemHandler ports Handlers/RubyGem.psm1 (Ruby Gems). Not present in
 // ironstate.schema.json (a pre-existing schema/docs drift bug in the original
-// repo, see docs/plans/go-rewrite.md §2/§11) but has real usage
+// repo, see docs/_plans/go-rewrite.md §2/§11) but has real usage
 // (roles/languages/ruby/main.yml), so it's implemented here regardless.
 type rubyGemHandler struct{}
 

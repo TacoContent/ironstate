@@ -1,7 +1,7 @@
 package engine
 
 // Package engine ports ironstate.ps1's Invoke-PackageItem/Invoke-Tasks/main
-// flow (docs/plans/go-rewrite.md §4.10): sequential, in-document-order
+// flow (docs/_plans/go-rewrite.md §4.10): sequential, in-document-order
 // dispatch of flattened tasks.Leaf values against a registered Handler,
 // threading a growing id-registry + user-fact set + command-availability
 // cache forward across a facts-first pass and then everything else.
@@ -38,7 +38,7 @@ const (
 // '{ rc, stdout, stdout_lines, stderr, stderr_lines }' shape every handler
 // result normalizes to. Extra carries any additional native properties a
 // handler wants to expose under an 'id' (e.g. a future 'shell.host: pwsh'
-// native-object merge - see docs/plans/go-rewrite.md §4.8/§11; unused by
+// native-object merge - see docs/_plans/go-rewrite.md §4.8/§11; unused by
 // every Phase 3 handler today but plumbed through so Phase 4's 'shell'
 // doesn't need a registry-shape change).
 type ExecResult struct {
@@ -99,7 +99,7 @@ func resolveBecome(v any) ironexec.Become {
 
 // Handler is the uniform Test/Describe/Install/Uninstall shape every
 // module implements — ports modules/Handlers/*.psm1's PSCustomObject
-// script-block contract (docs/plans/go-rewrite.md §4.8).
+// script-block contract (docs/_plans/go-rewrite.md §4.8).
 type Handler interface {
 	Test(item map[string]any, name string, ctx Context) (bool, error)
 	Describe(item map[string]any, action Action, ctx Context) (string, error)
@@ -583,7 +583,7 @@ func RunLeaves(leaves []tasks.Leaf, opts Options, state *State, stage ...string)
 			// A fact's embedded shell, every 'assert', and every FactProducer
 			// (e.g. 'mount_facts') have no real system side effect - each only
 			// reads/computes a value - so previews stay accurate even without
-			// '-Apply' - see docs/plans/go-rewrite.md §2/§4.10. Without this, a
+			// '-Apply' - see docs/_plans/go-rewrite.md §2/§4.10. Without this, a
 			// FactProducer's Install would never run in a dry run, leaving its
 			// fact undefined for every later leaf's preview.
 			effectiveApply := opts.Apply || hasEmbeddedShell || module == "assert" || isFactProducer(handler) || isReadOnly(handler)

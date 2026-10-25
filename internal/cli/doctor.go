@@ -19,7 +19,7 @@ import (
 // checkedCommands are looked up on PATH by `ironstate doctor`. This list
 // mirrors ironstate.ps1's package-manager modules plus the one remaining
 // optional PowerShell dependency (shell.host: pwsh — see
-// docs/plans/go-rewrite.md §11).
+// docs/_plans/go-rewrite.md §11).
 var checkedCommands = []string{
 	"winget", "choco", "brew", "apt-get", "pipx", "npm", "cargo", "go", "gem", "eget", "xget", "pwsh", "ssh",
 }

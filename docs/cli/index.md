@@ -29,17 +29,17 @@ Running `ironstate` without a subcommand **runs a playbook**. That is the main t
 
 | Command | Purpose |
 | --- | --- |
-| [`completion`](./commands/completion.md) | Generate shell completion scripts. |
-| [`doctor`](./commands/doctor.md) | Check `PATH` for package managers, shells, script filters, and plugin health. |
-| [`filters`](./commands/filters.md) | List built-in and discovered script filters. |
-| [`help`](./commands/help.md) | Show help for any command. |
-| [`init`](./commands/init.md) | Scaffold a new playbook, optionally from the current system state. |
-| [`plugin`](./commands/plugin.md) | Install, update, inspect, test, and benchmark external handler plugins. |
-| [`remote`](./commands/remote.md) | Ping, read logs from, and clean up remote-apply targets. |
-| [`validate`](./commands/validate.md) | Validate a playbook against the JSON schema. |
-| [`version`](./commands/version.md) | Print the version, commit, and build date. |
+| [`completion`](./commands/completion) | Generate shell completion scripts. |
+| [`doctor`](./commands/doctor) | Check `PATH` for package managers, shells, script filters, and plugin health. |
+| [`filters`](./commands/filters) | List built-in and discovered script filters. |
+| [`help`](./commands/help) | Show help for any command. |
+| [`init`](./commands/init) | Scaffold a new playbook, optionally from the current system state. |
+| [`plugin`](./commands/plugin) | Install, update, inspect, test, and benchmark external handler plugins. |
+| [`remote`](./commands/remote) | Ping, read logs from, and clean up remote-apply targets. |
+| [`validate`](./commands/validate) | Validate a playbook against the JSON schema. |
+| [`version`](./commands/version) | Print the version, commit, and build date. |
 
-Every flag for running a playbook is described in [Flags](./flags.md).
+Every flag for running a playbook is described in [Flags](./flags).
 
 ## Running a playbook
 
@@ -115,4 +115,4 @@ Options are resolved in this order. Earlier sources win.
 3. An `ironstate.yaml` or `ironstate.yml` config file in the current directory.
 4. Built-in defaults.
 
-ironstate also loads `.env` and `.secrets` files from the current directory into the process environment before a run. See [Flags](./flags.md#environment-variables-and-config-file) for details.
+ironstate also loads `.env` and `.secrets` files from the current directory into the process environment before a run. See [Flags](./flags#environment-variables-and-config-file) for details.

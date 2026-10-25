@@ -51,11 +51,11 @@ Use the list form for short files that need no `vars`, `envs`, or `tags`. Overla
 
 | Key | Type | Description |
 | --- | --- | --- |
-| `tasks` | list | The tasks to run, in order. See [Tasks](./tasks.md). |
-| `vars` | map | Variables for conditions and templates. Overlays **deep-merge** into it. See [Facts and variables](./facts-vars.md). |
-| `envs` / `environment` | map | Environment variables for the run, or, in an included file, for that file's tasks. See [Environment variables](./environment.md). |
-| `tags` | list | File-level tags added to every task in the file. See [Tags](./tags.md). |
-| `plugins` | list | External handler plugins this playbook uses (root playbook). See [Using a plugin](../plugins/using.md). |
+| `tasks` | list | The tasks to run, in order. See [Tasks](./tasks). |
+| `vars` | map | Variables for conditions and templates. Overlays **deep-merge** into it. See [Facts and variables](./facts-vars). |
+| `envs` / `environment` | map | Environment variables for the run, or, in an included file, for that file's tasks. See [Environment variables](./environment). |
+| `tags` | list | File-level tags added to every task in the file. See [Tags](./tags). |
+| `plugins` | list | External handler plugins this playbook uses (root playbook). See [Using a plugin](../plugins/using). |
 | `version` | string | Schema version. Currently `"1"`; optional. |
 
 ## How files merge
@@ -87,4 +87,4 @@ Add the schema comment to the first line of any task file. Editors with the YAML
 # yaml-language-server: $schema=https://raw.githubusercontent.com/TacoContent/ironstate/develop/ironstate.schema.json
 ```
 
-Run [`ironstate validate`](../cli/commands/validate.md) to check the whole playbook from the command line.
+Run [`ironstate validate`](../cli/commands/validate) to check the whole playbook from the command line.

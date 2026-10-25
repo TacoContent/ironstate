@@ -1,6 +1,6 @@
 // Package config layers CLI flags, IRONSTATE_* env vars, and an optional
 // ironstate.yaml/.ironstate.yaml config file (via viper) into one typed
-// Config struct — see docs/plans/go-rewrite.md §4.1. Nothing outside
+// Config struct — see docs/_plans/go-rewrite.md §4.1. Nothing outside
 // internal/cli touches viper directly.
 package config
 

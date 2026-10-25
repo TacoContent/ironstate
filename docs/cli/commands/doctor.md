@@ -46,7 +46,7 @@ A `[missing]` line only matters if your playbook uses the matching handler. Exam
 
 ### Script filters
 
-`doctor` lists every [script filter](../../filters/custom.md) discovered under `--filters-dir`. It's the same discovery that [`filters list`](./filters.md) uses.
+`doctor` lists every [script filter](../../filters/custom) discovered under `--filters-dir`. It's the same discovery that [`filters list`](./filters) uses.
 
 ### Plugins (`--playbook`)
 

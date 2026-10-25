@@ -53,7 +53,7 @@ A task's `when` combines with every enclosing group's `when` using AND. A false 
 | `and`, `or`, `not` | Boolean logic. |
 | `in`, `not in` | Membership in a list, or substring of a string. |
 | `is`, `is not` | Type test (see below). |
-| `\|` | Pipe into a [filter](../filters/index.md). |
+| `\|` | Pipe into a [filter](../filters/). |
 | `( … )` | Grouping. |
 
 Precedence, from loosest to tightest: `or`, `and`, `not`, comparisons, `in` / `is`, `|`, then values.
@@ -116,10 +116,10 @@ when: languages | enabled('rust')
 | --- | --- |
 | `facts.<name>` | A gathered or custom fact. |
 | `vars.<path>` / `<path>` | A variable. |
-| `envs.<NAME>` | An environment variable. See [Environment variables](./environment.md). |
-| `item`, `parent.item` | The current loop item, and the outer loop's item. See [Loops](./loops.md). |
-| `<id>`, `<id>.<field>` | An earlier task's result. See [Results](./results.md). |
-| `package.name`, `package.state`, `package.tags` | Inside an included package. See [Includes](./includes.md). |
+| `envs.<NAME>` | An environment variable. See [Environment variables](./environment). |
+| `item`, `parent.item` | The current loop item, and the outer loop's item. See [Loops](./loops). |
+| `<id>`, `<id>.<field>` | An earlier task's result. See [Results](./results). |
+| `package.name`, `package.state`, `package.tags` | Inside an included package. See [Includes](./includes). |
 | `inputs.<key>` | Inside an included package: the `include`'s `with` values. |
 
 Use `[N]` to index into lists: `${{ example.results[0].stdout }}`.

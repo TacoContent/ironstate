@@ -16,7 +16,7 @@ import (
 // unlike 'copy', there's no directory-tree templating.
 //
 // Deviation from Handlers/Template.psm1: 'eps'/'herestring' engines are
-// dropped per docs/plans/go-rewrite.md §1/§11 (audited as unused in this
+// dropped per docs/_plans/go-rewrite.md §1/§11 (audited as unused in this
 // repo). 'jinja' preserves the native subset port, 'jinja2' uses Gonja,
 // and 'gotemplate' uses Go stdlib text/template.
 type templateHandler struct{}
@@ -36,7 +36,7 @@ var errTemplateSourceMissing = errors.New("template source missing")
 // deep-cloned so mutating it below (the self-referential resolve pass)
 // never leaks into other leaves sharing the same site-wide vars, then
 // runs the third, self-referential '${{ }}' pass described in
-// docs/plans/go-rewrite.md §4.4 (a 'vars:' value can reference a sibling
+// docs/_plans//go-rewrite.md §4.4 (a 'vars:' value can reference a sibling
 // var directly, a reference neither the whole-document soft pass nor the
 // per-leaf strict pass ever revisits).
 func getTemplateRenderContext(item map[string]any, ctx engine.Context) (map[string]any, error) {
@@ -79,7 +79,7 @@ func getTemplateRenderedContent(item map[string]any, ctx engine.Context) (string
 	case "gotemplate":
 		return templateengines.RenderGoTemplate(string(raw), renderCtx)
 	case "eps", "herestring":
-		return "", fmt.Errorf("template engine '%s' is not supported - migrate to 'jinja', 'jinja2' or 'gotemplate' (docs/plans/go-rewrite.md §1/§11)", engineName)
+		return "", fmt.Errorf("template engine '%s' is not supported - migrate to 'jinja', 'jinja2' or 'gotemplate' (docs/_plans/go-rewrite.md §1/§11)", engineName)
 	default:
 		return "", fmt.Errorf("unknown template engine '%s'", engineName)
 	}

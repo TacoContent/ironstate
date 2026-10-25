@@ -22,7 +22,7 @@ Conditions and templates read from one shared context, made up of:
 
 - **facts**: what ironstate knows about the machine.
 - **vars**: values you define.
-- **results**: what earlier tasks returned. See [Results](./results.md).
+- **results**: what earlier tasks returned. See [Results](./results).
 
 ## Facts
 
@@ -58,7 +58,7 @@ Read facts as `facts.<name>`, or by their bare name in `when`:
 
 ### Custom facts
 
-The [`fact`](../handlers/fact.md) module adds your own facts. Fact tasks run **before every other task**, even in a dry-run, so their values are always available:
+The [`fact`](../handlers/fact) module adds your own facts. Fact tasks run **before every other task**, even in a dry-run, so their values are always available:
 
 ```yaml
 - name: Local bin path
@@ -74,7 +74,7 @@ The [`fact`](../handlers/fact.md) module adds your own facts. Fact tasks run **b
     value: ${{ rc == 0 }}
 ```
 
-These are read as `facts.local_bin_path` and `facts.wsl_installed`. [`mount_facts`](../handlers/mount_facts.md) adds facts about mounted filesystems.
+These are read as `facts.local_bin_path` and `facts.wsl_installed`. [`mount_facts`](../handlers/mount_facts) adds facts about mounted filesystems.
 
 ## Variables
 
@@ -117,7 +117,7 @@ ironstate --vars-file ./ci.yml --var editor=helix --var ssh.port=2222
 
 ### Package variables
 
-An included package's own `vars:` act as **package-local defaults**. They're visible only inside that package. If the site defines a variable with the same top-level name, the site's value replaces the package's value completely; it isn't deep-merged. To merge them instead, use the [`merge`](../filters/builtin.md#merge) filter:
+An included package's own `vars:` act as **package-local defaults**. They're visible only inside that package. If the site defines a variable with the same top-level name, the site's value replaces the package's value completely; it isn't deep-merged. To merge them instead, use the [`merge`](../filters/builtin#merge) filter:
 
 ```yaml
 # packages/editorconfig/main.yml

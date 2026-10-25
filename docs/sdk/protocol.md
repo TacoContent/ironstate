@@ -45,7 +45,7 @@ Implemented by the plugin.
 | `Describe` | `DescribeRequest{handler, action}` → `DescribeResponse{description}` | `action` is `"Install"` or `"Uninstall"`. |
 | `Install` | `HandlerRequest` → `ExecResult` | Apply the item. |
 | `Uninstall` | `HandlerRequest` → `ExecResult` | Remove the item. |
-| `FactName` | `FactNameRequest` → `FactNameResponse{name, produced}` | Optional. See [`FactProducer`](./handler.md#factproducer). |
+| `FactName` | `FactNameRequest` → `FactNameResponse{name, produced}` | Optional. See [`FactProducer`](./handler#factproducer). |
 | `ScanRole` | `ScanRoleRequest` → `ScanRoleResponse{role, supported}` | Optional. |
 | `Scan` | `ScanRequest` → `ScanResponse{items}` | Optional. Return `UNIMPLEMENTED` when unsupported. |
 
@@ -71,4 +71,4 @@ To reach it, read the numeric broker ID that the host puts in `context.flat["__i
 
 ## Other languages
 
-Any language with gRPC and a go-plugin-compatible handshake can implement a plugin: generate code from `handler.proto`, implement `HandlerPlugin`, and print the handshake line. go-plugin's [non-Go plugin guide](https://github.com/hashicorp/go-plugin/blob/main/docs/guide-plugin-write-non-go.md) describes the handshake. ironstate installs plugins with `go install`, so a non-Go plugin needs a Go module wrapper, or a manual install into the plugin cache, to be found.
+Any language with gRPC and a go-plugin-compatible handshake can implement a plugin: generate code from `handler.proto`, implement `HandlerPlugin`, and print the handshake line. go-plugin's [non-Go plugin guide](https://github.com/hashicorp/go-plugin/blob/main/docs/guide-plugin-write-non-go) describes the handshake. ironstate installs plugins with `go install`, so a non-Go plugin needs a Go module wrapper, or a manual install into the plugin cache, to be found.

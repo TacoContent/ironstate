@@ -20,7 +20,7 @@ import (
 //
 // Deviation from Handlers/ScheduledTask.psm1 (documented, not silent),
 // chosen deliberately to avoid adding a second PowerShell dependency
-// beyond 'shell.host: pwsh' (docs/plans/go-rewrite.md §11 - "the sole
+// beyond 'shell.host: pwsh' (docs/_plans/go-rewrite.md §11 - "the sole
 // remaining runtime dependency"): this is implemented by generating a
 // Task Scheduler XML definition and shelling out to the built-in
 // 'schtasks.exe' (part of Windows itself, not PowerShell), instead of the

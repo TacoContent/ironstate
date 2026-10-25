@@ -194,7 +194,7 @@ func ToJSONResult(r Result) JSONResult {
 
 // PrintJSON renders results as a JSON array on w - the '--output json'
 // format (additive, not a compatibility requirement; see
-// docs/plans/go-rewrite.md §1).
+// docs/_plans/go-rewrite.md §1).
 func PrintJSON(w io.Writer, results []Result) error {
 	out := make([]JSONResult, len(results))
 	for i, r := range results {

@@ -28,7 +28,7 @@ ironstate validate --playbook <path>
 
 | Flag | Required | Description |
 | --- | --- | --- |
-| `--playbook <path>` | yes | Playbook file, directory, or bare name. It's resolved the same way as for a [playbook run](../index.md#playbook-resolution). |
+| `--playbook <path>` | yes | Playbook file, directory, or bare name. It's resolved the same way as for a [playbook run](../#playbook-resolution). |
 | `-h`, `--help` | | Show help. |
 
 ## What gets validated
@@ -49,7 +49,7 @@ path/to/playbook/roles/shells/main.yml:12:7: /tasks/0/shell: ...
 ```
 
 > [!NOTE]
-> Every YAML file under the playbook directory is checked against the **playbook** schema. Keep other YAML files outside the playbook directory if they would not pass, such as an inventory, which uses [`inventory.schema.json`](../../playbooks/inventory.md).
+> Every YAML file under the playbook directory is checked against the **playbook** schema. Keep other YAML files outside the playbook directory if they would not pass, such as an inventory, which uses [`inventory.schema.json`](../../playbooks/inventory).
 
 ## Schema lookup
 

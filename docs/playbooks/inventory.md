@@ -86,7 +86,7 @@ groups:
 | `agent_dir` | Where the agent is cached on the target. |
 | `become` | `false` turns off every `become` for this host. Tasks then run as the SSH user, for example when there's no sudo. |
 | `verify_agent` | `false` skips SHA-256 verification of the agent on the target. |
-| `vars` | Variables for this host. These merge on top of the playbook's variables. See [Variable precedence](./facts-vars.md#variable-precedence). |
+| `vars` | Variables for this host. These merge on top of the playbook's variables. See [Variable precedence](./facts-vars#variable-precedence). |
 
 Inventory `vars` can contain `${{ }}` expressions. Each target evaluates them with its own facts.
 
@@ -102,7 +102,7 @@ inventory/
 ```
 
 > [!NOTE]
-> An inventory **inside** the playbook folder fails [`ironstate validate`](../cli/commands/validate.md), which checks every YAML file there against the playbook schema. Keep it beside the playbook if you use `validate`.
+> An inventory **inside** the playbook folder fails [`ironstate validate`](../cli/commands/validate), which checks every YAML file there against the playbook schema. Keep it beside the playbook if you use `validate`.
 
 ## Selecting hosts
 
@@ -137,7 +137,7 @@ The **playbook folder** is bundled and sent to each target, except for:
 - `.git`, `.env`, `.secrets`
 - anything matched by glob patterns in a `.ironstateignore` file
 
-`--vars-file` files, an outside `filters.dir`, your `filters.*` config, and approved [`uses`](./uses.md) checkouts are sent too. `.env`, `.secrets`, and `--forward-env` values travel **in memory only**.
+`--vars-file` files, an outside `filters.dir`, your `filters.*` config, and approved [`uses`](./uses) checkouts are sent too. `.env`, `.secrets`, and `--forward-env` values travel **in memory only**.
 
 Expressions run **on the target**, so `facts.*`, `lookup('env', …)`, and `lookup('url', …)` reflect the target.
 
@@ -149,7 +149,7 @@ Expressions run **on the target**, so `facts.*`, `lookup('env', …)`, and `look
 
 ## Plugins
 
-Playbooks with `plugins:` work remotely. When a target matches the controller's OS and architecture, the controller copies its installed plugins over. Other targets use their own installed plugins, and `--allow-plugin-install` lets them install missing ones (which requires Go on the target). Lockfile checksums are per platform. See [Using a plugin](../plugins/using.md).
+Playbooks with `plugins:` work remotely. When a target matches the controller's OS and architecture, the controller copies its installed plugins over. Other targets use their own installed plugins, and `--allow-plugin-install` lets them install missing ones (which requires Go on the target). Lockfile checksums are per platform. See [Using a plugin](../plugins/using).
 
 ## Output and logs
 
@@ -159,7 +159,7 @@ Playbooks with `plugins:` work remotely. When a target matches the controller's 
 | `json` | One document with a `hosts` array: status, facts, results, and stats for each host. |
 | `ndjson` | Every agent event, tagged with `"host"`, then a final `done` event. |
 
-Each target keeps the event log of its last 20 runs. Use [`ironstate remote logs`](../cli/commands/remote.md#remote-logs) to read one.
+Each target keeps the event log of its last 20 runs. Use [`ironstate remote logs`](../cli/commands/remote#remote-logs) to read one.
 
 ## Reliability
 

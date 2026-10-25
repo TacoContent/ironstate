@@ -1,4 +1,4 @@
-# Persistent JSON-over-stdio filter shim (docs/plans/go-rewrite.md §4.5).
+# Persistent JSON-over-stdio filter shim (docs/_plans/go-rewrite.md §4.5).
 #
 # Usage: shim.ps1 <path-to-filter-script.ps1>
 #

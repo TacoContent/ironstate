@@ -10,7 +10,7 @@ import (
 
 // pathHandler is a stub on non-Windows platforms: this module manages the
 // current user's persistent Windows PATH registry entry, which has no
-// equivalent here - matches docs/plans/go-rewrite.md §1's "Windows-only
+// equivalent here - matches docs/_plans/go-rewrite.md §1's "Windows-only
 // handlers stay Windows-only" scope decision.
 type pathHandler struct{}
 

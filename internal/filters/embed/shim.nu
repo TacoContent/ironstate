@@ -1,5 +1,5 @@
 #!/usr/bin/env -S nu --stdin --no-config-file
-# Single-shot JSON filter shim (docs/plans/go-rewrite.md §4.5) for
+# Single-shot JSON filter shim (docs/_plans/go-rewrite.md §4.5) for
 # nushell script filters - the '.nu' counterpart to shim.ps1/shim.sh/
 # shim.zsh/shim.fish.
 #

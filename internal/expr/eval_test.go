@@ -206,7 +206,7 @@ func TestIsNullTestNameIsUnreachableLikeThePowerShellOriginal(t *testing.T) {
 	// so '<expr> is null' can never actually parse in the original
 	// PowerShell grammar either (Parse-ExpressionMembership requires an
 	// 'ident' token after 'is'). Ported byte-for-byte rather than silently
-	// "fixed", per docs/plans/go-rewrite.md's no-silent-deviation rule —
+	// "fixed", per docs/_plans/go-rewrite.md's no-silent-deviation rule —
 	// use 'is none' instead.
 	_, err := Parse("x is null")
 	if err == nil {

@@ -9,7 +9,7 @@ import (
 )
 
 // lookPath is overridable in tests so json_query's jq-present/jq-absent
-// branches can both be exercised deliberately (docs/plans/go-rewrite.md
+// branches can both be exercised deliberately (docs/_plans/go-rewrite.md
 // §4.5 — neither branch should depend on the test runner's real PATH).
 var lookPath = exec.LookPath
 

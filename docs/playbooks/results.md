@@ -61,7 +61,7 @@ When a `shell` task with `host: pwsh` outputs exactly **one object**, that objec
 
 ### `id` vs. `fact`
 
-`fact` tasks run before everything else, so **a fact can't read an `id` result**. To turn a command's output into a fact, give the fact its own `shell`. See [Custom facts](./facts-vars.md#custom-facts).
+`fact` tasks run before everything else, so **a fact can't read an `id` result**. To turn a command's output into a fact, give the fact its own `shell`. See [Custom facts](./facts-vars#custom-facts).
 
 ## `failed_when`
 
@@ -129,5 +129,5 @@ A failed leaf normally **stops the run**. With `continue_on_error: true`, the fa
 - `become` is **per leaf**; it doesn't cascade from groups.
 - It applies to modules that run external commands: package managers, `shell`, `git`, firewall and cron modules, and plugins. Modules that change the system directly (`file`, `copy`, `registry`, `user`, `group`, …) ignore it; run ironstate itself elevated if they need privileges.
 - If `sudo` isn't available, the leaf fails. It never silently runs unelevated.
-- `sudo` may prompt for a password. For remote runs, use passwordless sudo or `--ask-become-pass`. See [Inventory](./inventory.md#elevation).
-- Tasks from an isolated [`uses`](./uses.md#isolation) source can't use `become`.
+- `sudo` may prompt for a password. For remote runs, use passwordless sudo or `--ask-become-pass`. See [Inventory](./inventory#elevation).
+- Tasks from an isolated [`uses`](./uses#isolation) source can't use `become`.

@@ -1,7 +1,7 @@
 package exec
 
 // Package exec wraps external command invocation behind a small
-// interface (docs/plans/go-rewrite.md §4.8) so every CLI-backed handler
+// interface (docs/_plans/go-rewrite.md §4.8) so every CLI-backed handler
 // (winget, chocolatey, pipx, npm, cargo, go, gem, eget, xget) is unit-testable
 // with a fake Runner asserting the exact argv built, without touching a
 // real package manager.
@@ -14,7 +14,7 @@ import (
 )
 
 // Result is a completed command's captured output — the same shape every
-// handler normalizes its own result to (docs/plans/go-rewrite.md §2).
+// handler normalizes its own result to (docs/_plans/go-rewrite.md §2).
 type Result struct {
 	RC          int
 	Stdout      string

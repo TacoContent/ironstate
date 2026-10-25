@@ -38,7 +38,7 @@ GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxx
 - Loaded values override variables already set in the environment, and `.secrets` loads second, so it overrides `.env`.
 - Every value from `.secrets` is automatically treated as a **secret** and masked in output.
 
-Read the values with `lookup('env', 'NAME')`, the [`env`](../filters/builtin.md#env) filter, or `envs.NAME`:
+Read the values with `lookup('env', 'NAME')`, the [`env`](../filters/builtin#env) filter, or `envs.NAME`:
 
 ```yaml
 - name: Clone private repo

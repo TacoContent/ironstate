@@ -24,7 +24,7 @@ A task list is made of three kinds of item. ironstate works out each item's kind
 | --- | --- | --- |
 | a module key (`winget`, `shell`, `copy`, …) | **leaf action** | Does one thing. |
 | `actions:` | **grouping task** | Holds a nested task list. Its `tags` and `when` apply to everything inside it. |
-| `include:` or `uses:` | **grouping task** | Like `actions:`, but the nested list comes from another file. See [Includes](./includes.md) and [Remote sources](./uses.md). |
+| `include:` or `uses:` | **grouping task** | Like `actions:`, but the nested list comes from another file. See [Includes](./includes) and [Remote sources](./uses). |
 
 ## Leaf actions
 
@@ -48,7 +48,7 @@ Some modules have a short form. A `shell` task, for example, can be just the com
   shell: uname -a
 ```
 
-See [Handlers](../handlers/index.md) for every module and its fields.
+See [Handlers](../handlers/) for every module and its fields.
 
 ## Grouping tasks
 
@@ -80,15 +80,15 @@ These fields sit **beside** the module key on any task:
 | Field | Type | Applies to | Description |
 | --- | --- | --- | --- |
 | `name` | string | any | Label shown in output. |
-| `tags` | list | any (cascades) | Used by `--tags`. See [Tags](./tags.md). |
-| `when` | string or list | any (cascades, AND) | Run only when true. See [Conditions](./conditions.md). |
-| `items` / `with` | list / any | any | Repeat this task for each item, or bind one value. See [Loops](./loops.md). |
-| `envs` / `environment` | map | any (cascades) | Environment overrides. See [Environment variables](./environment.md). |
-| `id` | string | leaf | Save this leaf's result for later tasks. See [Results](./results.md#registering-results-with-id). |
-| `failed_when` | expression(s) or shell checks | leaf | Decide whether this leaf failed. See [Results](./results.md#failed_when). |
+| `tags` | list | any (cascades) | Used by `--tags`. See [Tags](./tags). |
+| `when` | string or list | any (cascades, AND) | Run only when true. See [Conditions](./conditions). |
+| `items` / `with` | list / any | any | Repeat this task for each item, or bind one value. See [Loops](./loops). |
+| `envs` / `environment` | map | any (cascades) | Environment overrides. See [Environment variables](./environment). |
+| `id` | string | leaf | Save this leaf's result for later tasks. See [Results](./results#registering-results-with-id). |
+| `failed_when` | expression(s) or shell checks | leaf | Decide whether this leaf failed. See [Results](./results#failed_when). |
 | `continue_on_error` | bool | leaf | Keep going when this leaf fails. |
-| `become` | bool or user name | leaf | Run elevated with `sudo`. See [Results](./results.md#become). |
-| `creates` / `removes` | path or list | `shell` leaf | Skip the shell command when these paths already exist, or no longer exist. See [shell](../handlers/shell.md). |
+| `become` | bool or user name | leaf | Run elevated with `sudo`. See [Results](./results#become). |
+| `creates` / `removes` | path or list | `shell` leaf | Skip the shell command when these paths already exist, or no longer exist. See [shell](../handlers/shell). |
 
 ## Order of execution
 

@@ -22,7 +22,7 @@ import (
 // Deviation from Handlers/Path.psm1: 'scope' is accepted but only 'User'
 // is actually implemented (Machine-scope would require admin and isn't
 // exercised anywhere in this repo today - same treatment as other
-// documented, deliberate v1 gaps in docs/plans/go-rewrite.md §5/§11).
+// documented, deliberate v1 gaps in docs/_plans/go-rewrite.md §5/§11).
 type pathHandler struct{}
 
 func getUserPathEntries() ([]string, error) {

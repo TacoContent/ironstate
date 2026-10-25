@@ -108,4 +108,4 @@ When a looped task has an `id`, the top-level result fields hold the **last** it
 - log: { message: "first: ${{ probes.results[0].stdout }}, last: ${{ probes.stdout }}" }
 ```
 
-See [Results](./results.md).
+See [Results](./results).

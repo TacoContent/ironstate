@@ -1,7 +1,7 @@
 package filters
 
 // script.go implements the external-script filter adapter
-// (docs/plans/go-rewrite.md §4.5): a discovered script file is called
+// (docs/_plans/go-rewrite.md §4.5): a discovered script file is called
 // over a small, stable JSON protocol, so an existing filters/*.ps1,
 // *.sh, *.zsh, *.fish, or *.nu file keeps working completely unmodified
 // - the shim (embed/shim.*) is the only new artifact per script
@@ -29,7 +29,7 @@ import (
 
 // DefaultInterpreters maps a script file extension to the interpreter
 // argv prefix used to run its shim - the "eventually support other
-// script types" hook (docs/plans/go-rewrite.md §4.5). PowerShell, bash,
+// script types" hook (docs/_plans/go-rewrite.md §4.5). PowerShell, bash,
 // zsh, fish, and nu each ship a shim today.
 func DefaultInterpreters() map[string][]string {
 	return map[string][]string{
@@ -224,7 +224,7 @@ var startWorkerProcess = func(argv []string) (*workerProcess, error) {
 
 // scriptWorker is one persistent, lazily-started interpreter subprocess
 // backing a single script filter - opened on first Call and kept warm
-// for the process lifetime (docs/plans/go-rewrite.md §4.5's "process-per-
+// for the process lifetime (docs/_plans/go-rewrite.md §4.5's "process-per-
 // call has real overhead" mitigation), rather than spawned fresh per call.
 type scriptWorker struct {
 	argv []string

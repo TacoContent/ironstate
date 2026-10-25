@@ -11,13 +11,13 @@ import (
 
 // defaultPlaybookNames is the set of default document names searched
 // for, in order, when a '--playbook' value resolves to a directory (or
-// is empty/omitted) rather than a specific file — docs/plans/notes.md.
+// is empty/omitted) rather than a specific file — docs/_plans/notes.md.
 var defaultPlaybookNames = []string{"site.yml", "site.yaml", "main.yml", "main.yaml"}
 
 // ResolvePlaybookPath resolves the '--playbook' flag's value — a
 // specific file, a directory, a bare name with no extension, or "" for
 // the current directory — to an actual YAML document to load. It does
-// not require the exact file path, matching docs/plans/notes.md:
+// not require the exact file path, matching docs/_plans/notes.md:
 //
 //  1. input itself, if it already names an existing file.
 //  2. "<input>.yml" / "<input>.yaml" — input is a bare name with a

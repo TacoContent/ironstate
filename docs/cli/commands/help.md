@@ -37,4 +37,4 @@ ironstate help plugin bench    # flags for 'plugin bench'
 ironstate remote ping --help   # same thing, as a flag
 ```
 
-Help text includes each command's synopsis, description, flags with their defaults, and available subcommands. The [CLI reference](../index.md) and the [Flags](../flags.md) page cover the same information in more detail.
+Help text includes each command's synopsis, description, flags with their defaults, and available subcommands. The [CLI reference](../) and the [Flags](../flags) page cover the same information in more detail.

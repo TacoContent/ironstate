@@ -1,5 +1,5 @@
 #!/usr/bin/env fish
-# Persistent JSON-over-stdio filter shim (docs/plans/go-rewrite.md §4.5) for
+# Persistent JSON-over-stdio filter shim (docs/_plans/go-rewrite.md §4.5) for
 # fish script filters - the '.fish' counterpart to shim.sh/shim.zsh.
 #
 # Usage: shim.fish <path-to-filter-script.fish>

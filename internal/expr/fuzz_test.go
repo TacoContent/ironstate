@@ -3,7 +3,7 @@ package expr
 import "testing"
 
 // FuzzParse feeds arbitrary strings through Parse — cheap given the
-// grammar's small size (docs/plans/go-rewrite.md §4.3/§6). Parse must
+// grammar's small size (docs/_plans/go-rewrite.md §4.3/§6). Parse must
 // never panic; a syntax error is an acceptable, expected outcome.
 func FuzzParse(f *testing.F) {
 	seeds := []string{
