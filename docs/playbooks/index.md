@@ -48,7 +48,7 @@ Because each leaf is resolved just before it runs, later tasks can react to earl
 
 | Page | Covers |
 | --- | --- |
-| [Folder structure](./structurd) | What each folder in a playbook is for. |
+| [Folder structure](./structure) | What each folder in a playbook is for. |
 | [Task files](./task-files) | The top-level keys of a YAML file: `tasks`, `vars`, `envs`, `tags`, `plugins`. |
 | [Tasks](./tasks) | Leaf actions, grouping tasks, modules, and the shared task fields. |
 | [File naming](./naming) | How overlay file names select machines, and their precedence. |
