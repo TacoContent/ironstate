@@ -1,4 +1,86 @@
 
+## [v0.17.0](https://github.com/tacocontent/ironstate/releases/tag/v0.17.0) - 2026-10-25
+
+### 🚀 FEATURES
+
+#### _GENERAL_
+
+- Plugin support facts -[@camalot](https://github.com/camalot)
+
+- Plugin update to write an ironstate.lock.yaml -[@camalot](https://github.com/camalot)
+
+- Plugins can register filters -[@camalot](https://github.com/camalot)
+
+
+### 🐛 BUG FIXES
+
+#### _GENERAL_
+
+- Schema now allows plugin top-level -[@camalot](https://github.com/camalot)
+
+- Per-user variables/<user> and init now use same methods to look for username. -[@camalot](https://github.com/camalot)
+
+- Resolve typo -[@camalot](https://github.com/camalot)
+
+
+### 💼 OTHER
+
+#### _GENERAL_
+
+- Merge branch 'develop' of github.com:TacoContent/ironstate into develop -[@camalot](https://github.com/camalot)
+
+- Develop' of github.com:TacoContent/ironstate: -[@camalot](https://github.com/camalot)
+
+
+### 📚 DOCUMENTATION
+
+#### _GENERAL_
+
+- docs: update changelog for v0.16.0 -[@camalot](https://github.com/camalot)
+
+- Added documentation for handlers -[@camalot](https://github.com/camalot)
+
+- Scafolding for doc generation -[@camalot](https://github.com/camalot)
+
+- Prepare documentation for publish -[@camalot](https://github.com/camalot)
+
+- Link fixes for documentation urls -[@camalot](https://github.com/camalot)
+
+- Some layout changes -[@camalot](https://github.com/camalot)
+
+
+### 🧪 TESTING
+
+#### _GENERAL_
+
+- Add some additional xget tests -[@camalot](https://github.com/camalot)
+
+
+## GitHub
+
+### 💛 Contributors
+
+
+- [@camalot](https://github.com/camalot)
+## 📈 Commit Statistics
+
+
+- `15` commits contributed to the release.
+- `1` day has passed between the first and last commit.
+- `12` commits parsed as conventional.
+- `0` linked issues detected in commits.
+- `1` day  has passed between releases.
+
+
+![Statistics](https://quickchart.io/chart?c={type:'bar',data:{labels:['Commits','Contributors','Days%20Between%20Commits','Conventional%20Commits','Referenced%20Links','Days%20Since%20Last%20Release'],datasets:[{label:'Release',data:[15,1,1,12,0,1]}]}})
+
+
+
+---
+
+
+**Full Changelog**: https://github.com/tacocontent/ironstate/compare/v0.16.0...v0.17.0
+
 ## [v0.16.0](https://github.com/tacocontent/ironstate/releases/tag/v0.16.0) - 2026-10-24
 
 ### 🚀 FEATURES
