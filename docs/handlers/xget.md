@@ -7,7 +7,7 @@ nav_order: 48
 
 # xget
 
-The `xget` handler fetches GitHub release binaries with `xget`.
+The `xget` handler fetches GitHub release binaries with [xget](https://github.com/camalot/xget).
 
 ## Fields
 

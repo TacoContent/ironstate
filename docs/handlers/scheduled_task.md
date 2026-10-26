@@ -19,6 +19,3 @@ The `scheduled_task` handler manages Windows Scheduled Tasks.
 | `principal` | no | - | Task principal/run-as configuration. |
 | `settings` | no | - | Task settings. |
 | `state` | no | `present` | `present` / `absent` / `latest` |
-
-> [!NOTE]
-> This handler is for Windows only.
