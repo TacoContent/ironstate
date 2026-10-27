@@ -1,4 +1,59 @@
 
+## [v0.18.0](https://github.com/tacocontent/ironstate/releases/tag/v0.18.0) - 2026-10-27
+
+### 🚀 FEATURES
+
+#### _GENERAL_
+
+- Added support for custom argument for winget. -[@camalot](https://github.com/camalot)
+
+
+### 🐛 BUG FIXES
+
+#### _GENERAL_
+
+- Update schema to allow override argument for winget -[@camalot](https://github.com/camalot)
+
+
+### 📚 DOCUMENTATION
+
+#### _GENERAL_
+
+- Remove broken 'NOTE -[@camalot](https://github.com/camalot)
+
+
+### 🧪 TESTING
+
+#### _GENERAL_
+
+- Cleanup and separate tests for package managers -[@camalot](https://github.com/camalot)
+
+
+## GitHub
+
+### 💛 Contributors
+
+
+- [@camalot](https://github.com/camalot)
+## 📈 Commit Statistics
+
+
+- `4` commits contributed to the release.
+- `1` day has passed between the first and last commit.
+- `4` commits parsed as conventional.
+- `0` linked issues detected in commits.
+- `2` days  have passed between releases.
+
+
+![Statistics](https://quickchart.io/chart?c={type:'bar',data:{labels:['Commits','Contributors','Days%20Between%20Commits','Conventional%20Commits','Referenced%20Links','Days%20Since%20Last%20Release'],datasets:[{label:'Release',data:[4,1,1,4,0,2]}]}})
+
+
+
+---
+
+
+**Full Changelog**: https://github.com/tacocontent/ironstate/compare/v0.17.0...v0.18.0
+
 ## [v0.17.0](https://github.com/tacocontent/ironstate/releases/tag/v0.17.0) - 2026-10-25
 
 ### 🚀 FEATURES
