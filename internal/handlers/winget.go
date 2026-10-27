@@ -43,6 +43,9 @@ func (wingetHandler) Describe(item map[string]any, action engine.Action, ctx eng
 	if override := getString(item, "override"); override != "" {
 		desc += " --override " + override
 	}
+	if custom := getString(item, "custom"); custom != "" {
+		desc += " --custom " + custom
+	}
 	return desc, nil
 }
 
@@ -54,6 +57,9 @@ func (wingetHandler) Install(item map[string]any, name string, ctx engine.Contex
 	}
 	if override := getString(item, "override"); override != "" {
 		args = append(args, "--override", override)
+	}
+	if custom := getString(item, "custom"); custom != "" {
+		args = append(args, "--custom", custom)
 	}
 	result := runExternalCommand("winget", args)
 	if result.RC != 0 {

@@ -267,6 +267,14 @@
           "type": "string",
           "description": "winget source to install from, e.g. 'winget' or 'msstore'."
         },
+        "override": {
+          "type": "string",
+          "description": "Completely replaces the default installer arguments specified in an application's YAML manifest"
+        },
+        "custom": {
+          "type": "string",
+          "description": "Preserves the manifest's default behavior and appends your extra arguments"
+        },
         "state": { "$ref": "#/$defs/state" }
       }
     },

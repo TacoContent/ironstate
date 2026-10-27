@@ -16,3 +16,5 @@ The `winget` handler manages packages via Windows Package Manager (winget). Matc
 | `package` | yes | - | winget package ID, matched with `--exact`. |
 | `source` | no | - | winget source to install from, e.g. `winget` or `msstore`. |
 | `state` | no | `present` | `present` / `absent` / `latest` |
+| `override` | no | - | Completely replaces the default installer arguments specified in an application's YAML manifest. |
+| `custom` | no | - | Preserves the manifest's default behavior and appends your extra arguments. |

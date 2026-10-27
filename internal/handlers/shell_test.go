@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -78,5 +80,125 @@ func TestMissingPowerShellCommandSetsFalseFact(t *testing.T) {
 				t.Fatalf("scoop_installed=%v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestShellHandlerRunsCommandViaPwshFromShellEnv(t *testing.T) {
+	t.Setenv("SHELL", "pwsh")
+	rec := &recordingRunner{responses: []ironexec.Result{{RC: 0, Stdout: "hi\n", StdoutLines: []string{"hi"}}}}
+	withRunner(t, rec)
+
+	h := shellHandler{}
+	item := map[string]any{"command": "Write-Output hi"}
+	result, err := h.Install(item, "", testCtx())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.exes[0] != "pwsh" {
+		t.Fatalf("exe = %q, want pwsh", rec.exes[0])
+	}
+	if result.Stdout != "hi\n" {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestShellHostInvocationPreservesExecutablePathWithSpaces(t *testing.T) {
+	host := filepath.Join(t.TempDir(), "Program Files", "PowerShell", "7", "pwsh.exe")
+	if err := os.MkdirAll(filepath.Dir(host), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(host, []byte("test"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	got := shellHostInvocation(host)
+	if len(got) != 1 || got[0] != host {
+		t.Fatalf("shellHostInvocation(%q) = %#v, want the path as one executable", host, got)
+	}
+}
+
+func TestShellCustomPowerShellPathUsesPS1Extension(t *testing.T) {
+	for _, host := range []string{`C:\Program Files\PowerShell\7\pwsh.exe`, `"C:\Program Files\PowerShell\7\pwsh.exe"`, `/opt/PowerShell/pwsh`} {
+		if !isPowerShellHost(host) {
+			t.Errorf("isPowerShellHost(%q) = false", host)
+		}
+		if got := shellScriptExtension(shellStateConfig{HostSpec: host}); got != ".ps1" {
+			t.Errorf("shellScriptExtension(%q) = %q, want .ps1", host, got)
+		}
+	}
+	for _, host := range []string{"bash", `C:\Program Files\Git\bin\bash.exe`} {
+		if isPowerShellHost(host) {
+			t.Errorf("isPowerShellHost(%q) = true", host)
+		}
+	}
+}
+
+func TestShellHandlerTypeResolution(t *testing.T) {
+	tests := []struct {
+		name     string
+		item     map[string]any
+		shell    string
+		wantType string
+		wantHost string
+	}{
+		{name: "type wins over host", item: map[string]any{"type": "bash", "host": "cmd"}, wantType: "bash", wantHost: "bash"},
+		{name: "legacy host", item: map[string]any{"host": "cmd"}, wantHost: "cmd"},
+		{name: "shell environment", item: map[string]any{}, shell: "/bin/zsh", wantType: "/bin/zsh", wantHost: "/bin/zsh"},
+		{name: "os fallback", item: map[string]any{}, wantType: defaultShellType(), wantHost: defaultShellType()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("SHELL", tt.shell)
+			cfg := resolveShellStateConfig(tt.item, "present")
+			if cfg.Type != tt.wantType || cfg.HostSpec != tt.wantHost {
+				t.Fatalf("resolved type=%q host=%q, want type=%q host=%q", cfg.Type, cfg.HostSpec, tt.wantType, tt.wantHost)
+			}
+		})
+	}
+}
+
+func TestShellHandlerPerStateFallback(t *testing.T) {
+	rec := &recordingRunner{responses: []ironexec.Result{{RC: 0}}}
+	withRunner(t, rec)
+
+	h := shellHandler{}
+	item := map[string]any{
+		"host":    "cmd",
+		"command": "echo top-level",
+		"present": map[string]any{"command": "echo present-state"},
+	}
+	if _, err := h.Install(item, "", testCtx()); err != nil {
+		t.Fatal(err)
+	}
+	// per-state 'present' block's own 'command' wins, falls back to
+	// top-level 'host' since the block doesn't set its own.
+	if rec.exes[0] != "cmd.exe" {
+		t.Fatalf("exe = %q, want cmd.exe (host falls back to top-level)", rec.exes[0])
+	}
+}
+
+func TestShellHandlerAbsentDoesNotFallBackToTopLevelCommand(t *testing.T) {
+	cfg := resolveShellStateConfig(map[string]any{"command": "echo install-only"}, "absent")
+	if cfg.Command != "" {
+		t.Fatalf("expected 'absent' to never fall back to the top-level command, got %q", cfg.Command)
+	}
+}
+
+func TestShellHandlerCreatesGatesTest(t *testing.T) {
+	dir := t.TempDir()
+	marker := dir + "/done.marker"
+	h := shellHandler{}
+	item := map[string]any{"creates": []any{marker}}
+
+	installed, _ := h.Test(item, "", testCtx())
+	if installed {
+		t.Fatal("expected not installed before marker exists")
+	}
+	if err := os.WriteFile(marker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	installed, _ = h.Test(item, "", testCtx())
+	if !installed {
+		t.Fatal("expected installed once marker exists")
 	}
 }

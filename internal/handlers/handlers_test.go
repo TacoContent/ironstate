@@ -1378,3 +1378,36 @@ func writeTestZip(t *testing.T, path string, files map[string]string) {
 		t.Fatal(err)
 	}
 }
+
+// recordingRunner captures every Run() call's argv and returns a queued
+// canned response per call (or the last one, once the queue is drained).
+type recordingRunner struct {
+	calls     [][]string
+	exes      []string
+	responses []ironexec.Result
+	errs      []error
+}
+
+func (r *recordingRunner) Run(exe string, args []string) (ironexec.Result, error) {
+	r.exes = append(r.exes, exe)
+	r.calls = append(r.calls, args)
+	idx := len(r.calls) - 1
+	var result ironexec.Result
+	var err error
+	if idx < len(r.responses) {
+		result = r.responses[idx]
+	} else if len(r.responses) > 0 {
+		result = r.responses[len(r.responses)-1]
+	}
+	if idx < len(r.errs) {
+		err = r.errs[idx]
+	}
+	return result, err
+}
+
+func withRunner(t *testing.T, r *recordingRunner) {
+	t.Helper()
+	orig := runner
+	runner = r
+	t.Cleanup(func() { runner = orig })
+}
