@@ -175,8 +175,10 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go mod tidy; cd sdk; go mod tidy
+      - name: Select application release tag
+        run: echo "GORELEASER_CURRENT_TAG=$(git describe --tags --match 'v[0-9]*' --abbrev=0)" >> "$GITHUB_ENV"
       - uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
-          version: latest
+          version: '~> v2'
           args: build --snapshot --clean
