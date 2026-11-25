@@ -1,6 +1,6 @@
 module github.com/TacoContent/ironstate
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/TacoContent/ironstate/sdk v0.18.0
